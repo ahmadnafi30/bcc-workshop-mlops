@@ -30,6 +30,7 @@ airflow/airflow.db
 airflow/airflow.cfg
 
 # MLflow
+.mlflow/
 mlruns/
 mlartifacts/
 mlflow.db*

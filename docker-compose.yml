@@ -9,7 +9,7 @@ services:
     ports:
       - "${MLFLOW_PORT:-5000}:5000"
     volumes:
-      - mlflow-data:/mlflow
+      - ./.mlflow:/mlflow
     healthcheck:
       test:
         [
@@ -124,7 +124,6 @@ services:
       - dvc-cache:/app/.dvc/cache
 
 volumes:
-  mlflow-data:
   airflow-home:
   dvc-cache:
   prometheus-data:
