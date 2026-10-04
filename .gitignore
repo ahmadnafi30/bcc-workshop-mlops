@@ -36,6 +36,7 @@ mlartifacts/
 *.pkl
 *.joblib
 *.onnx
+models/*.json
 
 # Data generated locally
 data/source/*

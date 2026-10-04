@@ -7,26 +7,31 @@ import pandas as pd
 from preprocessing.aggregate_demand import aggregate_hourly_demand
 
 
+# ambil tanggal batch yang mau diubah dari raw trip jadi hourly demand
 def parse_args() -> argparse.Namespace:
-    """ambil tanggal batch yang mau diubah dari raw trip jadi hourly demand."""
+    # parser cukup nerima tanggal batch dan opsi overwrite
     parser = argparse.ArgumentParser(
         description="aggregate satu daily trip batch jadi hourly taxi demand"
     )
+
     parser.add_argument(
         "--date",
         required=True,
         help="tanggal batch, format YYYY-MM-DD",
     )
+
     parser.add_argument(
         "--force",
         action="store_true",
         help="timpa processed file kalau output sudah ada",
     )
+
     return parser.parse_args()
 
 
+# baca daily batch, aggregate demand per zone per jam, lalu simpan hasilnya
 def main() -> None:
-    """baca daily batch, aggregate demand per zone per jam, lalu simpan hasilnya."""
+    # ambil tanggal dan siapin seluruh path input-output dari root repository
     args = parse_args()
     target_date = date.fromisoformat(args.date)
     root = Path(__file__).resolve().parents[1]
@@ -47,10 +52,12 @@ def main() -> None:
         / f"{target_date.isoformat()}.parquet"
     )
 
+    # processed file nggak perlu dibuat ulang kecuali force memang diminta
     if output_path.exists() and not args.force:
         print(f"processed demand sudah ada, skip: {output_path}")
         return
 
+    # kasih error yang jelas kalau urutan manual pipeline-nya belum lengkap
     if not trip_path.exists():
         raise FileNotFoundError(
             f"daily batch belum ada: {trip_path}. "
@@ -63,6 +70,7 @@ def main() -> None:
             "jalanin bootstrap_data.py dulu."
         )
 
+    # load raw batch dan metadata lalu ubah trip-level data jadi hourly demand
     trips = pd.read_parquet(trip_path)
     zone_lookup = pd.read_csv(zone_lookup_path)
     demand = aggregate_hourly_demand(
@@ -71,9 +79,11 @@ def main() -> None:
         target_date=target_date,
     )
 
+    # simpan hasil processed sebagai parquet supaya step berikutnya tinggal baca
     output_path.parent.mkdir(parents=True, exist_ok=True)
     demand.to_parquet(output_path, index=False)
 
+    # kasih summary sederhana buat quick sanity check dari terminal
     print(
         f"{target_date.isoformat()} -> "
         f"{len(demand):,} zone-hour rows, "

@@ -51,11 +51,14 @@ Historical replay bikin semua itu bisa didemokan tanpa harus nunggu tiga bulan b
 Initial setup:
 
 ```text
-Jan 01 - Jan 21
-initial training data
+Jan 01 - Jan 07
+warm-up history
+
+Jan 08 - Jan 21
+initial training rows
 
 Jan 22 - Jan 26
-validation data
+validation rows
 ```
 
 Setelah model awal siap:

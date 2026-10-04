@@ -114,6 +114,24 @@ Notebook ini sengaja simple. Kita cuma cek beberapa hal penting:
 
 Tujuannya supaya sebelum bikin model kita tahu data yang masuk itu memang masuk akal.
 
+## Siapin initial training history
+
+Sebelum production replay mulai, kita butuh history buat model pertama.
+
+```bash
+python scripts/prepare_historical_demand.py
+```
+
+Default-nya script ini nyiapin hourly demand dari 1 sampai 26 January 2025.
+
+Setelah itu feature dataset bisa dibikin dengan:
+
+```bash
+python scripts/build_features.py
+```
+
+Detail feature-nya dibahas di [Feature Engineering](feature-engineering.md).
+
 ## Simulate new production data
 
 Misalnya sekarang kita mau pura-pura tanggal production-nya adalah 27 January 2025:

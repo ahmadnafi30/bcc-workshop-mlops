@@ -78,7 +78,7 @@ lag_168h
 | `lag_24h` | demand pada jam yang sama kemarin |
 | `lag_168h` | demand pada jam yang sama minggu lalu |
 
-`lag_168h` bikin beberapa hari awal dataset belum punya feature lengkap. Itu normal dan nanti kita handle saat preprocessing.
+`lag_168h` butuh history satu minggu. Karena itu 1-7 January kita pakai sebagai warm-up history, lalu model-ready row mulai efektif dari 8 January.
 
 ### Rolling features
 
@@ -139,7 +139,7 @@ Nanti baseline juga kita log ke MLflow.
 
 ## Main model
 
-Untuk core workshop, pilihan utama kita adalah **HistGradientBoostingRegressor** dari scikit-learn.
+Untuk core workshop, pilihan utama kita adalah **HistGradientBoostingRegressor** dari scikit-learn. `zone_id` kita treat sebagai categorical feature karena ID zone bukan angka yang punya hubungan besar-kecil.
 
 Alasannya:
 
@@ -175,7 +175,10 @@ rmse
 ## Time-based split
 
 ```text
-Jan 01 ───────── Jan 21
+Jan 01 ─ Jan 07
+   WARM-UP
+
+Jan 08 ───────── Jan 21
       TRAIN
 
 Jan 22 ─ Jan 26

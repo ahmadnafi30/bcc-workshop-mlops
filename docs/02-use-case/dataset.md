@@ -120,7 +120,8 @@ Kita fokus ke pickup zone, bukan dropoff zone. Jadi kalau pickup terjadi di Manh
 
 | Period | Role |
 | --- | --- |
-| Jan 1 - Jan 21 | initial training |
+| Jan 1 - Jan 7 | warm-up history |
+| Jan 8 - Jan 21 | initial training |
 | Jan 22 - Jan 26 | validation |
 | Jan 27 onward | simulated production |
 

@@ -10,6 +10,9 @@ nav:
       - Historical Replay: 02-use-case/historical-replay.md
   - Data Pipeline:
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
+      - Feature Engineering: 05-data-pipeline/feature-engineering.md
+  - Training & Tracking:
+      - Baseline Training: 06-experiment-tracking/baseline-training.md
 
 theme:
   name: material
