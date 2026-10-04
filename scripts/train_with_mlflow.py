@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.snapshot import describe_snapshot
 from tracking.mlflow_tracking import (
     configure_mlflow,
     log_baseline_run,
@@ -19,36 +20,44 @@ from training.train import (
 )
 
 
-# load feature dataset yang bakal dipakai untuk experiment tracking
-def load_features(feature_path: Path) -> pd.DataFrame:
-    # kasih error yang jelas kalau feature engineering belum pernah dijalankan
-    if not feature_path.exists():
+# load snapshot yang sudah dibekukan DVC buat experiment tracking
+def load_training_snapshot(snapshot_path: Path) -> pd.DataFrame:
+    # kasih error yang jelas kalau snapshot belum pernah direproduce
+    if not snapshot_path.exists():
         raise FileNotFoundError(
-            f"feature dataset belum ada: {feature_path}. "
-            "jalanin scripts/build_features.py dulu."
+            f"training snapshot belum ada: {snapshot_path}. "
+            "jalanin uv run dvc repro create_training_snapshot dulu."
         )
 
-    return pd.read_parquet(feature_path)
+    return pd.read_parquet(snapshot_path)
 
 
-# train baseline dan model utama lalu kirim semua hasilnya ke MLflow
+# train baseline dan model utama lalu kirim result plus dataset fingerprint ke MLflow
 def main() -> None:
     # siapin tracking server dulu sebelum kita mulai bikin experiment run
     tracking = configure_mlflow()
 
     root = Path(__file__).resolve().parents[1]
-    feature_path = root / "data" / "features" / "taxi_demand_features.parquet"
+    snapshot_path = (
+        root
+        / "data"
+        / "snapshots"
+        / "training"
+        / "taxi_demand_2025-01-26.parquet"
+    )
 
-    # split-nya tetap sama dengan manual training supaya comparison-nya fair
-    features = load_features(feature_path)
+    # dua model di run ini wajib pakai snapshot yang sama supaya comparison-nya fair
+    features = load_training_snapshot(snapshot_path)
+    snapshot_info = describe_snapshot(snapshot_path)
     train_data, validation_data = split_train_validation(features)
 
-    # baseline masuk MLflow sebagai run sendiri walaupun nggak punya trained model artifact
+    # baseline masuk MLflow sebagai run sendiri dan tetap dicatat dataset version-nya
     baseline_metrics = evaluate_naive_24h(validation_data)
     baseline_run_id = log_baseline_run(
         metrics=baseline_metrics,
         train_rows=len(train_data),
         validation_rows=len(validation_data),
+        dataset_info=snapshot_info,
     )
 
     # train gradient boosting lalu evaluate pada validation period yang sama
@@ -60,7 +69,7 @@ def main() -> None:
         y_pred=predictions,
     )
 
-    # trained model ikut dilog supaya nanti run ini bisa masuk ke model registry
+    # model artifact dan dataset fingerprint dilog dalam experiment run yang sama
     model_run = log_sklearn_run(
         model=model,
         model_params=HIST_GRADIENT_BOOSTING_PARAMS,
@@ -68,12 +77,15 @@ def main() -> None:
         input_example=validation_input,
         train_rows=len(train_data),
         validation_rows=len(validation_data),
+        dataset_info=snapshot_info,
     )
 
-    # summary terminal cukup nunjukin hasil penting dan id yang bakal dipakai next step
+    # summary terminal nunjukin experiment result sekaligus dataset version yang dipakai
     print("\nmlflow experiment selesai")
     print(f"tracking uri: {tracking['tracking_uri']}")
     print(f"experiment: {tracking['experiment_name']}")
+    print(f"snapshot: {snapshot_info['name']}")
+    print(f"dataset sha256: {snapshot_info['sha256']}")
     print(
         f"baseline -> MAE {baseline_metrics['mae']:.3f}, "
         f"run {baseline_run_id}"

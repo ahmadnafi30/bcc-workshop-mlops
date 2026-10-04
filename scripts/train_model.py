@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.snapshot import describe_snapshot
 from training.evaluate import (
     calculate_regression_metrics,
     evaluate_naive_24h,
@@ -15,28 +16,35 @@ from training.train import (
 )
 
 
-# load feature dataset yang sudah jadi input final untuk initial model training
-def load_features(feature_path: Path) -> pd.DataFrame:
-    # training sengaja gagal jelas kalau feature engineering belum dijalankan
-    if not feature_path.exists():
+# load training snapshot yang sudah dibekukan sebelum model training jalan
+def load_training_snapshot(snapshot_path: Path) -> pd.DataFrame:
+    # training harus gagal jelas kalau snapshot DVC belum pernah dibuat
+    if not snapshot_path.exists():
         raise FileNotFoundError(
-            f"feature dataset belum ada: {feature_path}. "
-            "jalanin scripts/build_features.py dulu."
+            f"training snapshot belum ada: {snapshot_path}. "
+            "jalanin uv run dvc repro create_training_snapshot dulu."
         )
 
-    return pd.read_parquet(feature_path)
+    return pd.read_parquet(snapshot_path)
 
 
-# train baseline dan model utama lalu simpan hasil evaluasinya buat comparison
+# train baseline dan model utama dari snapshot yang sama lalu simpan hasil evaluasinya
 def main() -> None:
     # semua artifact disimpan relatif dari root repository supaya command konsisten
     root = Path(__file__).resolve().parents[1]
-    feature_path = root / "data" / "features" / "taxi_demand_features.parquet"
+    snapshot_path = (
+        root
+        / "data"
+        / "snapshots"
+        / "training"
+        / "taxi_demand_2025-01-26.parquet"
+    )
     model_path = root / "models" / "taxi_demand_model.joblib"
     metrics_path = root / "models" / "initial_metrics.json"
 
-    # load feature dataset lalu bikin train-validation split berdasarkan waktu
-    features = load_features(feature_path)
+    # load snapshot dan simpan fingerprint dataset yang benar-benar dipakai training
+    features = load_training_snapshot(snapshot_path)
+    snapshot_info = describe_snapshot(snapshot_path)
     train_data, validation_data = split_train_validation(features)
 
     # baseline 24 jam jadi patokan apakah ML model kita benar-benar ada improvement
@@ -52,11 +60,12 @@ def main() -> None:
         y_pred=predictions,
     )
 
-    # model bundle disimpan lokal dulu sebelum nanti pindah ke MLflow model registry
+    # model bundle disimpan lokal dulu sebelum nanti pindah penuh ke MLflow registry
     save_model_bundle(model, model_path)
 
-    # simpan metric dan metadata sederhana supaya hasil run tetap bisa dibandingin
+    # dataset fingerprint ikut disimpan supaya result manual tetap reproducible
     metrics = {
+        "dataset": snapshot_info,
         "train_rows": len(train_data),
         "validation_rows": len(validation_data),
         "baseline_24h": baseline_metrics,
@@ -72,8 +81,10 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    # tampilkan comparison yang gampang dibaca langsung dari terminal
+    # tampilkan comparison dan dataset fingerprint yang dipakai run ini
     print("\nvalidation result")
+    print(f"snapshot: {snapshot_info['name']}")
+    print(f"dataset sha256: {snapshot_info['sha256']}")
     print(
         f"naive 24h              -> "
         f"MAE {baseline_metrics['mae']:.3f}, "

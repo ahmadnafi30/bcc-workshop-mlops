@@ -25,26 +25,19 @@ Nanti Airflow tinggal orchestrate step-step yang memang sudah bisa jalan ini.
 Dari root repository:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync
 ```
 
-Kalau pakai Windows:
+Setelah itu semua command workshop dijalankan lewat `uv run`.
 
-```powershell
-.venv\Scripts\activate
-pip install -e ".[dev]"
-```
-
-Project pakai Python 3.11 atau yang lebih baru.
+Detail setup ada di [Project Setup with uv](../10-hands-on/setup.md).
 
 ## Bootstrap data
 
 Jalankan:
 
 ```bash
-python scripts/bootstrap_data.py
+uv run python scripts/bootstrap_data.py
 ```
 
 Secara default script akan nyiapin data January sampai March 2025.
@@ -86,13 +79,13 @@ Semua generated data ini masuk `.gitignore`, jadi repository tetap ringan.
 Kalau mau bootstrap bulan tertentu saja:
 
 ```bash
-python scripts/bootstrap_data.py --months 2025-01
+uv run python scripts/bootstrap_data.py --months 2025-01
 ```
 
 Kalau mau download dan prepare ulang:
 
 ```bash
-python scripts/bootstrap_data.py --force
+uv run python scripts/bootstrap_data.py --force
 ```
 
 ## Cek datanya dulu
@@ -119,7 +112,7 @@ Tujuannya supaya sebelum bikin model kita tahu data yang masuk itu memang masuk 
 Sebelum production replay mulai, kita butuh history buat model pertama.
 
 ```bash
-python scripts/prepare_historical_demand.py
+uv run python scripts/prepare_historical_demand.py
 ```
 
 Default-nya script ini nyiapin hourly demand dari 1 sampai 26 January 2025.
@@ -127,7 +120,7 @@ Default-nya script ini nyiapin hourly demand dari 1 sampai 26 January 2025.
 Setelah itu feature dataset bisa dibikin dengan:
 
 ```bash
-python scripts/build_features.py
+uv run python scripts/build_features.py
 ```
 
 Detail feature-nya dibahas di [Feature Engineering](feature-engineering.md).
@@ -137,7 +130,7 @@ Detail feature-nya dibahas di [Feature Engineering](feature-engineering.md).
 Misalnya sekarang kita mau pura-pura tanggal production-nya adalah 27 January 2025:
 
 ```bash
-python scripts/simulate_daily_data.py --date 2025-01-27
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
 ```
 
 Output-nya:
@@ -151,7 +144,7 @@ Script hanya mengambil data untuk tanggal tersebut dari replay source.
 Kalau command yang sama dijalankan lagi, file yang sudah ada akan di-skip. Kalau memang mau generate ulang:
 
 ```bash
-python scripts/simulate_daily_data.py --date 2025-01-27 --force
+uv run python scripts/simulate_daily_data.py --date 2025-01-27 --force
 ```
 
 Behavior ini bakal kepakai nanti waktu kita bahas idempotency di Airflow.
@@ -161,7 +154,7 @@ Behavior ini bakal kepakai nanti waktu kita bahas idempotency di Airflow.
 Raw daily batch masih berbentuk trip-level data. Sekarang kita ubah menjadi demand per zone per jam:
 
 ```bash
-python scripts/prepare_daily_demand.py --date 2025-01-27
+uv run python scripts/prepare_daily_demand.py --date 2025-01-27
 ```
 
 Hasilnya:
@@ -209,8 +202,8 @@ Bedanya `source` dan `raw` memang sengaja.
 Untuk sekarang kita masih jalanin manual:
 
 ```bash
-python scripts/simulate_daily_data.py --date ...
-python scripts/prepare_daily_demand.py --date ...
+uv run python scripts/simulate_daily_data.py --date ...
+uv run python scripts/prepare_daily_demand.py --date ...
 ```
 
 Nanti Airflow yang ngatur:

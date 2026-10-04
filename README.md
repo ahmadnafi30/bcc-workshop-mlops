@@ -2,11 +2,12 @@
 
 End-to-end MLOps workshop project using an urban mobility / taxi demand forecasting use case.
 
-The project will demonstrate the ML lifecycle from data ingestion and orchestration to experiment tracking, model serving, containerization, CI/CD, monitoring, and retraining.
+Project ini ngebahas lifecycle ML dari data ingestion, feature engineering, experiment tracking, model registry, serving, CI/CD, monitoring, sampai retraining.
 
-## Planned Stack
+## Stack
 
 - Python
+- uv
 - Airflow
 - DVC
 - MLflow
@@ -16,13 +17,33 @@ The project will demonstrate the ML lifecycle from data ingestion and orchestrat
 - Prometheus
 - Grafana
 
-## Project Status
+## Quick Start
 
-🚧 Work in progress — the repository structure is being prepared before the workshop implementation is added.
+Project ini pakai **uv** buat Python environment dan dependency management.
+
+Dari root repository:
+
+```bash
+uv sync
+```
+
+Karena project punya `.python-version`, uv bakal pakai Python 3.11 untuk environment workshop.
+
+Jalankan command project lewat `uv run`:
+
+```bash
+uv run pytest
+uv run python scripts/bootstrap_data.py
+uv run dvc repro create_training_snapshot
+```
+
+Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
+
+> `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.
 
 ## Documentation
 
-Workshop materials and hands-on guides live under `docs/`.
+Workshop materials dan hands-on guide ada di `docs/`.
 
 ## High-level Flow
 

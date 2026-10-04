@@ -8,6 +8,8 @@ nav:
       - Dataset: 02-use-case/dataset.md
       - Feature & Model Design: 02-use-case/feature-design.md
       - Historical Replay: 02-use-case/historical-replay.md
+  - Tools:
+      - DVC & Training Snapshots: 03-tools/dvc.md
   - Data Pipeline:
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
@@ -15,6 +17,8 @@ nav:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
       - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
       - Model Registry: 06-experiment-tracking/model-registry.md
+  - Hands-on:
+      - Setup with uv: 10-hands-on/setup.md
 
 theme:
   name: material

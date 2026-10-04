@@ -44,15 +44,18 @@ rolling_mean_24h
 Pastikan sebelumnya sudah jalan:
 
 ```bash
-python scripts/bootstrap_data.py
-python scripts/prepare_historical_demand.py
-python scripts/build_features.py
+uv run python scripts/bootstrap_data.py
+uv run python scripts/prepare_historical_demand.py
+uv run python scripts/build_features.py
+uv run dvc repro create_training_snapshot
 ```
+
+Training sekarang baca snapshot DVC, bukan langsung dari feature file yang bisa terus berubah.
 
 Lalu train:
 
 ```bash
-python scripts/train_model.py
+uv run python scripts/train_model.py
 ```
 
 Output terminal kurang lebih:

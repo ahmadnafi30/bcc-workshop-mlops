@@ -25,7 +25,7 @@ champion
 Setelah:
 
 ```bash
-python scripts/train_with_mlflow.py
+uv run python scripts/train_with_mlflow.py
 ```
 
 terminal bakal print run id untuk gradient boosting.
@@ -41,7 +41,7 @@ Run id itu yang kita register.
 ## 2. Register sebagai challenger
 
 ```bash
-python scripts/register_model.py --run-id <RUN_ID>
+uv run python scripts/register_model.py --run-id <RUN_ID>
 ```
 
 Hasil pertama kira-kira:
@@ -86,7 +86,7 @@ Untuk sekarang kita bikin explicit supaya konsepnya kelihatan.
 Misalnya version 1 sudah oke:
 
 ```bash
-python scripts/promote_model.py --version 1
+uv run python scripts/promote_model.py --version 1
 ```
 
 Registry jadi:
@@ -101,7 +101,7 @@ taxi-demand-forecasting-model
 Kalau besok version 2 lebih bagus, kita tinggal:
 
 ```bash
-python scripts/promote_model.py --version 2
+uv run python scripts/promote_model.py --version 2
 ```
 
 Sekarang alias `champion` pindah ke version 2.

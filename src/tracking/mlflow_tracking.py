@@ -37,11 +37,27 @@ def configure_mlflow(
     }
 
 
+# rapihin metadata snapshot jadi parameter yang gampang dibandingin antar MLflow run
+def build_dataset_params(
+    dataset_info: dict[str, str | int],
+) -> dict[str, str | int]:
+    # fingerprint dan nama snapshot jadi penghubung antara DVC dataset dan MLflow run
+    return {
+        "dataset_snapshot": dataset_info["name"],
+        "dataset_sha256": dataset_info["sha256"],
+        "dataset_rows": dataset_info["rows"],
+        "dataset_zones": dataset_info["zones"],
+        "dataset_start": dataset_info["start_timestamp"],
+        "dataset_end": dataset_info["end_timestamp"],
+    }
+
+
 # log naive 24h sebagai experiment run biar baseline ikut muncul di MLflow UI
 def log_baseline_run(
     metrics: dict[str, float],
     train_rows: int,
     validation_rows: int,
+    dataset_info: dict[str, str | int],
 ) -> str:
     # baseline nggak punya artifact model karena prediction-nya langsung dari lag_24h
     with mlflow.start_run(run_name="naive-24h") as run:
@@ -51,6 +67,7 @@ def log_baseline_run(
                 "forecast_horizon": "1h",
                 "train_rows": train_rows,
                 "validation_rows": validation_rows,
+                **build_dataset_params(dataset_info),
             }
         )
         mlflow.log_metrics(metrics)
@@ -73,12 +90,13 @@ def log_sklearn_run(
     input_example: pd.DataFrame,
     train_rows: int,
     validation_rows: int,
+    dataset_info: dict[str, str | int],
 ) -> dict[str, str]:
     # model example cukup beberapa row karena tujuannya buat schema dan contoh input
     example = input_example.head(5).copy()
 
     with mlflow.start_run(run_name="hist-gradient-boosting") as run:
-        # params dipisah dari metrics biar comparison antar run gampang dibaca
+        # params model dan dataset disimpan bareng supaya run bisa direproduce lagi
         mlflow.log_params(
             {
                 "model_type": "hist_gradient_boosting",
@@ -87,6 +105,7 @@ def log_sklearn_run(
                 "train_rows": train_rows,
                 "validation_rows": validation_rows,
                 **model_params,
+                **build_dataset_params(dataset_info),
             }
         )
         mlflow.log_metrics(metrics)

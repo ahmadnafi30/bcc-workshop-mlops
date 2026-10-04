@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "End-to-end MLOps workshop project for BCC"
 requires-python = ">=3.11"
 dependencies = [
+    "dvc>=3.60,<4.0",
     "joblib>=1.4",
     "mlflow>=3.5,<4.0",
     "numpy>=1.26",
@@ -17,11 +18,15 @@ dependencies = [
     "scikit-learn>=1.6,<2.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "jupyterlab>=4.2",
     "pytest>=8.3",
 ]
+
+[tool.uv]
+default-groups = ["dev"]
+package = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

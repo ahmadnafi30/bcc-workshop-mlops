@@ -96,7 +96,7 @@ Script ini cukup dijalankan saat setup.
 Tugasnya me-release satu tanggal tertentu.
 
 ```bash
-python scripts/simulate_daily_data.py --date 2025-01-27
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
 ```
 
 hasilnya:

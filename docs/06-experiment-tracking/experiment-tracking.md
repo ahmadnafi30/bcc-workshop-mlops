@@ -17,7 +17,7 @@ Di sini MLflow mulai masuk.
 Dari root repository, buka terminal baru:
 
 ```bash
-mlflow server
+uv run mlflow server
 ```
 
 Default local server bisa dibuka di:
@@ -33,15 +33,16 @@ Untuk workshop lokal, default SQLite backend dari MLflow sudah cukup. Nanti pas 
 Pastikan feature dataset sudah ada:
 
 ```bash
-python scripts/bootstrap_data.py
-python scripts/prepare_historical_demand.py
-python scripts/build_features.py
+uv run python scripts/bootstrap_data.py
+uv run python scripts/prepare_historical_demand.py
+uv run python scripts/build_features.py
+uv run dvc repro create_training_snapshot
 ```
 
 Lalu:
 
 ```bash
-python scripts/train_with_mlflow.py
+uv run python scripts/train_with_mlflow.py
 ```
 
 Script ini bikin dua run di experiment:
@@ -63,6 +64,9 @@ params
 - forecast_horizon
 - train_rows
 - validation_rows
+- dataset_snapshot
+- dataset_sha256
+- dataset_rows
 
 metrics
 - mae

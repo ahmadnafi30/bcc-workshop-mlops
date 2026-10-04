@@ -1,0 +1,9 @@
+stages:
+  create_training_snapshot:
+    cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+    deps:
+      - data/features/taxi_demand_features.parquet
+      - scripts/create_training_snapshot.py
+      - src/data_versioning/snapshot.py
+    outs:
+      - data/snapshots/training/taxi_demand_2025-01-26.parquet

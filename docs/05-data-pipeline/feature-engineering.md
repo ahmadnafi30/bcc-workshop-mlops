@@ -18,7 +18,7 @@ Model belum cukup dikasih `trip_count` mentah. Kita perlu kasih context dari wak
 Sebelum production replay mulai tanggal 27 January, kita siapin dulu history untuk initial training dan validation:
 
 ```bash
-python scripts/prepare_historical_demand.py
+uv run python scripts/prepare_historical_demand.py
 ```
 
 Default range-nya:
@@ -43,7 +43,7 @@ Ini beda sama production replay. Initial history memang sudah kita anggap availa
 Setelah processed demand lengkap:
 
 ```bash
-python scripts/build_features.py
+uv run python scripts/build_features.py
 ```
 
 Output:
@@ -139,4 +139,16 @@ feature engineering
 taxi_demand_features.parquet
 ```
 
-Nanti waktu masuk DVC, file feature atau training snapshot inilah yang lebih meaningful untuk di-version daripada semua raw monthly file.
+Setelah feature dataset siap, kita freeze data yang dipakai training menjadi **training snapshot** dan versioning-nya ditangani DVC.
+
+```bash
+uv run dvc repro create_training_snapshot
+```
+
+Output initial snapshot:
+
+```text
+data/snapshots/training/taxi_demand_2025-01-26.parquet
+```
+
+Jadi feature dataset boleh berkembang, tapi input model initial tetap punya version yang jelas. Detailnya ada di [DVC and Training Snapshots](../03-tools/dvc.md).
