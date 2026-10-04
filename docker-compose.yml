@@ -1,0 +1,4 @@
+name: bcc-workshop-mlops
+
+# Services will be added incrementally during the workshop.
+services: {}

@@ -1,0 +1,9 @@
+[project]
+name = "bcc-workshop-mlops"
+version = "0.1.0"
+description = "End-to-end MLOps workshop project for BCC"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

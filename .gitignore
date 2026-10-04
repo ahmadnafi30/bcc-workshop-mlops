@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Models / generated artifacts
+*.pkl
+*.joblib
+*.onnx
+
+# Data generated locally
+data/raw/*
+!data/raw/trips/
+!data/raw/weather/
+!data/raw/trips/.gitkeep
+!data/raw/weather/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+data/features/*
+!data/features/.gitkeep
+
+data/snapshots/*
+!data/snapshots/training/
+!data/snapshots/training/.gitkeep
+
+# DVC cache
+.dvc/cache/
+
+# Coverage
+.coverage
+htmlcov/

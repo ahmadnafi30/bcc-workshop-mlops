@@ -1,0 +1,13 @@
+site_name: BCC Workshop — MLOps
+site_description: End-to-end MLOps workshop documentation
+
+nav:
+  - Home: index.md
+  - Use Case:
+      - Problem Statement: 02-use-case/problem-statement.md
+      - Dataset: 02-use-case/dataset.md
+      - Feature & Model Design: 02-use-case/feature-design.md
+      - Historical Replay: 02-use-case/historical-replay.md
+
+theme:
+  name: material
