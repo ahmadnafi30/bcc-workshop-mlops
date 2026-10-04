@@ -1,15 +1,42 @@
 site_name: BCC Workshop — MLOps
-site_description: End-to-end MLOps workshop documentation
+site_description: Beginner-friendly end-to-end MLOps workshop using NYC taxi demand forecasting
+repo_url: https://github.com/ahmadnafi30/bcc-workshop-mlops
+repo_name: ahmadnafi30/bcc-workshop-mlops
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
 
 nav:
   - Home: index.md
+  - Start Here:
+      - Workshop Overview: 01-introduction/workshop-overview.md
+      - MLOps from Zero: 01-introduction/mlops-from-zero.md
+      - Architecture: 01-introduction/architecture.md
+      - Git Workflow: 01-introduction/git-workflow.md
   - Use Case:
       - Problem Statement: 02-use-case/problem-statement.md
       - Dataset: 02-use-case/dataset.md
       - Feature & Model Design: 02-use-case/feature-design.md
       - Historical Replay: 02-use-case/historical-replay.md
-  - Tools:
-      - DVC & Training Snapshots: 03-tools/dvc.md
+  - Core Tools:
+      - uv: 03-tools/uv.md
+      - DVC: 03-tools/dvc.md
       - Airflow: 03-tools/airflow.md
       - Docker: 03-tools/docker.md
   - Infrastructure:
@@ -17,7 +44,7 @@ nav:
   - Data Pipeline:
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
-      - Airflow Orchestration: 05-data-pipeline/airflow-pipeline.md
+      - Airflow Pipeline: 05-data-pipeline/airflow-pipeline.md
   - Training & Tracking:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
       - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
@@ -34,8 +61,18 @@ nav:
       - Prometheus: 09-monitoring/prometheus.md
       - Grafana: 09-monitoring/grafana.md
       - Retraining: 09-monitoring/retraining.md
-  - Hands-on:
-      - Setup with uv: 10-hands-on/setup.md
-
-theme:
-  name: material
+  - Hands-on Workshop:
+      - Step 0 - Setup: 10-hands-on/setup.md
+      - Step 1 - Data: 10-hands-on/step-01-data.md
+      - Step 2 - Baseline: 10-hands-on/step-02-baseline.md
+      - Step 3 - DVC: 10-hands-on/step-03-dvc.md
+      - Step 4 - MLflow: 10-hands-on/step-04-mlflow.md
+      - Step 5 - Airflow: 10-hands-on/step-05-airflow.md
+      - Step 6 - FastAPI: 10-hands-on/step-06-api.md
+      - Step 7 - Docker: 10-hands-on/step-07-docker.md
+      - Step 8 - CI/CD: 10-hands-on/step-08-cicd.md
+      - Step 9 - Monitoring: 10-hands-on/step-09-monitoring.md
+      - Step 10 - Retraining: 10-hands-on/step-10-retraining.md
+      - Troubleshooting: 10-hands-on/troubleshooting.md
+      - Presenter Checklist: 10-hands-on/demo-checklist.md
+  - Glossary: glossary.md

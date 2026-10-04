@@ -1,172 +1,218 @@
 # BCC Workshop — MLOps
 
-End-to-end MLOps workshop project using an urban mobility / taxi demand forecasting use case.
+Hi peers 👋
 
-Project ini ngebahas lifecycle ML dari data ingestion, feature engineering, experiment tracking, model registry, serving, CI/CD, monitoring, sampai retraining.
+Welcome to **BCC Workshop — MLOps**, a beginner-friendly end-to-end project where we learn how a machine learning model moves from a notebook idea into a small production-like system.
 
-## Stack
+The use case is **NYC Yellow Taxi Demand Forecasting**: predicting how many taxi pickups will happen in each Manhattan taxi zone one hour ahead.
 
-- Python
-- uv
-- Airflow
-- DVC
-- MLflow
-- FastAPI
-- Docker / Docker Compose
-- GitHub Actions
-- Prometheus
-- Grafana
+This workshop is presented by:
 
-## Quick Start
+- **Ahmad Nafi Mubarok**
+- **Fatoni Murfid Syafii**
 
-Project ini pakai **uv** buat Python environment dan dependency management.
+> The goal is not to build the fanciest forecasting model. The goal is to understand the ML lifecycle around the model: data, reproducibility, tracking, serving, automation, delivery, monitoring, and retraining.
 
-Dari root repository:
+## What are we building?
 
-```bash
+~~~text
+NYC TLC data
+    ↓
+data preparation
+    ↓
+feature engineering
+    ↓
+DVC training snapshot
+    ↓
+model training
+    ↓
+MLflow experiment tracking
+    ↓
+MLflow Model Registry
+    ↓
+Airflow orchestration
+    ↓
+FastAPI serving
+    ↓
+Docker / Docker Compose
+    ↓
+GitHub Actions CI/CD
+    ↓
+Prometheus + Grafana
+    ↓
+performance monitoring
+    ↓
+retraining → challenger model
+~~~
+
+Every tool enters the story because we already have a problem it solves.
+
+## Workshop stack
+
+| Area | Tool |
+| --- | --- |
+| Python environment | uv |
+| ML model | scikit-learn |
+| Data versioning | DVC |
+| Workflow orchestration | Apache Airflow |
+| Experiment tracking | MLflow |
+| Model registry | MLflow Model Registry |
+| Model API | FastAPI + Uvicorn |
+| Containerization | Docker |
+| Local multi-service stack | Docker Compose |
+| CI/CD | GitHub Actions + GHCR |
+| Metrics | Prometheus |
+| Dashboard | Grafana |
+
+## Quick start
+
+### 1. Clone
+
+~~~bash
+git clone https://github.com/ahmadnafi30/bcc-workshop-mlops.git
+cd bcc-workshop-mlops
+~~~
+
+### 2. Install
+
+This project uses Python 3.11 and uv.
+
+~~~bash
 uv sync
-```
+~~~
 
-Karena project punya `.python-version`, uv bakal pakai Python 3.11 untuk environment workshop.
+Run tests:
 
-Jalankan command project lewat `uv run`:
-
-```bash
+~~~bash
 uv run pytest
-uv run python scripts/bootstrap_data.py
-uv run dvc repro create_training_snapshot
-```
+~~~
 
-Kalau mau menjalankan Airflow orchestration:
+### 3. Open the learning material
 
-```bash
-uv sync --group airflow
-uv run --group airflow python scripts/start_airflow.py
-```
+~~~bash
+uv sync --group docs
+uv run --group docs mkdocs serve
+~~~
 
-DAG utama yang tersedia:
+Open:
 
-```text
-taxi_daily_replay
-taxi_initial_training
-taxi_model_monitoring
-```
+~~~text
+http://127.0.0.1:8000
+~~~
 
-Setelah model sudah dipromote ke alias `champion`, start serving API:
+If you are new to MLOps, start with the docs instead of jumping directly into Docker or Airflow.
 
-```bash
-uv run uvicorn api.main:app --reload
-```
+## Local service stack
 
-Endpoint utama:
+Later in the workshop:
 
-```text
-GET  /health
-GET  /model-info
-POST /predict
-```
-
-Interactive API docs tersedia di:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Kalau mau jalanin local stack pakai Docker:
-
-```bash
+~~~bash
 docker compose up -d --build
-```
+~~~
 
-Service yang langsung hidup:
+| Service | URL |
+| --- | --- |
+| MLflow | http://localhost:5000 |
+| Airflow | http://localhost:8080 |
+| FastAPI | http://localhost:8000 |
+| FastAPI docs | http://localhost:8000/docs |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
 
-```text
-MLflow     -> http://localhost:5000
-Airflow    -> http://localhost:8080
-FastAPI    -> http://localhost:8000
-Prometheus -> http://localhost:9090
-Grafana    -> http://localhost:3000
-```
+## Repository map
 
-Untuk bootstrap data lewat container:
+~~~text
+.
+├── api/                 # HTTP layer for model serving
+├── dags/                # Airflow DAG definitions
+├── data/                # local generated data
+├── docker/              # container image definition
+├── docs/                # workshop material
+├── monitoring/          # Prometheus + Grafana config
+├── notebooks/           # lightweight data exploration
+├── scripts/             # human-friendly commands
+├── src/                 # reusable project logic
+├── tests/               # automated tests
+├── docker-compose.yml
+├── dvc.yaml
+├── mkdocs.yml
+└── pyproject.toml
+~~~
 
-```bash
-docker compose run --rm workspace python scripts/bootstrap_data.py
-docker compose run --rm workspace python scripts/prepare_historical_demand.py
-docker compose run --rm workspace python scripts/build_features.py
-```
+Useful rule:
 
-GitHub Actions sekarang punya dua workflow:
+~~~text
+scripts/ = "run this manually"
+src/     = "reusable logic"
+dags/    = "when + in what order"
+api/     = "expose predictions through HTTP"
+~~~
 
-```text
-CI
-→ tests + Docker build validation
+## Git workflow
 
-Container Delivery
-→ publish api / mlflow / airflow image ke GHCR setelah CI main sukses
-```
+~~~text
+feat/* or fix/*
+        ↓
+      develop
+        ↓
+       main
+~~~
 
-Jadi CD project ini berhenti di **container delivery**, belum auto-deploy ke server/cloud.
+- **main**: stable workshop release
+- **develop**: integration branch
+- **feat/***: new feature work
+- **fix/***: bug fixes
+- **docs/***: documentation-only changes
 
-Monitoring flow sekarang:
+Read CONTRIBUTING.md before creating a PR.
 
-```text
-FastAPI /metrics
-      ↓
-Prometheus
-      ↓
-Grafana
+## Dataset note
 
-prediction log
-      ↓
-ground truth
-      ↓
-MAE / RMSE
-      ↓
-retraining decision
-      ↓
-Airflow monitoring DAG
-      ↓
-optional retraining
-      ↓
-challenger model
-```
+The project uses official NYC Taxi & Limousine Commission Yellow Taxi Trip Records.
 
-Buat replay prediction satu historical day:
+Opening the CloudFront directory URL itself can show **AccessDenied**. That is expected because directory listing is not public. We access exact monthly Parquet objects instead, such as:
 
-```bash
-uv run python scripts/replay_predictions.py --date 2025-01-28
-uv run python scripts/evaluate_predictions.py
-```
+~~~text
+.../yellow_tripdata_2025-01.parquet
+~~~
 
-Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
+The bootstrap script handles those paths for you.
 
-> `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.
+## Core learning path
 
-## Documentation
-
-Workshop materials dan hands-on guide ada di `docs/`.
-
-## High-level Flow
-
-```text
+~~~text
+Setup
+  ↓
 Data
   ↓
-Airflow
+Baseline
   ↓
-DVC snapshot
-  ↓
-Training
+DVC
   ↓
 MLflow
+  ↓
+Airflow
   ↓
 FastAPI
   ↓
 Docker
   ↓
-GitHub Actions
+CI/CD
   ↓
 Monitoring
   ↓
 Retraining
-```
+~~~
+
+## Production-like, not production-copy-paste
+
+This repository deliberately simplifies a few things:
+
+- local filesystem instead of cloud object storage,
+- SQLite for local MLflow metadata,
+- Airflow standalone,
+- historical replay instead of waiting for real future data,
+- manual champion promotion,
+- no Kubernetes.
+
+The concepts transfer. The infrastructure can grow later.

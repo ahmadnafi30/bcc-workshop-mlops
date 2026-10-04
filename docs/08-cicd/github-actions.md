@@ -1,110 +1,149 @@
 # GitHub Actions
 
-GitHub Actions jadi automation engine buat CI/CD project ini.
+## What is a workflow?
 
-Workflow disimpan di:
+A GitHub Actions workflow is YAML stored under:
 
-```text
+~~~text
 .github/workflows/
-├── ci.yml
-└── cd.yml
-```
+~~~
+
+It describes automated jobs triggered by repository events.
+
+Our main files:
+
+~~~text
+ci.yml
+cd.yml
+~~~
+
+## Event → workflow
+
+Examples:
+
+~~~text
+push
+→ CI
+
+pull request
+→ CI
+
+successful CI on main
+→ container delivery
+~~~
+
+This event-driven model is different from Airflow's data workflow orchestration.
 
 ## CI workflow
 
-`ci.yml` jalan saat:
+### Branch policy
 
-```text
-push ke main
-pull request ke main
-manual trigger
-```
+For pull requests:
 
-Ada dua job utama.
+~~~text
+feat/* → develop
+develop → main
+~~~
 
-### Python tests
+The CI job checks that PR direction matches the repository workflow.
 
-```text
-checkout
-   ↓
-setup uv
-   ↓
-install Python
-   ↓
-uv sync
-   ↓
+This does not replace GitHub branch protection, but it makes the expected process visible and testable.
+
+### Quality job
+
+The quality job installs uv, prepares Python, and runs checks.
+
+~~~text
+Ruff
 pytest
-```
+MkDocs build
+~~~
 
-Command test yang dijalankan runner:
+Why build docs in CI?
 
-```bash
-uv run pytest -q
-```
+Because broken documentation links or invalid navigation should be caught before workshop day.
 
-Jadi CI menggunakan workflow yang sama dengan cara kita jalanin project lokal.
+### Docker matrix
 
-### Docker build
+We build multiple targets:
 
-Job kedua pakai matrix:
-
-```text
+~~~text
 api
 mlflow
 airflow
-```
+~~~
 
-GitHub build ketiga target Dockerfile. Di CI `push` diset false, jadi image cuma dibuild buat validasi dan belum dikirim ke registry.
+A matrix avoids copying the same job three times.
 
-Sebelum build, workflow juga menjalankan:
+Conceptually:
 
-```bash
-docker compose config --quiet
-```
-
-supaya error syntax atau interpolation di Compose ketahuan lebih awal.
+~~~text
+same build logic
+×
+different target
+~~~
 
 ## Cache
 
-Docker build menggunakan GitHub Actions cache yang dipisah per target. uv setup juga pakai cache supaya install berikutnya lebih cepat.
+GitHub Actions can reuse cached dependencies and Docker layers.
+
+Caching is not correctness.
+
+It is an optimization.
+
+The workflow should still produce the same result when the cache is empty.
 
 ## Concurrency
 
-CI punya `cancel-in-progress: true`.
+Suppose you push commit A, then immediately push commit B.
 
-Kalau commit baru masuk ke branch yang sama saat CI lama masih jalan, run lama bisa dihentikan dan runner fokus ke revision terbaru.
+CI for A may no longer be useful.
 
-## CD workflow
+The workflow can cancel the older in-progress run for the same branch.
 
-`cd.yml` menunggu workflow `CI` selesai.
+This saves runner time.
 
-Container image baru dipublish kalau:
+## Delivery workflow
 
-```text
-CI conclusion = success
-event = push
-branch = main
-```
+The CD workflow waits for CI completion.
 
-Jadi pull request nggak bisa publish image hanya karena membuka PR.
+It only publishes when:
 
-Manual trigger tetap tersedia buat demo.
+- CI succeeded,
+- event came from a push,
+- branch is main.
 
-## Permissions
+Pull requests do not publish release images.
 
-CI cuma butuh:
+## GITHUB_TOKEN
 
-```text
-contents: read
-```
+GitHub automatically provides a token to the workflow.
 
-Sedangkan delivery butuh:
+For GHCR publishing, the job requests:
 
-```text
-contents: read
+~~~text
 packages: write
-```
+~~~
 
-`packages: write` dipakai buat push image ke GitHub Container Registry.
+This avoids storing a personal registry password in the repository.
 
-Kita pakai built-in `GITHUB_TOKEN`, jadi workshop nggak perlu bikin Docker registry password sendiri.
+## Secrets rule
+
+Never commit credentials into workflow YAML.
+
+Use GitHub Secrets or environment-based credentials for real secret values.
+
+Our local demo configuration only contains non-secret defaults.
+
+## Reading a workflow
+
+When a YAML file looks overwhelming, read it in this order:
+
+1. name;
+2. trigger;
+3. permissions;
+4. jobs;
+5. steps inside one job;
+6. only then study expressions.
+
+Do not try to understand the whole file at once.

@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+      - develop
+      - "feat/**"
+      - "fix/**"
+      - "docs/**"
+      - "chore/**"
   pull_request:
     branches:
       - main
+      - develop
   workflow_dispatch:
 
 permissions:
@@ -17,8 +23,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Python tests
+  branch-policy:
+    name: Branch policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate pull request direction
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE_BRANCH" = "main" ] && [ "$HEAD_BRANCH" != "develop" ]; then
+            echo "PR ke main harus berasal dari develop."
+            exit 1
+          fi
+
+          if [ "$BASE_BRANCH" = "develop" ]; then
+            case "$HEAD_BRANCH" in
+              feat/*|fix/*|docs/*|chore/*) ;;
+              *)
+                echo "PR ke develop harus berasal dari feat/*, fix/*, docs/*, atau chore/*."
+                exit 1
+                ;;
+            esac
+          fi
+
+  quality:
+    name: Python + docs quality
     runs-on: ubuntu-latest
 
     steps:
@@ -35,10 +67,16 @@ jobs:
         run: uv python install
 
       - name: Sync project
-        run: uv sync
+        run: uv sync --group docs
+
+      - name: Run Ruff
+        run: uv run ruff check src api scripts tests
 
       - name: Run tests
         run: uv run pytest -q
+
+      - name: Build workshop docs
+        run: uv run --group docs mkdocs build --strict
 
   docker-build:
     name: Docker build - ${{ matrix.target }}

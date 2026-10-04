@@ -2,6 +2,7 @@
 .github
 .venv
 .airflow
+.mlflow
 .pytest_cache
 .mypy_cache
 .ruff_cache

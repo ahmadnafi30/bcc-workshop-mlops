@@ -30,6 +30,7 @@ airflow/airflow.db
 airflow/airflow.cfg
 
 # MLflow
+.mlflow/
 mlruns/
 mlartifacts/
 mlflow.db*
@@ -52,12 +53,9 @@ data/metadata/*
 
 data/raw/*
 !data/raw/trips/
-!data/raw/weather/
 !data/raw/trips/.gitkeep
-!data/raw/weather/.gitkeep
 
 data/processed/*
-!data/processed/.gitkeep
 !data/processed/demand/
 !data/processed/demand/.gitkeep
 
@@ -77,3 +75,6 @@ data/monitoring/*
 # Coverage
 .coverage
 htmlcov/
+
+# MkDocs build
+site/
