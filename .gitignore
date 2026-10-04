@@ -38,6 +38,15 @@ mlartifacts/
 *.onnx
 
 # Data generated locally
+data/source/*
+!data/source/tlc/
+!data/source/replay/
+!data/source/tlc/.gitkeep
+!data/source/replay/.gitkeep
+
+data/metadata/*
+!data/metadata/.gitkeep
+
 data/raw/*
 !data/raw/trips/
 !data/raw/weather/
@@ -46,6 +55,8 @@ data/raw/*
 
 data/processed/*
 !data/processed/.gitkeep
+!data/processed/demand/
+!data/processed/demand/.gitkeep
 
 data/features/*
 !data/features/.gitkeep

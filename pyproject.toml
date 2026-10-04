@@ -1,9 +1,27 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "bcc-workshop-mlops"
 version = "0.1.0"
 description = "End-to-end MLOps workshop project for BCC"
 requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=17.0",
+    "requests>=2.32",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyterlab>=4.2",
+    "pytest>=8.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
 testpaths = ["tests"]

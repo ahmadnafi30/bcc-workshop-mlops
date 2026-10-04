@@ -8,6 +8,8 @@ nav:
       - Dataset: 02-use-case/dataset.md
       - Feature & Model Design: 02-use-case/feature-design.md
       - Historical Replay: 02-use-case/historical-replay.md
+  - Data Pipeline:
+      - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
 
 theme:
   name: material
