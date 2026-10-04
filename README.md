@@ -37,6 +37,20 @@ uv run python scripts/bootstrap_data.py
 uv run dvc repro create_training_snapshot
 ```
 
+Kalau mau menjalankan Airflow orchestration:
+
+```bash
+uv sync --group airflow
+uv run --group airflow python scripts/start_airflow.py
+```
+
+DAG utama yang tersedia:
+
+```text
+taxi_daily_replay
+taxi_initial_training
+```
+
 Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
 
 > `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.

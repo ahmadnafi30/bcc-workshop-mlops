@@ -108,3 +108,28 @@ uv sync
 ```
 
 lalu project siap dipakai.
+
+
+## Airflow environment
+
+Airflow sengaja ditaruh di dependency group terpisah karena dependency-nya jauh lebih besar dibanding core ML project.
+
+Untuk install core project + Airflow:
+
+```bash
+uv sync --group airflow
+```
+
+Jalankan Airflow dengan:
+
+```bash
+uv run --group airflow python scripts/start_airflow.py
+```
+
+Kalau mau cek DAG dari CLI:
+
+```bash
+uv run --group airflow airflow dags list
+```
+
+Di Windows, jalankan bagian Airflow lewat WSL2. Core Python project tetap bisa dipakai seperti biasa dari environment lain yang didukung uv.

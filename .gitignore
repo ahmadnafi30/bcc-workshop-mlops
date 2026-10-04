@@ -24,6 +24,7 @@ env/
 .ipynb_checkpoints/
 
 # Airflow
+.airflow/
 airflow/logs/
 airflow/airflow.db
 airflow/airflow.cfg
