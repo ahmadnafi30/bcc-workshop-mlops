@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from data_versioning.snapshot import describe_snapshot
 from tracking.mlflow_tracking import configure_mlflow

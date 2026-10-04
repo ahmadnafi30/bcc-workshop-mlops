@@ -1,7 +1,7 @@
 import importlib.util
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 
 # cek satu import tanpa menjalankan package-nya
