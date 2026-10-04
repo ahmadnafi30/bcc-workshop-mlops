@@ -71,6 +71,28 @@ Interactive API docs tersedia di:
 http://127.0.0.1:8000/docs
 ```
 
+Kalau mau jalanin local stack pakai Docker:
+
+```bash
+docker compose up -d --build
+```
+
+Service yang langsung hidup:
+
+```text
+MLflow  -> http://localhost:5000
+Airflow -> http://localhost:8080
+FastAPI -> http://localhost:8000
+```
+
+Untuk bootstrap data lewat container:
+
+```bash
+docker compose run --rm workspace python scripts/bootstrap_data.py
+docker compose run --rm workspace python scripts/prepare_historical_demand.py
+docker compose run --rm workspace python scripts/build_features.py
+```
+
 Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
 
 > `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.

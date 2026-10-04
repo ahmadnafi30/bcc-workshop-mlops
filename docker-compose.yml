@@ -1,4 +1,96 @@
 name: bcc-workshop-mlops
 
-# Services will be added incrementally during the workshop.
-services: {}
+services:
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: mlflow
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-taxi-demand-forecasting}
+      MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-taxi-demand-forecasting-model}
+      MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: airflow
+    environment:
+      AIRFLOW_HOME: /airflow
+      AIRFLOW__CORE__DAGS_FOLDER: /app/dags
+      AIRFLOW__API__HOST: 0.0.0.0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-taxi-demand-forecasting}
+      MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-taxi-demand-forecasting-model}
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+      - airflow-home:/airflow
+      - dvc-cache:/app/.dvc/cache
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+  workspace:
+    profiles:
+      - tools
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: base
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-taxi-demand-forecasting}
+      MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-taxi-demand-forecasting-model}
+    volumes:
+      - ./data:/app/data
+      - dvc-cache:/app/.dvc/cache
+
+volumes:
+  mlflow-data:
+  airflow-home:
+  dvc-cache:
