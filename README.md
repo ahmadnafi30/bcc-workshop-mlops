@@ -51,6 +51,26 @@ taxi_daily_replay
 taxi_initial_training
 ```
 
+Setelah model sudah dipromote ke alias `champion`, start serving API:
+
+```bash
+uv run uvicorn api.main:app --reload
+```
+
+Endpoint utama:
+
+```text
+GET  /health
+GET  /model-info
+POST /predict
+```
+
+Interactive API docs tersedia di:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
 Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
 
 > `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.

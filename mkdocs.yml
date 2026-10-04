@@ -19,6 +19,9 @@ nav:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
       - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
       - Model Registry: 06-experiment-tracking/model-registry.md
+  - Model Serving:
+      - Serving Design: 07-model-serving/model-serving.md
+      - FastAPI: 07-model-serving/fastapi.md
   - Hands-on:
       - Setup with uv: 10-hands-on/setup.md
 
