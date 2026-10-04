@@ -58,6 +58,7 @@ def log_baseline_run(
     train_rows: int,
     validation_rows: int,
     dataset_info: dict[str, str | int],
+    stage: str = "validation",
 ) -> str:
     # baseline nggak punya artifact model karena prediction-nya langsung dari lag_24h
     with mlflow.start_run(run_name="naive-24h") as run:
@@ -75,7 +76,7 @@ def log_baseline_run(
             {
                 "task": "taxi-demand-forecasting",
                 "model_family": "baseline",
-                "stage": "initial-validation",
+                "stage": stage,
             }
         )
 
@@ -91,6 +92,7 @@ def log_sklearn_run(
     train_rows: int,
     validation_rows: int,
     dataset_info: dict[str, str | int],
+    stage: str = "validation",
 ) -> dict[str, str]:
     # model example cukup beberapa row karena tujuannya buat schema dan contoh input
     example = input_example.head(5).copy()
@@ -113,7 +115,7 @@ def log_sklearn_run(
             {
                 "task": "taxi-demand-forecasting",
                 "model_family": "gradient-boosting",
-                "stage": "initial-validation",
+                "stage": stage,
             }
         )
 

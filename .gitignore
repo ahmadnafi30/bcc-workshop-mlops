@@ -68,6 +68,9 @@ data/snapshots/*
 !data/snapshots/training/
 !data/snapshots/training/.gitkeep
 
+data/monitoring/*
+!data/monitoring/.gitkeep
+
 # DVC cache
 .dvc/cache/
 

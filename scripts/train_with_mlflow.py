@@ -15,7 +15,10 @@ def main() -> None:
         / "taxi_demand_2025-01-26.parquet"
     )
 
-    result = run_mlflow_experiment(snapshot_path)
+    result = run_mlflow_experiment(
+        snapshot_path,
+        stage="initial-validation",
+    )
 
     print("\nmlflow experiment selesai")
     print(f"tracking uri: {result['tracking_uri']}")

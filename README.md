@@ -49,6 +49,7 @@ DAG utama yang tersedia:
 ```text
 taxi_daily_replay
 taxi_initial_training
+taxi_model_monitoring
 ```
 
 Setelah model sudah dipromote ke alias `champion`, start serving API:
@@ -80,9 +81,11 @@ docker compose up -d --build
 Service yang langsung hidup:
 
 ```text
-MLflow  -> http://localhost:5000
-Airflow -> http://localhost:8080
-FastAPI -> http://localhost:8000
+MLflow     -> http://localhost:5000
+Airflow    -> http://localhost:8080
+FastAPI    -> http://localhost:8000
+Prometheus -> http://localhost:9090
+Grafana    -> http://localhost:3000
 ```
 
 Untuk bootstrap data lewat container:
@@ -104,6 +107,37 @@ Container Delivery
 ```
 
 Jadi CD project ini berhenti di **container delivery**, belum auto-deploy ke server/cloud.
+
+Monitoring flow sekarang:
+
+```text
+FastAPI /metrics
+      ↓
+Prometheus
+      ↓
+Grafana
+
+prediction log
+      ↓
+ground truth
+      ↓
+MAE / RMSE
+      ↓
+retraining decision
+      ↓
+Airflow monitoring DAG
+      ↓
+optional retraining
+      ↓
+challenger model
+```
+
+Buat replay prediction satu historical day:
+
+```bash
+uv run python scripts/replay_predictions.py --date 2025-01-28
+uv run python scripts/evaluate_predictions.py
+```
 
 Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
 

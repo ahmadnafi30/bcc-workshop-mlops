@@ -45,6 +45,26 @@ def test_split_train_validation_uses_time_order() -> None:
     assert validation["target_trip_count"].tolist() == [20, 30]
 
 
+# pastikan validation window ikut maju kalau snapshot retraining punya tanggal lebih baru
+def test_split_train_validation_moves_with_latest_snapshot_date() -> None:
+    features = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2025-02-01 00:00:00",
+                "2025-02-10 23:00:00",
+                freq="h",
+            ),
+            "target_trip_count": 1,
+        }
+    )
+
+    train, validation = split_train_validation(features)
+
+    assert train["timestamp"].max() == pd.Timestamp("2025-02-05 23:00:00")
+    assert validation["timestamp"].min() == pd.Timestamp("2025-02-06 00:00:00")
+    assert validation["timestamp"].max() == pd.Timestamp("2025-02-10 23:00:00")
+
+
 # pastikan model utama bisa fit dan predict dari schema feature yang kita sepakati
 def test_hist_gradient_boosting_can_train_and_predict() -> None:
     # bikin synthetic feature dataset kecil tanpa perlu dependency ke file TLC

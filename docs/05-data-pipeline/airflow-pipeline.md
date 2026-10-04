@@ -199,28 +199,52 @@ Nanti production version bisa diganti ke daily schedule dan target date diambil 
 
 Historical replay di sini cuma mempercepat waktu, bukan mengubah dependency pipeline.
 
-## Yang belum ada
+## Monitoring DAG
 
-DAG sekarang belum punya:
-
-```text
-performance monitoring
-automatic retraining trigger
-champion promotion
-```
-
-Itu memang belum kita pura-purain.
-
-Nanti setelah prediction logging + monitoring selesai, flow-nya baru bisa berkembang jadi:
+DAG ketiga:
 
 ```text
-daily data
-    ↓
-evaluate recent model
-    ↓
-performance turun?
-    ↓ yes
-trigger training DAG
+taxi_model_monitoring
 ```
 
-Jadi Airflow orchestration kita tumbuh bareng lifecycle project, bukan langsung penuh placeholder.
+Flow-nya:
+
+```text
+evaluate_model
+      ↓
+maybe_retrain
+```
+
+`evaluate_model` baca prediction log, cari ground truth yang sudah tersedia, lalu compare recent MAE dengan validation MAE champion dari MLflow.
+
+Default decision rule:
+
+```text
+recent MAE > reference MAE x 1.25
+AND
+evaluated predictions >= 100
+```
+
+Angka ini configurable lewat Airflow params atau environment.
+
+Kalau model masih sehat, `maybe_retrain` berhenti dengan status `not_needed`.
+
+Kalau performa turun:
+
+```text
+latest feature dataset
+      ↓
+runtime training snapshot
+      ↓
+5-day validation window terbaru
+      ↓
+MLflow retraining run
+      ↓
+beat naive baseline?
+      ↓ yes
+register challenger
+```
+
+Runtime snapshot tetap punya nama + SHA256 dan dicatat di MLflow. Kita nggak menjalankan `dvc add` otomatis dari Airflow karena itu bakal memodifikasi repository runtime. DVC tetap dipakai buat reproducible versioned snapshot workflow, sedangkan runtime retraining menyimpan fingerprint dataset di MLflow.
+
+Champion promotion masih manual. Jadi automation berhenti di challenger, bukan langsung ganti production model.

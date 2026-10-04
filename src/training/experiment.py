@@ -36,6 +36,7 @@ def load_training_snapshot(snapshot_path: Path) -> pd.DataFrame:
 # jalanin baseline dan model utama lalu log dua-duanya ke MLflow
 def run_mlflow_experiment(
     snapshot_path: Path,
+    stage: str = "validation",
 ) -> dict[str, str | float | bool]:
     # semua run diarahkan ke experiment yang sama sebelum training dimulai
     tracking = configure_mlflow()
@@ -52,6 +53,7 @@ def run_mlflow_experiment(
         train_rows=len(train_data),
         validation_rows=len(validation_data),
         dataset_info=snapshot_info,
+        stage=stage,
     )
 
     # model utama ditrain dan dievaluate pada validation period yang sama
@@ -71,6 +73,7 @@ def run_mlflow_experiment(
         train_rows=len(train_data),
         validation_rows=len(validation_data),
         dataset_info=snapshot_info,
+        stage=stage,
     )
 
     return {

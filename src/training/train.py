@@ -6,8 +6,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 from features.build_features import MODEL_FEATURE_COLUMNS
 
-TRAIN_END = pd.Timestamp("2025-01-22 00:00:00")
-VALIDATION_END = pd.Timestamp("2025-01-27 00:00:00")
+DEFAULT_VALIDATION_DAYS = 5
 
 HIST_GRADIENT_BOOSTING_PARAMS = {
     "learning_rate": 0.05,
@@ -21,6 +20,7 @@ HIST_GRADIENT_BOOSTING_PARAMS = {
 # pisahin feature dataset berdasarkan waktu supaya future nggak bocor ke training
 def split_train_validation(
     features: pd.DataFrame,
+    validation_days: int = DEFAULT_VALIDATION_DAYS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     # pastiin timestamp sudah jadi datetime sebelum bikin time-based mask
     data = features.copy()
@@ -29,11 +29,14 @@ def split_train_validation(
         errors="raise",
     )
 
-    # training pakai row sebelum 22 January, validation pakai 22-26 January
-    train = data.loc[data["timestamp"] < TRAIN_END].copy()
+    # validation selalu pakai beberapa hari paling akhir dari snapshot
+    validation_end = data["timestamp"].max().normalize() + pd.Timedelta(days=1)
+    validation_start = validation_end - pd.Timedelta(days=validation_days)
+
+    train = data.loc[data["timestamp"] < validation_start].copy()
     validation = data.loc[
-        (data["timestamp"] >= TRAIN_END)
-        & (data["timestamp"] < VALIDATION_END)
+        (data["timestamp"] >= validation_start)
+        & (data["timestamp"] < validation_end)
     ].copy()
 
     if train.empty:

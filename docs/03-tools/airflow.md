@@ -152,7 +152,27 @@ Promotion tetap explicit:
 uv run python scripts/promote_model.py --version <VERSION>
 ```
 
-## Kenapa dua DAG?
+### taxi_model_monitoring
+
+DAG ini evaluate champion model dari prediction log yang actual demand-nya sudah tersedia.
+
+```text
+evaluate champion
+      ↓
+recent MAE > threshold?
+   /              \
+ no               yes
+ ↓                 ↓
+stop          new snapshot
+                   ↓
+                retrain
+                   ↓
+             challenger
+```
+
+Champion tetap nggak auto-promote.
+
+## Kenapa beberapa DAG?
 
 Kalau semuanya dimasukin satu DAG, kita jadi seolah-olah harus retrain model setiap ada daily batch.
 
@@ -166,4 +186,4 @@ model training pipeline
 jalan saat memang dibutuhkan
 ```
 
-Nanti monitoring yang menentukan kapan model perlu diretrain.
+Monitoring sekarang yang menentukan kapan retraining memang perlu dijalankan.

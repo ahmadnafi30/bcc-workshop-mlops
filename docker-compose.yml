@@ -65,6 +65,9 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-taxi-demand-forecasting}
       MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-taxi-demand-forecasting-model}
+      RETRAIN_MAE_MULTIPLIER: ${RETRAIN_MAE_MULTIPLIER:-1.25}
+      RETRAIN_MIN_SAMPLES: ${RETRAIN_MIN_SAMPLES:-100}
+      RETRAIN_RECENT_LIMIT: ${RETRAIN_RECENT_LIMIT:-500}
     ports:
       - "${AIRFLOW_PORT:-8080}:8080"
     volumes:
@@ -74,6 +77,36 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
   workspace:
     profiles:
@@ -94,3 +127,5 @@ volumes:
   mlflow-data:
   airflow-home:
   dvc-cache:
+  prometheus-data:
+  grafana-data:

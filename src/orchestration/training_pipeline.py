@@ -47,7 +47,10 @@ def train_candidate_model(
         / DEFAULT_SNAPSHOT_NAME
     )
 
-    return run_mlflow_experiment(snapshot_path)
+    return run_mlflow_experiment(
+        snapshot_path,
+        stage="initial-validation",
+    )
 
 
 # register candidate hanya kalau MAE model lebih baik daripada naive baseline

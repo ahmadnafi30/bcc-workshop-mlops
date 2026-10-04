@@ -29,6 +29,11 @@ nav:
       - Concepts: 08-cicd/cicd-concepts.md
       - GitHub Actions: 08-cicd/github-actions.md
       - Container Delivery: 08-cicd/deployment-flow.md
+  - Monitoring:
+      - Concepts: 09-monitoring/monitoring-concepts.md
+      - Prometheus: 09-monitoring/prometheus.md
+      - Grafana: 09-monitoring/grafana.md
+      - Retraining: 09-monitoring/retraining.md
   - Hands-on:
       - Setup with uv: 10-hands-on/setup.md
 
