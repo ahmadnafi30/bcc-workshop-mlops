@@ -13,6 +13,8 @@ nav:
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
   - Training & Tracking:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
+      - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
+      - Model Registry: 06-experiment-tracking/model-registry.md
 
 theme:
   name: material

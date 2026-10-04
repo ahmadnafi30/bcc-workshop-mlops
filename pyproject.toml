@@ -9,6 +9,7 @@ description = "End-to-end MLOps workshop project for BCC"
 requires-python = ">=3.11"
 dependencies = [
     "joblib>=1.4",
+    "mlflow>=3.5,<4.0",
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=17.0",

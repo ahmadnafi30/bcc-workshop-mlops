@@ -9,6 +9,14 @@ from features.build_features import MODEL_FEATURE_COLUMNS
 TRAIN_END = pd.Timestamp("2025-01-22 00:00:00")
 VALIDATION_END = pd.Timestamp("2025-01-27 00:00:00")
 
+HIST_GRADIENT_BOOSTING_PARAMS = {
+    "learning_rate": 0.05,
+    "max_iter": 200,
+    "max_leaf_nodes": 31,
+    "l2_regularization": 0.1,
+    "random_state": 42,
+}
+
 
 # pisahin feature dataset berdasarkan waktu supaya future nggak bocor ke training
 def split_train_validation(
@@ -37,13 +45,10 @@ def split_train_validation(
     return train, validation
 
 
-# siapin dataframe feature sesuai tipe yang diharapkan model
+# siapin dataframe feature dalam urutan yang selalu sama buat fit dan predict
 def prepare_model_input(data: pd.DataFrame) -> pd.DataFrame:
-    # zone_id adalah category, bukan angka yang punya urutan besar-kecil
-    X = data[MODEL_FEATURE_COLUMNS].copy()
-    X["zone_id"] = X["zone_id"].astype("category")
-
-    return X
+    # zone_id tetap numeric di dataframe, tapi model bakal treat kolom ini sebagai categorical
+    return data[MODEL_FEATURE_COLUMNS].copy()
 
 
 # train gradient boosting dari model-ready features yang sudah bebas leakage
@@ -54,14 +59,10 @@ def train_hist_gradient_boosting(
     X_train = prepare_model_input(train_data)
     y_train = train_data["target_trip_count"]
 
-    # config sengaja ringan supaya tetap nyaman dijalankan di laptop workshop
+    # zone_id disebut explicit sebagai categorical karena id zone bukan nilai ordinal
     model = HistGradientBoostingRegressor(
-        categorical_features="from_dtype",
-        learning_rate=0.05,
-        max_iter=200,
-        max_leaf_nodes=31,
-        l2_regularization=0.1,
-        random_state=42,
+        categorical_features=["zone_id"],
+        **HIST_GRADIENT_BOOSTING_PARAMS,
     )
     model.fit(X_train, y_train)
 
@@ -73,7 +74,7 @@ def save_model_bundle(
     model: HistGradientBoostingRegressor,
     output_path: Path,
 ) -> Path:
-    # bundle sederhana ini nanti bakal digantikan model registry waktu masuk MLflow
+    # bundle sederhana ini tetap dipakai buat manual flow sebelum pindah penuh ke registry
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
