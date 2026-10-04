@@ -19,10 +19,12 @@ Registry
 Open a terminal:
 
 ~~~bash
-uv run mlflow server
+uv run python scripts/start_mlflow.py
 ~~~
 
 Keep it running.
+
+This helper uses the repository's `.mlflow/` directory for metadata and artifacts. Later, Docker Compose mounts the same state, so your experiment runs and champion alias remain available when you switch to containers.
 
 Open:
 

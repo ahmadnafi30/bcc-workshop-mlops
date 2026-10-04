@@ -32,7 +32,7 @@ MLflow does the same for ML experiments.
 ## Start MLflow
 
 ~~~bash
-uv run mlflow server
+uv run python scripts/start_mlflow.py
 ~~~
 
 Open:
@@ -40,6 +40,8 @@ Open:
 ~~~text
 http://127.0.0.1:5000
 ~~~
+
+The helper stores local MLflow metadata and artifacts under `.mlflow/`. Docker Compose later mounts the same directory, so the workshop can move from local mode to container mode without starting from an empty registry.
 
 ## Run tracked training
 

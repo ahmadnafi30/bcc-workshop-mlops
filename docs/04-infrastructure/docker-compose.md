@@ -90,10 +90,20 @@ Health checks let Compose wait for useful readiness before dependent services pr
 
 ## Persistent state
 
-Named volumes:
+Persistent storage is split into a bind mount and named volumes.
+
+### Shared MLflow bind mount
 
 ~~~text
-mlflow-data
+./.mlflow
+→ /mlflow
+~~~
+
+The local helper `scripts/start_mlflow.py` and the Docker MLflow service use the same repository-local state directory. That keeps experiment history and Model Registry state continuous when the workshop moves from local processes to Docker Compose.
+
+### Named volumes
+
+~~~text
 airflow-home
 prometheus-data
 grafana-data
@@ -114,7 +124,7 @@ docker compose down
 docker compose down -v
 ~~~
 
-The second command is destructive for local service state.
+The second command deletes the named volumes above. It does **not** delete the bind-mounted `.mlflow/` directory, so MLflow state remains unless you remove that folder yourself.
 
 ## Workspace service
 

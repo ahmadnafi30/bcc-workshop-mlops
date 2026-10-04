@@ -168,6 +168,16 @@ integration demo
 
 Different test levels answer different questions.
 
+## Before starting locally
+
+Start the shared local MLflow server first:
+
+~~~bash
+uv run python scripts/start_mlflow.py
+~~~
+
+Make sure the registered model already has a `champion` alias. The API resolves that alias instead of hard-coding a model version.
+
 ## Start locally
 
 ~~~bash

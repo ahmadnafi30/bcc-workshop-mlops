@@ -90,7 +90,13 @@ The dashboard is provisioned under the MLOps folder.
 
 A dashboard cannot visualize traffic that never happened.
 
-Generate requests or historical prediction replay.
+Generate real HTTP prediction traffic:
+
+~~~bash
+uv run python scripts/generate_api_traffic.py --date 2025-01-28 --start-hour 17 --end-hour 18
+~~~
+
+This script goes through FastAPI, so request-rate and latency metrics actually move. The separate `replay_predictions.py` script calls the predictor directly and is better for faster batch model evaluation, but it intentionally bypasses FastAPI operational metrics.
 
 Then give Prometheus a scrape interval to collect the metrics.
 
