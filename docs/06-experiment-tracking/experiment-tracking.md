@@ -1,146 +1,154 @@
 # MLflow Experiment Tracking
 
-Sekarang kita sudah punya dua experiment yang meaningful:
+## The problem
 
-```text
-naive 24h
-vs
-HistGradientBoosting
-```
+A few experiments are easy to remember.
 
-Kalau cuma dua run, metric sebenarnya masih bisa dicatet manual. Tapi begitu kita mulai ubah hyperparameter, retrain model, ganti dataset snapshot, atau compare beberapa candidate model, file JSON mulai susah dipakai buat tracking.
+Twenty experiments are not.
 
-Di sini MLflow mulai masuk.
+Imagine notes like:
 
-## Start MLflow server
+~~~text
+model A maybe lr .05?
+dataset new?
+MAE 11-ish
+~~~
 
-Dari root repository, buka terminal baru:
+That is not reproducible experiment history.
 
-```bash
+MLflow Tracking gives each run structured metadata.
+
+## Analogy: laboratory notebook
+
+A scientist records:
+
+- experiment conditions,
+- measurement,
+- sample,
+- result.
+
+MLflow does the same for ML experiments.
+
+## Start MLflow
+
+~~~bash
 uv run mlflow server
-```
+~~~
 
-Default local server bisa dibuka di:
+Open:
 
-```text
+~~~text
 http://127.0.0.1:5000
-```
+~~~
 
-Untuk workshop lokal, default SQLite backend dari MLflow sudah cukup. Nanti pas masuk Docker kita pindahin service ini ke container supaya setup-nya lebih konsisten.
+## Run tracked training
 
-## Run experiment
-
-Pastikan feature dataset sudah ada:
-
-```bash
-uv run python scripts/bootstrap_data.py
-uv run python scripts/prepare_historical_demand.py
-uv run python scripts/build_features.py
-uv run dvc repro create_training_snapshot
-```
-
-Lalu:
-
-```bash
+~~~bash
 uv run python scripts/train_with_mlflow.py
-```
+~~~
 
-Script ini bikin dua run di experiment:
+Two runs are logged:
 
-```text
-taxi-demand-forecasting
+~~~text
+naive-24h
+hist-gradient-boosting
+~~~
 
-├── naive-24h
-└── hist-gradient-boosting
-```
+## What is stored?
 
-## Apa yang ditrack?
+Parameters:
 
-Baseline punya:
-
-```text
-params
-- model_type
-- forecast_horizon
-- train_rows
-- validation_rows
-- dataset_snapshot
-- dataset_sha256
-- dataset_rows
-
-metrics
-- mae
-- rmse
-```
-
-Gradient boosting punya tambahan model config:
-
-```text
+~~~text
+model_type
 learning_rate
 max_iter
-max_leaf_nodes
-l2_regularization
-random_state
-```
+dataset_snapshot
+dataset_sha256
+train_rows
+validation_rows
+~~~
 
-dan model artifact yang bisa dipakai lagi tanpa train ulang.
+Metrics:
 
-## Kenapa baseline ikut MLflow?
+~~~text
+mae
+rmse
+~~~
 
-Karena baseline adalah bagian dari experiment comparison.
+Tags:
 
-Di MLflow UI kita pengen bisa lihat:
+~~~text
+task
+model_family
+stage
+~~~
 
-```text
-Run                         MAE       RMSE
-------------------------------------------------
-naive-24h                   ...       ...
-hist-gradient-boosting      ...       ...
-```
+Model artifact:
 
-Jadi pertanyaan kita bukan cuma:
+~~~text
+MLflow sklearn model
+~~~
 
-> model mana yang metric-nya paling bagus?
+## Parameter vs metric
 
-tapi:
+Useful distinction:
 
-> apakah ML model ini benar-benar kasih improvement dibanding rule sederhana?
+~~~text
+parameter
+→ input / configuration
 
-## Model artifact
+metric
+→ measured result
+~~~
 
-Untuk gradient boosting, MLflow juga nyimpen model dengan nama artifact:
+Example:
 
-```text
-model
-```
+~~~text
+learning_rate
+→ parameter
 
-Script bakal print URI seperti:
+mae
+→ metric
+~~~
 
-```text
-runs:/<run-id>/model
-```
+## Run ID
 
-URI ini penting karena next step kita bisa mengambil model dari sebuah run lalu masukin ke **Model Registry**.
+Each experiment run gets a unique ID.
 
-## Tracking vs Registry
+That ID becomes important for model lineage.
 
-Dua konsep ini jangan dicampur.
+A registered model version can point back to the exact run that produced it.
 
-**Experiment Tracking** jawab:
+## Dataset fingerprint
 
-```text
-apa yang kita coba?
-param-nya apa?
-metric-nya berapa?
-artifact-nya di mana?
-```
+We log SHA256 and snapshot metadata so the run records its training data identity.
 
-Sedangkan **Model Registry** jawab:
+This connects:
 
-```text
-model mana yang sekarang jadi candidate?
-model version berapa?
-model mana yang jadi champion?
-```
+~~~text
+DVC/data snapshot
+↓
+MLflow run
+↓
+model artifact
+~~~
 
-Jadi kita tracking dulu, baru model yang memang layak kita register.
+## Why track baseline too?
+
+Because experiment tracking should preserve the comparison context.
+
+If only the fancy model is logged, we lose the evidence that justified using it.
+
+## What to explore in the UI
+
+Open a run and find:
+
+- Parameters,
+- Metrics,
+- Tags,
+- Artifacts,
+- model signature / input example.
+
+Then compare runs side by side.
+
+That UI exploration is part of the workshop, not decoration.

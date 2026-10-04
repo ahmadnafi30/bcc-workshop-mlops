@@ -1,156 +1,146 @@
 # MLflow Model Registry
 
-Experiment Tracking dan Model Registry punya kerjaan yang beda.
+## Tracking and Registry are different
 
-Tracking dipakai buat nyatet semua percobaan. Registry dipakai buat ngatur model yang memang sudah dianggap candidate untuk dipakai sistem lain.
+Tracking answers:
 
-Flow workshop kita:
+> What experiments did we run?
 
-```text
-MLflow experiment run
-        ↓
-model artifact
-        ↓
-register
-        ↓
-challenger
-        ↓
-review
-        ↓
-champion
-```
+Registry answers:
 
-## 1. Cari model run
+> Which model versions are candidates for use?
 
-Setelah:
+Think of:
 
-```bash
-uv run python scripts/train_with_mlflow.py
-```
+~~~text
+experiment notebook
+vs
+approved model catalog
+~~~
 
-terminal bakal print run id untuk gradient boosting.
+## Register a run
 
-Contohnya:
+After tracked training, take the model run ID:
 
-```text
-model -> MAE 10.123, run 8d4...
-```
-
-Run id itu yang kita register.
-
-## 2. Register sebagai challenger
-
-```bash
+~~~bash
 uv run python scripts/register_model.py --run-id <RUN_ID>
-```
+~~~
 
-Hasil pertama kira-kira:
+The model becomes a registered version.
 
-```text
+Example:
+
+~~~text
 taxi-demand-forecasting-model
 └── version 1
-    └── alias: challenger
-```
+~~~
 
-Kalau nanti ada model baru:
+A new registration creates another version:
 
-```text
-taxi-demand-forecasting-model
-├── version 1
-└── version 2
-    └── alias: challenger
-```
+~~~text
+version 1
+version 2
+version 3
+~~~
 
-Alias `challenger` pindah ke candidate terbaru tanpa consumer harus tahu version number.
+## Aliases
 
-## 3. Review dulu
+We use:
 
-Kita sengaja nggak langsung bikin model baru jadi production.
+~~~text
+challenger
+champion
+~~~
 
-Sebelum promote, kita bisa cek:
+### challenger
 
-```text
-MAE
-RMSE
-experiment params
-training snapshot
-model artifact
-```
+A candidate we want to evaluate.
 
-Nanti setelah monitoring dan retraining masuk, review ini bisa punya rule yang lebih otomatis.
+### champion
 
-Untuk sekarang kita bikin explicit supaya konsepnya kelihatan.
+The model selected for serving.
 
-## 4. Promote ke champion
+Aliases are pointers.
 
-Misalnya version 1 sudah oke:
+~~~text
+champion
+   ↓
+version 3
+~~~
 
-```bash
+Later:
+
+~~~text
+champion
+   ↓
+version 5
+~~~
+
+The application still asks for champion.
+
+## Why aliases are useful
+
+Bad serving code:
+
+~~~text
+load model version 3
+~~~
+
+Every promotion requires application code changes.
+
+Better:
+
+~~~text
+load champion
+~~~
+
+Now model governance can change the pointer without hard-coding a new version.
+
+## Promotion
+
+Promotion is explicit:
+
+~~~bash
 uv run python scripts/promote_model.py --version 1
-```
+~~~
 
-Registry jadi:
+Why not automatically promote every new model?
 
-```text
-taxi-demand-forecasting-model
-└── version 1
-    ├── challenger
-    └── champion
-```
+Because:
 
-Kalau besok version 2 lebih bagus, kita tinggal:
+~~~text
+new
+≠
+approved
+~~~
 
-```bash
-uv run python scripts/promote_model.py --version 2
-```
+The workshop automates challenger creation but keeps the final production choice visible.
 
-Sekarang alias `champion` pindah ke version 2.
+## Lineage
 
-## Kenapa pakai alias?
+A model version keeps a source run ID.
 
-Tanpa alias, API bisa saja load:
+So we can trace:
 
-```text
-models:/taxi-demand-forecasting-model/1
-```
-
-Masalahnya setiap model update, code API juga harus diganti ke version 2, 3, 4, dan seterusnya.
-
-Dengan alias:
-
-```text
-models:/taxi-demand-forecasting-model@champion
-```
-
-FastAPI nanti cukup load URI itu terus.
-
-Model version di belakangnya boleh berubah tanpa hard-code version baru di application code.
-
-## Champion dan challenger
-
-Di workshop ini artinya sederhana:
-
-**challenger**
-
-candidate baru yang lagi kita evaluate.
-
-**champion**
-
-model yang sekarang dipilih untuk dipakai production.
-
-Ini bukan fitur wajib MLflow. Nama alias sebenarnya bebas. Kita pilih dua nama ini karena gampang dipakai buat ngejelasin lifecycle model.
-
-## Next
-
-Setelah registry ini siap, kita sudah punya boundary yang enak buat model serving:
-
-```text
-FastAPI
+~~~text
+champion alias
    ↓
-load
-models:/taxi-demand-forecasting-model@champion
+model version
    ↓
-predict
-```
+MLflow run
+   ↓
+metrics + params + dataset fingerprint
+~~~
 
-Jadi FastAPI nanti nggak perlu tahu model ditrain pakai file apa atau version berapa. Dia cuma perlu tahu siapa current champion.
+That traceability is one of the strongest reasons to use a registry.
+
+## Rollback idea
+
+If a newly promoted model behaves badly, an alias can be moved back to an older version.
+
+That gives a simple mental model for rollback:
+
+~~~text
+change pointer
+not application code
+~~~
