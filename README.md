@@ -93,6 +93,18 @@ docker compose run --rm workspace python scripts/prepare_historical_demand.py
 docker compose run --rm workspace python scripts/build_features.py
 ```
 
+GitHub Actions sekarang punya dua workflow:
+
+```text
+CI
+→ tests + Docker build validation
+
+Container Delivery
+→ publish api / mlflow / airflow image ke GHCR setelah CI main sukses
+```
+
+Jadi CD project ini berhenti di **container delivery**, belum auto-deploy ke server/cloud.
+
 Kalau mau masuk ke virtual environment secara manual, uv tetap bikin environment di `.venv/`.
 
 > `uv.lock` akan dibuat atau di-update oleh uv saat dependency resolution dijalankan. Setelah environment sudah diverifikasi di mesin workshop, lock file itu sebaiknya ikut di-commit supaya install peserta benar-benar reproducible.

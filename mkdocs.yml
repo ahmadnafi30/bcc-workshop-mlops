@@ -25,6 +25,10 @@ nav:
   - Model Serving:
       - Serving Design: 07-model-serving/model-serving.md
       - FastAPI: 07-model-serving/fastapi.md
+  - CI/CD:
+      - Concepts: 08-cicd/cicd-concepts.md
+      - GitHub Actions: 08-cicd/github-actions.md
+      - Container Delivery: 08-cicd/deployment-flow.md
   - Hands-on:
       - Setup with uv: 10-hands-on/setup.md
 
