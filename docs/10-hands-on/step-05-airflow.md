@@ -1,18 +1,28 @@
-# Step 5 — Airflow Orchestration
+# Step 5 — Airflow: Dari Command Manual ke DAG yang Bisa Dilihat
 
-## Goal
+Sekarang kita punya beberapa manual steps yang sudah kalian pahami.
 
-See how manual scripts become an observable dependency graph.
+Perfect timing buat masuk Airflow.
 
-Do not treat Airflow as “magic automation”. Every task should map to logic you already understand.
+Kalau kalian belum ngerti manual pipeline, jangan skip ke sini dulu.
 
-## 1. Install Airflow group
+Airflow enak dipelajari kalau underlying logic already familiar.
+
+---
+
+# 1. Install Airflow dependency group
 
 ~~~bash
 uv sync --group airflow
 ~~~
 
-## 2. Start Airflow
+Ini lebih berat daripada base sync.
+
+First install bisa agak lama.
+
+---
+
+# 2. Start Airflow
 
 ~~~bash
 uv run --group airflow python scripts/start_airflow.py
@@ -24,11 +34,11 @@ Open:
 http://localhost:8080
 ~~~
 
-The standalone command creates local Airflow state and local authentication.
+Standalone mode setup local Airflow environment.
 
-## 3. Find the DAGs
+---
 
-You should see:
+# 3. Cari tiga DAG
 
 ~~~text
 taxi_daily_replay
@@ -36,13 +46,15 @@ taxi_initial_training
 taxi_model_monitoring
 ~~~
 
-If a DAG is missing, that is a DAG parsing problem, not a model problem.
+Kalau salah satu missing, jangan lanjut seolah normal.
 
-## 4. Open taxi_daily_replay
+DAG missing usually berarti parse/import issue.
 
-Look at Graph view.
+---
 
-You should see:
+# 4. Buka taxi_daily_replay
+
+Graph view harus menunjukkan:
 
 ~~~text
 get_replay_date
@@ -56,99 +68,183 @@ aggregate_demand
 rebuild_features
 ~~~
 
-Compare that graph with the manual scripts from earlier.
+Coba compare dengan command manual Step 1.
 
-This is the key learning moment:
+Recognize pattern?
 
-> Airflow did not replace the business logic. It organized it.
+Airflow tidak invent pipeline baru.
 
-## 5. Trigger Jan 27
+Dia arrange pipeline yang sudah ada.
 
-Use replay_date:
+---
+
+# 5. Trigger Jan 27
+
+Masukkan param:
 
 ~~~text
-2025-01-27
+replay_date = 2025-01-27
 ~~~
 
-Watch task states change.
+Trigger.
 
-A successful run should eventually produce:
+Observe states.
+
+Typical Airflow color/state akan change selama task running/success/fail.
+
+---
+
+# 6. Klik satu task
+
+Open logs.
+
+Misalnya release_batch.
+
+Lihat actual output.
+
+Jangan treat UI sebagai black box.
+
+Task log adalah salah satu tempat debugging utama.
+
+---
+
+# 7. Validate downstream behavior
+
+Kalau release success lalu validate success, aggregate jalan.
+
+Kalau validation fail, aggregate seharusnya tidak blindly lanjut.
+
+Ini dependency in action.
+
+---
+
+# 8. Check output files
+
+Setelah run:
 
 ~~~text
 data/raw/trips/2025-01-27.parquet
 data/processed/demand/2025-01-27.parquet
 ~~~
 
-and rebuild the feature dataset.
+Feature dataset juga rebuilt.
 
-## 6. Inspect task logs
+---
 
-Click a task and open logs.
-
-If a task fails, read that task's log first.
-
-Avoid the beginner debugging pattern:
-
-> “Airflow broken.”
-
-Be specific:
-
-> “validate_batch failed because the batch timestamp was wrong.”
-
-Specific failure boundaries are one reason orchestration is useful.
-
-## 7. Trigger the next date
-
-Try:
+# 9. Trigger Jan 28
 
 ~~~text
-2025-01-28
+replay_date = 2025-01-28
 ~~~
 
-Now the feature history extends further.
+Sekarang history extend lagi.
 
-## 8. Understand XCom
+---
 
-TaskFlow may pass small result dictionaries such as:
+# 10. Inspect XCom
+
+Kalau UI expose XCom/task return, lihat.
+
+Yang lewat adalah metadata kecil.
+
+Bukan full taxi DataFrame.
+
+Pertanyaan:
+
+> Kenapa nggak pass DataFrame langsung?
+
+Karena XCom bukan large data channel.
+
+---
+
+# 11. Buka initial training DAG
 
 ~~~text
-date
-rows
-path
-status
+create_snapshot
+      ↓
+train_model
+      ↓
+register_candidate
 ~~~
 
-The Parquet data itself stays in files.
+Coba pikir:
 
-Do not use XCom as a giant DataFrame transport.
+> Kenapa DAG ini terpisah dari daily replay?
 
-## 9. Initial training DAG
+Jawaban:
 
-Open:
+> New data arrival tidak selalu berarti harus train model.
+
+Lifecycle berbeda.
+
+---
+
+# 12. Buka monitoring DAG
 
 ~~~text
-taxi_initial_training
+evaluate_model
+      ↓
+maybe_retrain
 ~~~
 
-See:
+Kita belum perlu trigger sekarang kalau prediction logs belum ada.
+
+Tapi lihat graph dulu.
+
+Nanti di Step 10 kita balik ke sini.
+
+---
+
+# 13. Failure mindset
+
+Kalau DAG fail, jangan bilang:
+
+> “Airflow error.”
+
+Coba lebih specific:
 
 ~~~text
-snapshot
-→ train
-→ register candidate
+Which DAG?
+Which run?
+Which task?
+Which exception?
+Which upstream artifact?
 ~~~
 
-This is a different lifecycle from daily data processing.
+Contoh:
 
-## Checkpoint
+> aggregate_demand failed because input daily parquet missing.
 
-You should be able to explain:
+Ini debugging yang jauh lebih actionable.
+
+---
+
+# Mini challenge
+
+Kalau function feature engineering punya bug, apakah fix-nya sebaiknya ditulis langsung di DAG?
+
+Jawaban:
+
+~~~text
+No.
+Fix reusable logic in src/features,
+then DAG continues to call it.
+~~~
+
+DAG tetap orchestration layer.
+
+---
+
+# Checkpoint
+
+Kalian harus bisa explain:
 
 - DAG,
 - task,
 - dependency,
 - XCom,
-- why business logic lives in src,
-- why we have more than one DAG.
+- DAG parsing,
+- why DAG thin,
+- why multiple DAGs.
 
-Next: serve champion through FastAPI.
+Next kita pindah dari training/orchestration ke model serving.

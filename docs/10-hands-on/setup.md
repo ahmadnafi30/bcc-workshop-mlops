@@ -1,95 +1,275 @@
-# Step 0 — Setup
+# Step 0 — Setup: Biar Semua Mulai dari Environment yang Sama
 
-## Goal
+Hi peers, sebelum kita download data gigabytes, start Airflow, atau build Docker image, kita pastikan dulu environment basic-nya aman.
 
-At the end of this step:
+Ini kelihatannya boring, tapi setup yang nggak konsisten biasanya jadi sumber drama paling besar di workshop.
 
-- Python 3.11 is available through uv,
-- project dependencies are installed,
-- tests can run,
-- you understand the main repository folders.
+> “Kak, punya saya sklearn-nya beda.”
 
-Do not download the taxi dataset yet. First make sure the project itself is healthy.
+> “Kak, Python saya 3.13.”
 
-## 1. Clone the repository
+> “Kak, command-nya masuk environment lain.”
+
+Jadi Step 0 ini justru penting.
+
+---
+
+# Target step ini
+
+Setelah selesai, kalian harus punya:
+
+~~~text
+Python 3.11
+uv environment
+project dependencies
+pytest working
+basic repo understanding
+~~~
+
+Docker belum wajib fully working di step ini. Nanti masuk section Docker baru kita strict check.
+
+---
+
+# 1. Clone repository
 
 ~~~bash
 git clone https://github.com/ahmadnafi30/bcc-workshop-mlops.git
 cd bcc-workshop-mlops
 ~~~
 
-If the repository is private, GitHub may ask you to authenticate.
+Coba setelah masuk folder, lihat:
 
-## 2. Install uv
+~~~bash
+ls
+~~~
 
-Follow the official uv installation method for your operating system.
+atau di Windows:
 
-Verify:
+~~~powershell
+dir
+~~~
+
+Kalian harus melihat file/folder seperti:
+
+~~~text
+api/
+dags/
+docs/
+scripts/
+src/
+tests/
+pyproject.toml
+docker-compose.yml
+dvc.yaml
+~~~
+
+Kalau kalian belum tahu semua folder buat apa, santai. Nanti satu-satu.
+
+---
+
+# 2. Check uv
 
 ~~~bash
 uv --version
 ~~~
 
-## 3. Sync the environment
+Kalau command belum ada, install uv sesuai official installation instruction untuk OS kalian.
+
+Kenapa workshop nggak pakai plain pip saja?
+
+Karena kita pengen semua dependency masuk project definition dan command jalan dari consistent environment.
+
+---
+
+# 3. Sync dependencies
 
 ~~~bash
 uv sync
 ~~~
 
-What happens conceptually:
+Saat command ini jalan, jangan cuma tunggu selesai.
+
+Coba pahami apa yang sedang terjadi.
 
 ~~~text
 pyproject.toml
       ↓
-uv resolves dependencies
+uv membaca dependency
       ↓
-Python environment in .venv
+prepare Python environment
       ↓
-project package installed
+install project + dev packages
 ~~~
 
-You do not need to manually activate the virtual environment for workshop commands.
+Environment local biasanya berada di:
 
-## 4. Verify Python
+~~~text
+.venv/
+~~~
+
+Folder itu ignored dari Git.
+
+Kenapa?
+
+Karena environment hasil install nggak perlu di-commit.
+
+Yang di-commit adalah recipe-nya: pyproject.toml.
+
+---
+
+# 4. Check Python version
 
 ~~~bash
 uv run python --version
 ~~~
 
-Expected family:
+Expected:
 
 ~~~text
 Python 3.11.x
 ~~~
 
-The repository intentionally targets Python 3.11 for a predictable workshop environment.
+Kalau bukan 3.11, stop sebentar.
 
-## 5. Run the setup doctor
+Jangan lanjut dengan asumsi:
+
+> “Ah paling aman.”
+
+Semakin ke Airflow, version mismatch makin mungkin bikin dependency issue.
+
+---
+
+# 5. Run doctor
 
 ~~~bash
 uv run python scripts/doctor.py
 ~~~
 
-The doctor checks basic Python imports, project structure, and whether useful local commands such as Docker are discoverable.
+Doctor check beberapa hal:
 
-A missing Docker command does not block the early ML steps. It matters later during containerization.
+~~~text
+Python 3.11
+pandas import
+sklearn import
+DVC import
+MLflow import
+FastAPI import
+Prometheus client
+Docker CLI
+~~~
 
-## 6. Run tests
+Kalau Docker belum ada, early workshop masih bisa lanjut.
+
+Tapi catat bahwa Step 7 nanti butuh Docker.
+
+---
+
+# 6. Run tests
 
 ~~~bash
 uv run pytest
 ~~~
 
-Why run tests before touching anything?
+Kenapa tests dijalankan sekarang, sebelum kita ubah apa-apa?
 
-Because we want a known-good starting point.
+Karena kita mau punya baseline:
 
-If tests already fail before you change code, later debugging becomes ambiguous.
+~~~text
+fresh clone
+→ tests green
+~~~
 
-## 7. Optional: start the documentation
+Nanti kalau setelah change tests fail, kita tahu failure kemungkinan dari perubahan kita.
+
+Kalau dari awal sudah fail, debugging jadi ambiguous.
+
+---
+
+# 7. Coba lihat struktur project
+
+Sekarang kita orientasi.
+
+## src/
+
+~~~text
+src/
+~~~
+
+Reusable logic.
+
+Kalau ada logic feature engineering yang ingin dipakai script, Airflow, dan test, sebaiknya hidup di sini.
+
+## scripts/
+
+~~~text
+scripts/
+~~~
+
+Human-friendly entry point.
+
+Contoh:
+
+~~~bash
+uv run python scripts/build_features.py
+~~~
+
+## dags/
+
+~~~text
+dags/
+~~~
+
+Airflow orchestration definition.
+
+## api/
+
+~~~text
+api/
+~~~
+
+HTTP layer.
+
+## tests/
+
+~~~text
+tests/
+~~~
+
+Automated checks.
+
+---
+
+# Satu rule yang enak diingat
+
+~~~text
+src/
+HOW
+
+scripts/
+RUN THIS MANUALLY
+
+dags/
+WHEN + IN WHAT ORDER
+
+api/
+HOW OTHER APPS TALK TO THE MODEL
+~~~
+
+Nanti rule ini sering kita pakai.
+
+---
+
+# 8. Optional: run docs locally
+
+Install docs group:
 
 ~~~bash
 uv sync --group docs
+~~~
+
+Start:
+
+~~~bash
 uv run --group docs mkdocs serve
 ~~~
 
@@ -99,57 +279,69 @@ Open:
 http://127.0.0.1:8000
 ~~~
 
-Keep the docs open during the workshop.
+Kalau kalian self-learning, recommended banget keep docs tab open.
 
-## Windows note
+---
 
-The core Python flow works with uv.
+# Mini challenge
 
-For the Docker + Airflow parts, WSL2 is usually the smoother learning environment on Windows.
+Sebelum lanjut, coba jawab tanpa lihat section atas:
 
-The important thing is consistency: do not mix several Python installations and environments without knowing which one is active.
+> Kalau saya punya function aggregate demand yang dipakai script dan Airflow, sebaiknya logic intinya tinggal di scripts/, dags/, atau src/?
 
-## Repository orientation
-
-Before continuing, look at:
+Jawaban:
 
 ~~~text
-scripts/
 src/
-dags/
-api/
-tests/
 ~~~
 
-Remember:
+Script dan DAG cukup call function-nya.
 
-~~~text
-scripts
-→ commands humans run
+Kalau reasoning ini sudah masuk, structure repo mulai kebaca.
 
-src
-→ reusable logic
+---
 
-dags
-→ workflow definitions
+# Common issues
 
-api
-→ HTTP interface
+## uv command not found
 
-tests
-→ automated checks
+uv belum installed atau PATH belum refresh.
+
+## Python bukan 3.11
+
+Pastikan uv/project Python resolution benar.
+
+## pytest missing module
+
+Coba:
+
+~~~bash
+uv sync
 ~~~
 
-## Checkpoint
+lagi dan pastikan kalian run:
 
-You are ready when:
+~~~bash
+uv run pytest
+~~~
+
+bukan pytest dari global environment.
+
+---
+
+# Checkpoint
+
+Kalian siap Step 1 kalau:
 
 ~~~text
 uv run python --version
 → 3.11.x
 
+uv run python scripts/doctor.py
+→ core checks okay
+
 uv run pytest
 → pass
 ~~~
 
-Next: download and understand the data.
+Next kita mulai menyentuh real taxi data.
