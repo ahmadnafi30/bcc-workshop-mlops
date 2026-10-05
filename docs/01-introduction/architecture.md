@@ -1,189 +1,296 @@
-# Architecture
+# Architecture — Gimana Semua Komponen Ini Nyambung?
 
-## Big picture
+Kalau lihat architecture full dari awal, reaction pertama mungkin:
+
+> “Wah banyak banget.”
+
+Fair.
+
+Jadi kita pecah jadi tiga perspective:
 
 ~~~text
-NYC TLC source
-      ↓
-bootstrap / historical replay
-      ↓
-hourly zone demand
-      ↓
-feature engineering
-      ↓
-DVC snapshot
-      ↓
-model training
-      ↓
-MLflow tracking
-      ↓
+1. Data Flow
+2. Model Lifecycle
+3. Operations Flow
+~~~
+
+Kalau tiga ini sudah kebayang, architecture keseluruhan jadi jauh lebih masuk akal.
+
+---
+
+## 1. Data Flow
+
+Data flow jawab:
+
+> “Data dari mana dan berubah jadi apa sebelum model belajar?”
+
+~~~text
+NYC TLC Trip Records
+        ↓
+Filter Manhattan
+        ↓
+Historical Replay Source
+        ↓
+Daily Raw Batch
+        ↓
+Hourly Zone Demand
+        ↓
+Feature Engineering
+        ↓
+Training Snapshot
+~~~
+
+Raw data itu one row per trip.
+
+Model tidak train langsung dari trip rows. Kita aggregate menjadi:
+
+~~~text
+one row
+=
+one zone × one hour
+~~~
+
+Lalu dari history demand kita buat lag dan rolling features.
+
+Folder data juga mengikuti lifecycle:
+
+~~~text
+source
+→ external/original input
+
+raw
+→ released daily batch
+
+processed
+→ hourly demand
+
+features
+→ model-ready table
+
+snapshots
+→ frozen training input
+~~~
+
+Jadi nama folder bukan sekadar estetika. Dia merepresentasikan data lifecycle.
+
+---
+
+## 2. Model Lifecycle
+
+Model lifecycle jawab:
+
+> “Dari training data sampai model yang live, prosesnya bagaimana?”
+
+~~~text
+Training Snapshot
+       ↓
+Train Baseline
+       ↓
+Train Main Model
+       ↓
+Evaluate
+       ↓
+MLflow Tracking
+       ↓
 Model Registry
+       ↓
+Challenger
+       ↓
+Review
+       ↓
+Champion
+       ↓
+Serving
+~~~
+
+Kenapa ada baseline? Karena complex model harus earn complexity-nya.
+
+Kenapa ada Registry? Karena experiment bagus belum otomatis production model.
+
+Kenapa ada challenger dan champion? Supaya promotion explicit dan traceable.
+
+---
+
+## 3. Operations Flow
+
+Operations flow jawab:
+
+> “Setelah model diserve, kita tahu system-nya sehat dari mana?”
+
+~~~text
+Client Request
       ↓
 FastAPI
       ↓
-prediction log
+Prediction
       ↓
-ground truth evaluation
+Operational Metrics
       ↓
-monitoring
-      ↓
-retraining → challenger
-~~~
-
-Airflow orchestrates repeated workflow steps. Docker Compose runs local services. GitHub Actions validates and packages changes.
-
-## Three layers
-
-### Data layer
-
-~~~text
-trip records
-    ↓
-hourly demand
-    ↓
-features
-    ↓
-training snapshot
-~~~
-
-Question:
-
-> What data does the model learn from?
-
-### Model lifecycle
-
-~~~text
-snapshot
-   ↓
-train
-   ↓
-evaluate
-   ↓
-track
-   ↓
-register
-   ↓
-promote
-   ↓
-serve
-~~~
-
-Question:
-
-> How does an experiment become the model used by the application?
-
-### Operations
-
-~~~text
-request
-   ↓
-API metrics
-   ↓
 Prometheus
-   ↓
+      ↓
 Grafana
-
-prediction
-   ↓
-actual demand later
-   ↓
-MAE
-   ↓
-retraining decision
 ~~~
 
-Question:
+Tapi itu baru system health.
 
-> How do we know the system is healthy after deployment?
+Untuk model health:
 
-## Folder responsibilities
+~~~text
+Prediction
+      ↓
+Prediction Log
+      ↓
+Ground Truth Arrives
+      ↓
+Join Prediction + Actual
+      ↓
+MAE / RMSE
+      ↓
+Retrain Decision
+~~~
+
+Dua loop ini jalan paralel.
+
+---
+
+## Mapping ke repository
 
 ### src/
 
 Reusable business logic.
 
-Examples:
+Contoh:
 
-- ingestion,
-- aggregation,
-- feature engineering,
-- training,
-- monitoring.
+~~~text
+src/ingestion/
+src/features/
+src/training/
+src/serving/
+src/monitoring/
+~~~
+
+Rule penting:
+
+> Logic yang bisa dipakai ulang jangan ditaruh hanya di script atau DAG.
 
 ### scripts/
 
-Manual entry points for humans.
+Human-friendly entry points.
 
-Example:
-
-~~~bash
-uv run python scripts/build_features.py
-~~~
-
-Scripts should reuse src functions instead of duplicating core logic.
+Script mostly call reusable function dari src.
 
 ### dags/
 
-Airflow workflow definitions.
+Airflow orchestration.
 
-A DAG should mostly explain:
+Rule:
 
 ~~~text
-WHEN
-+
-IN WHAT ORDER
+dags
+→ WHEN + IN WHAT ORDER
+
+src
+→ HOW
 ~~~
 
-not hide hundreds of lines of preprocessing inside the DAG file.
+Kalau business logic numpuk di DAG, testing jadi susah.
 
 ### api/
 
-HTTP concerns:
+HTTP layer.
 
-- request validation,
-- response schema,
-- status codes,
-- dependency wiring.
+Responsibility-nya request, response, status code, dependency wiring. Feature construction dan model loading tetap reusable di serving layer.
 
-Prediction logic itself remains reusable under src/serving.
+### monitoring/
 
-## Local Docker services
+Prometheus dan Grafana configuration.
+
+Ini infrastructure concern, bukan training logic.
+
+---
+
+## Kenapa boundaries penting?
+
+Bayangin semua logic ditaruh di satu main.py 3000 lines.
+
+Ada data download, feature engineering, training, serving, monitoring, orchestration.
+
+Technically mungkin jalan, tapi maintainability jelek.
+
+Boundary membantu jawab:
+
+> “Kalau feature engineering berubah, concern mana yang kita sentuh?”
+
+> “Kalau API response berubah, apa yang seharusnya nggak ikut berubah?”
+
+> “Kalau orchestration berubah tapi domain logic sama, file mana yang relevan?”
+
+Architecture bagus bukan karena folder-nya banyak. Architecture bagus karena responsibility jelas.
+
+---
+
+## Local vs Container Network
+
+Ini sering bikin newbie bingung.
+
+Dari browser host:
 
 ~~~text
-FastAPI    → mlflow:5000
-Prometheus → api:8000/metrics
-Grafana    → prometheus:9090
-Airflow    → mlflow:5000
+MLflow
+http://localhost:5000
 ~~~
 
-Docker Compose gives services DNS names based on service names.
+Dari API container:
 
-Inside the API container, localhost means the API container itself. It does not mean MLflow.
+~~~text
+http://mlflow:5000
+~~~
 
-## Storage
+Kenapa beda?
 
-| Purpose | Location |
-| --- | --- |
-| source data | data/source |
-| raw replay batch | data/raw/trips |
-| processed hourly demand | data/processed/demand |
-| feature dataset | data/features |
-| training snapshots | data/snapshots/training |
-| prediction logs | data/monitoring |
-| MLflow state | Docker volume |
-| Airflow state | Docker volume |
-| Prometheus TSDB | Docker volume |
+Karena localhost artinya “machine/container saya sendiri”.
 
-Generated data is ignored by Git.
+Di API container, localhost:5000 berarti port 5000 di API container, bukan MLflow container.
 
-## Workshop simplifications
+Docker Compose kasih internal DNS berdasarkan service name.
 
-We intentionally use:
+Jadi:
 
-- one machine,
-- local files,
-- SQLite for local tracking metadata,
-- Airflow standalone,
-- manual champion approval.
+~~~text
+api
+→ mlflow:5000
 
-A larger production setup may replace those pieces without changing the lifecycle concepts.
+prometheus
+→ api:8000
+
+grafana
+→ prometheus:9090
+~~~
+
+Ini concept networking yang bakal sering muncul.
+
+---
+
+## Simplification vs real production
+
+Production platform bisa jauh lebih kompleks.
+
+Tapi yang berubah biasanya scale dan infrastructure.
+
+~~~text
+local filesystem
+→ object storage
+
+single Docker host
+→ Kubernetes
+
+SQLite
+→ managed database
+
+standalone Airflow
+→ distributed/managed Airflow
+~~~
+
+Pattern lifecycle tetap sama.
+
+Makanya kita belajar pattern dulu.

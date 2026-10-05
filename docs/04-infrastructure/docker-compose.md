@@ -1,107 +1,243 @@
-# Docker Compose
+# Docker Compose — Menyalakan Satu MLOps Stack Tanpa Buka Lima Terminal Manual
 
-## Why Compose?
+Setelah Docker section, kita sudah ngerti satu image bisa dijalankan jadi container.
 
-We now have several services:
+Sekarang problem berikutnya:
+
+Project kita bukan satu service.
+
+Kita punya:
 
 ~~~text
-FastAPI
 MLflow
 Airflow
+FastAPI
 Prometheus
 Grafana
 ~~~
 
-Starting each one manually with the correct network, port, volume, and environment variable would be annoying.
+Kalau semuanya start manual, kita harus ingat:
 
-Docker Compose describes the local stack in one file:
+- command,
+- port,
+- network,
+- environment variable,
+- storage,
+- startup order.
+
+Docker Compose masuk buat define **multi-service local environment**.
+
+---
+
+## Analogi: satu kompleks gedung
+
+Docker image seperti blueprint unit.
+
+Container seperti unit yang sedang dipakai.
+
+Docker Compose seperti site plan satu kompleks:
+
+> Ada service apa saja? Mereka tinggal di network mana? Port apa yang dibuka? Storage mana yang dipakai? Service mana nunggu service lain?
+
+Semua didefinisikan di:
 
 ~~~text
 docker-compose.yml
 ~~~
 
-## Analogy: apartment building manager
+---
 
-Docker images are individual apartment designs.
-
-Compose is the building plan:
-
-- which apartments exist,
-- which ports are exposed,
-- which storage they use,
-- which services depend on others,
-- how they find each other.
-
-## Start everything
+## Start stack
 
 ~~~bash
 docker compose up -d --build
 ~~~
 
-Break it down:
+Kita bedah:
+
+### up
+
+Create/start service.
+
+### -d
+
+Detached mode.
+
+Terminal kalian balik, container tetap jalan.
+
+### --build
+
+Build local images dulu kalau perlu.
+
+---
+
+## Service kita
+
+### MLflow
 
 ~~~text
-up
-→ create/start services
+host:
+localhost:5000
 
--d
-→ detached mode
-
---build
-→ rebuild local images first
+internal Compose:
+mlflow:5000
 ~~~
 
-## Service discovery
+Responsibility:
 
-Compose creates a default network.
+- tracking server,
+- registry,
+- artifact access.
 
-Services can reach each other by service name.
-
-Examples:
+### FastAPI
 
 ~~~text
-api → http://mlflow:5000
-prometheus → http://api:8000/metrics
-grafana → http://prometheus:9090
+localhost:8000
 ~~~
 
-From your browser, you use published host ports:
+Serve champion prediction.
+
+### Airflow
+
+~~~text
+localhost:8080
+~~~
+
+Orchestrate data/training/monitoring workflow.
+
+### Prometheus
+
+~~~text
+localhost:9090
+~~~
+
+Scrape metrics.
+
+### Grafana
+
+~~~text
+localhost:3000
+~~~
+
+Visualize metrics.
+
+---
+
+## Kenapa internal hostname beda?
+
+Ini penting banget.
+
+Dari browser laptop:
 
 ~~~text
 http://localhost:5000
-http://localhost:8000
 ~~~
 
-Internal and external addresses are different views of the same service.
-
-## depends_on and health checks
-
-Starting a process does not always mean it is ready.
-
-For example:
+Dari API container:
 
 ~~~text
-MLflow container started
+http://mlflow:5000
+~~~
+
+Kalau API container call localhost:5000, dia cari MLflow **di dalam dirinya sendiri**.
+
+Compose DNS kasih nama service.
+
+Makanya:
+
+~~~text
+api → mlflow
+prometheus → api
+grafana → prometheus
+~~~
+
+---
+
+## depends_on
+
+Kadang service A butuh B.
+
+API butuh MLflow.
+
+Tapi container process started bukan berarti service ready menerima request.
+
+Makanya MLflow punya healthcheck.
+
+Compose bisa wait sampai health condition.
+
+Mental model:
+
+~~~text
+container running
 ≠
-MLflow HTTP endpoint ready
+application ready
 ~~~
 
-Health checks let Compose wait for useful readiness before dependent services proceed.
+Ini subtle tapi real operational concern.
 
-## Persistent state
+---
 
-Persistent storage is split into a bind mount and named volumes.
+## Healthcheck
 
-### Shared MLflow bind mount
+Healthcheck adalah test readiness/liveness sederhana.
+
+Misalnya request HTTP ke service.
+
+Kalau belum healthy, dependent service bisa ditahan.
+
+Ini mengurangi race condition startup.
+
+---
+
+## Shared data folder
+
+Kita bind mount:
 
 ~~~text
-./.mlflow
-→ /mlflow
+./data
+→ /app/data
 ~~~
 
-The local helper `scripts/start_mlflow.py` and the Docker MLflow service use the same repository-local state directory. That keeps experiment history and Model Registry state continuous when the workshop moves from local processes to Docker Compose.
+Benefit workshop:
 
-### Named volumes
+- Airflow container bisa write,
+- API container bisa read,
+- host bisa inspect file yang sama.
+
+Jadi local data acts as shared simple storage.
+
+Production mungkin pakai object storage/database instead.
+
+---
+
+## Shared MLflow state
+
+Audit workshop menemukan issue penting.
+
+Kalau local MLflow pakai state A, lalu Docker MLflow pakai state B, participant bakal mengalami:
+
+> “Lho champion yang tadi saya register kok hilang?”
+
+Makanya local helper dan Docker MLflow share:
+
+~~~text
+.mlflow/
+~~~
+
+Ini bikin transition:
+
+~~~text
+local MLflow
+→ Docker MLflow
+~~~
+
+tetap continuity.
+
+---
+
+## Named volumes
+
+Kita punya named volume untuk service state seperti:
 
 ~~~text
 airflow-home
@@ -110,66 +246,139 @@ grafana-data
 dvc-cache
 ~~~
 
-Stopping a container does not necessarily remove those volumes.
+Kenapa volume?
 
-### Stop
+Container disposable.
+
+Kalau container delete, state jangan selalu ikut hilang.
+
+Volume separate lifecycle storage dari container process.
+
+---
+
+## down vs down -v
 
 ~~~bash
 docker compose down
 ~~~
 
-### Stop and delete volumes
+Stop/remove containers/network, keep named volumes.
 
 ~~~bash
 docker compose down -v
 ~~~
 
-The second command deletes the named volumes above. It does **not** delete the bind-mounted `.mlflow/` directory, so MLflow state remains unless you remove that folder yourself.
+Juga remove named volumes.
+
+Jadi command kedua destructive untuk local service state.
+
+Tapi bind-mounted .mlflow folder tidak otomatis hilang karena bukan named volume itu.
+
+---
 
 ## Workspace service
 
-The Compose file also has a tools profile with a workspace container.
+Kita punya workspace profile untuk command one-shot.
 
-It is useful for one-off commands:
-
-~~~bash
-docker compose run --rm workspace python scripts/bootstrap_data.py
-~~~
-
-This means a participant can execute the project logic inside the same containerized environment.
-
-## Check the stack
+Contoh:
 
 ~~~bash
-docker compose ps
+docker compose run --rm workspace python scripts/doctor.py
 ~~~
 
-Logs:
+Kenapa nggak workspace jalan terus?
+
+Karena dia bukan service.
+
+Dia cuma environment buat execute project command.
+
+Setelah command selesai, container remove.
+
+---
+
+## Profiles
+
+Compose profile bisa hide optional service dari default startup.
+
+Workspace pakai profile karena tidak perlu hidup terus.
+
+Ini pattern useful kalau stack punya debug/admin tools.
+
+---
+
+## Logs
+
+Semua:
 
 ~~~bash
 docker compose logs -f
 ~~~
 
-One service:
+Specific:
 
 ~~~bash
 docker compose logs -f api
 ~~~
 
-## Workshop URLs
+Logs adalah first stop debugging runtime.
 
-| Service | Host URL |
-| --- | --- |
-| MLflow | http://localhost:5000 |
-| Airflow | http://localhost:8080 |
-| FastAPI | http://localhost:8000 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
+Kalau API container crash, jangan langsung edit model.
 
-## Production note
+Baca log dulu.
 
-Compose is excellent for local learning and many development workflows.
+---
 
-A large production platform may use another orchestrator or cloud service.
+## Common mistakes
 
-The lesson here is the multi-service boundary and configuration, not “Compose is always production”.
+### Port conflict
+
+Local MLflow masih running.
+
+Compose mau bind 5000.
+
+Error.
+
+Stop local process dulu.
+
+### Salah hostname
+
+Container call localhost untuk service lain.
+
+Connection refused.
+
+### Data tidak muncul
+
+Bind mount path berbeda atau permission problem.
+
+### Reset state tanpa sadar
+
+Run down -v lalu Airflow/Grafana state hilang.
+
+---
+
+## Compose bukan Kubernetes mini
+
+Compose bagus banget untuk local multi-service development.
+
+Tapi dia bukan distributed production orchestrator.
+
+Jangan pakai workshop Compose architecture untuk conclude “production deployment selesai”.
+
+Yang kita pelajari adalah:
+
+- service boundaries,
+- networking,
+- storage,
+- config,
+- health dependency.
+
+---
+
+## Checkpoint
+
+1. Docker Compose solve problem apa?
+2. Kenapa mlflow:5000 dipakai antar container?
+3. Healthcheck beda apa dengan container process running?
+4. Bind mount dan named volume beda apa?
+5. down -v efeknya apa?
+6. Workspace service kenapa one-shot?

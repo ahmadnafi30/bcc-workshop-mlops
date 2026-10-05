@@ -1,112 +1,235 @@
-# CI/CD Concepts
+# CI/CD — Biar Quality Nggak Bergantung ke “Jangan Lupa Run Test Ya”
 
-## Why automation after Git push?
+Sekarang bayangin repo mulai dikerjakan beberapa orang.
 
-Without CI, code quality depends on someone remembering:
+Sebelum merge, harusnya:
 
-~~~text
-run tests
-run lint
-build docs
-build Docker
-~~~
+- test,
+- lint,
+- docs build,
+- Docker build.
 
-Humans forget.
+Kalau process-nya:
 
-CI makes the verification step consistent.
+> “Guys jangan lupa run test sebelum push.”
 
-## CI — Continuous Integration
+Ada satu masalah: manusia lupa. 😭
 
-Question:
+CI masuk buat bikin quality gate lebih konsisten.
 
-> Is this change safe enough to integrate?
+---
 
-Our CI checks:
+## CI = Continuous Integration
+
+CI menjawab:
+
+> “Perubahan code ini aman nggak buat diintegrasikan?”
+
+Project kita check:
 
 ~~~text
 branch policy
-      ↓
-dependency setup
-      ↓
+↓
+setup environment
+↓
 Ruff
-      ↓
+↓
 pytest
-      ↓
-MkDocs build
-      ↓
+↓
+MkDocs strict build
+↓
 Docker Compose validation
-      ↓
+↓
 Docker image build
 ~~~
 
-CI does not automatically mean deployment.
+Perhatikan: CI bukan cuma unit test.
 
-It is primarily a quality gate.
+Karena repository kita bukan cuma Python code.
 
-## CD has two common meanings
+Docs dan Docker juga bagian deliverable.
 
-### Continuous Delivery
+---
+
+## Kenapa docs build masuk CI?
+
+Workshop docs adalah product juga.
+
+Kalau nav broken atau markdown extension error, workshop experience rusak.
+
+Jadi docs failure sama valid-nya dengan code failure.
+
+---
+
+## Kenapa Docker build masuk CI?
+
+Python test bisa green tapi Docker build fail.
+
+Contoh:
+
+~~~text
+COPY path salah
+dependency missing di image
+Dockerfile syntax error
+~~~
+
+CI build image supaya packaging error ketahuan sebelum release.
+
+---
+
+## Branch workflow
+
+~~~text
+feat/* / fix/* / docs/* / chore/*
+              ↓
+           develop
+              ↓
+            main
+~~~
+
+Kenapa develop?
+
+Supaya ada integration stage sebelum stable release.
+
+Feature individually green belum tentu compatible dengan feature lain.
+
+Develop jadi tempat mereka ketemu dulu.
+
+---
+
+## Branch policy
+
+CI check PR direction.
+
+Allowed:
+
+~~~text
+feat/* → develop
+fix/* → develop
+docs/* → develop
+chore/* → develop
+
+develop → main
+~~~
+
+Kenapa policy di CI?
+
+Supaya workflow repository bukan cuma tulisan di README.
+
+Ada automated guard.
+
+Idealnya GitHub branch protection/ruleset juga dipasang.
+
+---
+
+## CD itu ambiguity
+
+CD bisa berarti:
+
+~~~text
+Continuous Delivery
+atau
+Continuous Deployment
+~~~
+
+Workshop kita pakai **Continuous Delivery**.
+
+Artinya:
 
 ~~~text
 verified code
-   ↓
+↓
 build artifact
-   ↓
+↓
 publish artifact
-   ↓
+↓
 ready to deploy
 ~~~
 
-### Continuous Deployment
+Kita belum automatically deploy ke production cloud.
+
+Kenapa?
+
+Karena repo belum punya real production target.
+
+Lebih jujur berhenti di GHCR daripada fake deploy command cuma supaya diagram terlihat lengkap.
+
+---
+
+## Artifact delivery
+
+Container image adalah deployment artifact.
+
+Kita publish:
 
 ~~~text
-verified code
-   ↓
-publish
-   ↓
-automatically deploy to production
+API image
+MLflow image
+Airflow image
 ~~~
 
-Our workshop uses **Continuous Delivery**.
+ke GHCR.
 
-We publish container images to GHCR but do not pretend we have a real cloud production target.
+---
 
-## Analogy: factory quality control
+## latest vs SHA tag
 
-Code is a product moving through a factory.
+latest convenient.
 
-CI is the inspection station.
-
-CD is packaging the approved product and putting it in the warehouse.
-
-Continuous Deployment would add:
-
-> automatically ship it to the customer.
-
-## Why Docker image is an artifact
-
-An artifact is a built output of the software process.
-
-Examples:
-
-- Python wheel,
-- binary,
-- Docker image.
-
-For this project, the deployable delivery artifact is the service container image.
-
-## Why code and model lifecycle are separate
-
-There are two kinds of change:
+Tapi movable.
 
 ~~~text
-code changed
+today latest = commit A
+tomorrow latest = commit B
+~~~
+
+SHA tag identify exact revision.
+
+Useful buat:
+
+- audit,
+- rollback,
+- traceability.
+
+---
+
+## Code lifecycle vs model lifecycle
+
+Ini salah satu concept MLOps yang subtle.
+
+~~~text
+new code
 → CI/CD
 
-model performance changed
-→ monitoring/retraining
+new data / performance degradation
+→ retraining lifecycle
 ~~~
 
-They can interact, but they are not the same trigger.
+Model bisa berubah tanpa application code berubah.
 
-That distinction is important in MLOps.
+Application code bisa berubah tanpa retrain model.
+
+Jadi kita punya dua lifecycle yang related tapi tidak identical.
+
+---
+
+## Analogi factory
+
+CI = quality inspection.
+
+CD = packaging approved product dan taruh ke warehouse.
+
+Continuous Deployment = warehouse langsung kirim ke customer automatically.
+
+Workshop berhenti di warehouse.
+
+---
+
+## Checkpoint
+
+1. CI solve problem apa?
+2. Kenapa docs dan Docker ikut CI?
+3. Develop branch buat apa?
+4. Continuous Delivery beda apa dengan Deployment?
+5. Kenapa SHA image tag useful?
+6. Code lifecycle beda apa dengan model lifecycle?

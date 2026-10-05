@@ -1,72 +1,99 @@
-# Apache Airflow
+# Apache Airflow — Dari Run Script Satu-Satu ke Workflow yang Bisa Diatur
 
-## Why Airflow appears in this project
+Airflow sering kelihatan intimidating buat newbie karena istilahnya banyak: DAG, task, scheduler, XCom, run, state, trigger, operator.
 
-Before Airflow, our scripts already work.
+Kalau semuanya dilempar sekaligus, ya wajar bingung.
 
-We can manually run:
+Jadi kita mulai dari problem.
+
+---
+
+## Bayangin pipeline tanpa Airflow
+
+Kalian punya lima command:
 
 ~~~text
-release data
-validate
-aggregate
-build features
-train
-evaluate
+1. release data
+2. validate data
+3. aggregate demand
+4. build features
+5. train model
 ~~~
 
-That is intentional.
+Kalau sekali jalan manual, masih gampang.
 
-An orchestrator should coordinate working logic, not become the only place where the logic exists.
+Sekarang tambah complexity.
 
-Airflow solves a different problem:
+Step 2 gagal. Harus ulang dari awal atau lanjut dari mana?
 
-> What should run, in what order, when, and what happens if something fails?
+Step 3 butuh output step 1 dan 2.
 
-## Analogy: a film production schedule
+Step 4 harus jalan berulang.
 
-Imagine making a film.
+Step 5 cuma boleh jalan kalau performance turun.
 
-You have teams for:
+Sekarang kita butuh sesuatu yang ngerti:
 
-- lighting,
-- camera,
-- actors,
-- editing.
+~~~text
+dependency
+execution order
+state
+retry
+schedule
+logs
+~~~
 
-The schedule does not do the camera operator's job.
+Itulah orchestration.
 
-It says:
+Airflow adalah workflow orchestrator.
+
+---
+
+## Analogi: production manager film
+
+Bayangin bikin film.
+
+Ada set team, lighting, camera, actors, editor.
+
+Production manager nggak pegang kamera dan nggak edit footage.
+
+Dia coordinate:
 
 ~~~text
 set ready
-   ↓
+↓
 lighting ready
-   ↓
-camera starts
-   ↓
-actors perform
-   ↓
-editing receives footage
+↓
+camera roll
+↓
+actor perform
+↓
+footage ke editor
 ~~~
 
-Airflow is closer to the production schedule.
+Airflow mirip production manager.
 
-The real domain work remains in Python functions.
+Actual pekerjaan tetap dilakukan reusable function/script.
 
-## What is a DAG?
+Airflow coordinate **kapan**, **urutan**, dan **state**.
 
-DAG means:
+Makanya kita menghindari pattern:
 
-> Directed Acyclic Graph
+> “Semua business logic ditulis di DAG.”
 
-Break the words down.
+---
+
+## Apa itu DAG?
+
+DAG = Directed Acyclic Graph.
+
+Kita pecah.
 
 ### Graph
 
-A graph has nodes and relationships.
+Graph punya node dan edge.
 
-In Airflow:
+Di Airflow:
 
 ~~~text
 node
@@ -78,21 +105,17 @@ edge
 
 ### Directed
 
-The relationship has direction.
+Arah matters.
 
 ~~~text
-validate
-   ↓
-aggregate
+validate → aggregate
 ~~~
 
-means aggregate depends on validate.
-
-Not the reverse.
+artinya aggregate depend on validate.
 
 ### Acyclic
 
-The dependency graph cannot loop forever.
+Tidak boleh cycle.
 
 Bad:
 
@@ -100,129 +123,58 @@ Bad:
 A → B → C → A
 ~~~
 
-A workflow needs a valid execution order.
+Kalau ada cycle, workflow tidak punya execution order yang valid.
 
-## A simple DAG
+---
 
-~~~text
-download
-   ↓
-validate
-   ↓
-transform
-   ↓
-save
-~~~
+## DAG bukan data
 
-If validate fails, transform should not blindly continue.
+DAG itu **workflow definition**.
 
-That dependency is one of the most important reasons to use an orchestrator.
-
-## DAG file vs business logic
-
-Our rule:
+Dia mendeskripsikan:
 
 ~~~text
-dags/
-→ WHEN + IN WHAT ORDER
-
-src/
-→ HOW
+task apa?
+dependency bagaimana?
+parameter apa?
+kapan jalan?
 ~~~
 
-Bad pattern:
+Bukan file dataset.
 
-~~~python
-@task
-def preprocess():
-    # 300 lines of pandas logic here
-~~~
+---
 
-Better:
+## Task itu apa?
 
-~~~python
-@task
-def preprocess():
-    return reusable_preprocess_function(...)
-~~~
+Task = satu unit of work.
 
-Why?
-
-Because reusable logic becomes:
-
-- easier to test,
-- callable without Airflow,
-- easier to explain,
-- less coupled to orchestration.
-
-## TaskFlow API
-
-Airflow 3 exposes stable authoring interfaces from airflow.sdk.
-
-We use decorators such as:
-
-~~~python
-@dag(...)
-def my_pipeline():
-
-    @task
-    def first_task():
-        ...
-
-    @task
-    def second_task(value):
-        ...
-
-    result = first_task()
-    second_task(result)
-~~~
-
-Something subtle happens here.
-
-When Airflow parses the DAG, calling first_task does not immediately execute the business code like a normal Python function call.
-
-It creates task relationships for the workflow.
-
-## XCom
-
-TaskFlow can pass small return values between tasks using XCom.
-
-Example:
+Contoh:
 
 ~~~text
 release_batch
-returns:
-{
-  date,
-  rows,
-  path
-}
-
-next task
-receives that metadata
+validate_batch
+aggregate_demand
 ~~~
 
-XCom is good for small metadata.
+Task boundary yang bagus biasanya punya satu responsibility jelas.
 
-We deliberately do **not** pass a full DataFrame through XCom.
+Kenapa jangan satu giant task?
 
-Why?
-
-Airflow's metadata system is not a large-data transport layer.
-
-Large data stays in files:
+Misalnya:
 
 ~~~text
-data/raw
-data/processed
-data/features
+download + validate + aggregate + features + train
 ~~~
 
-Tasks exchange references and summaries.
+Kalau gagal, kita cuma tahu big_task failed.
 
-## Our DAGs
+Tapi gagal di mana?
 
-### taxi_daily_replay
+Boundary yang jelas bikin debugging dan retry lebih bagus.
+
+---
+
+## DAG pertama: taxi_daily_replay
 
 ~~~text
 get_replay_date
@@ -236,11 +188,33 @@ aggregate_demand
 rebuild_features
 ~~~
 
-Purpose:
+### get_replay_date
 
-> simulate one new production day arriving.
+Resolve date yang mau direplay.
 
-### taxi_initial_training
+Karena workshop historical simulation, presenter bisa trigger Jan 27 lalu Jan 28 dalam beberapa menit tanpa edit code.
+
+### release_batch
+
+Ambil historical data dari replay source lalu materialize seolah data baru datang.
+
+### validate_batch
+
+Fail early kalau input invalid.
+
+Kenapa validation sebelum transform? Karena corrupted input jangan dibiarkan lanjut ke downstream pipeline.
+
+### aggregate_demand
+
+Trip-level rows jadi hourly zone demand.
+
+### rebuild_features
+
+History bertambah, jadi feature table diperbarui.
+
+---
+
+## DAG kedua: taxi_initial_training
 
 ~~~text
 create_snapshot
@@ -250,11 +224,19 @@ train_model
 register_candidate
 ~~~
 
-Purpose:
+Kenapa terpisah dari daily replay?
 
-> produce an initial challenger from a reproducible snapshot.
+Karena:
 
-### taxi_model_monitoring
+> **New data arrival tidak selalu berarti harus retrain.**
+
+Kalau setiap daily batch langsung retrain, model train terus tanpa evidence bahwa retraining memang perlu.
+
+Data pipeline dan training lifecycle punya trigger berbeda.
+
+---
+
+## DAG ketiga: taxi_model_monitoring
 
 ~~~text
 evaluate_model
@@ -262,109 +244,222 @@ evaluate_model
 maybe_retrain
 ~~~
 
-Inside maybe_retrain:
+Yang menarik: maybe_retrain bisa memilih tidak melakukan training.
+
+Kalau model sehat:
 
 ~~~text
-healthy
-→ stop
-
-degraded
-→ new snapshot
-→ retrain
-→ register challenger
+evaluate
+↓
+not_needed
+↓
+finish
 ~~~
 
-## How to make a DAG from zero
-
-A useful design sequence is:
-
-### Step 1 — write the workflow in plain language
-
-Example:
+Kalau degraded:
 
 ~~~text
-receive file
-validate file
-aggregate data
-build features
+evaluate
+↓
+retrain recommended
+↓
+new snapshot
+↓
+train
+↓
+register challenger
 ~~~
 
-### Step 2 — identify task boundaries
+No-op bisa menjadi outcome automation yang benar.
 
-Ask:
+Automation bukan berarti “selalu melakukan sesuatu”.
 
-> If this fails, do I want to know which step failed?
+---
 
-That often reveals useful task boundaries.
+## TaskFlow API
 
-### Step 3 — identify dependencies
+Simplified:
+
+~~~python
+from airflow.sdk import dag, task
+
+@dag(...)
+def my_pipeline():
+
+    @task
+    def first():
+        return {"rows": 100}
+
+    @task
+    def second(info):
+        print(info["rows"])
+
+    result = first()
+    second(result)
+
+my_pipeline()
+~~~
+
+Syntax-nya kelihatan seperti function biasa, tapi saat DAG parsing Airflow membangun graph task dependency.
+
+---
+
+## XCom
+
+XCom dipakai untuk task communication.
+
+Contoh task return:
 
 ~~~text
-validate requires received file
-aggregate requires valid file
-features require aggregated demand
+date
+rows
+path
+status
 ~~~
 
-### Step 4 — keep heavy logic in src/
+Itu metadata kecil.
 
-Write reusable Python functions first.
+Kenapa kita nggak pass full DataFrame?
 
-### Step 5 — connect tasks in the DAG
+Karena XCom bukan large data transport.
 
-Now the DAG is mostly orchestration.
+Bad:
 
-## schedule=None
+~~~text
+huge DataFrame
+↓
+serialize
+↓
+metadata database
+~~~
 
-Our workshop DAGs are manually triggered.
+Better:
 
-Why?
+~~~text
+large data
+→ parquet / storage
 
-Historical replay lets us simulate Jan 27, Jan 28, and Jan 29 within minutes.
+XCom
+→ reference + metadata
+~~~
 
-A real deployment may use a schedule.
+Ini design principle penting banget.
 
-The workshop keeps manual triggers so participants can see each lifecycle step clearly.
+---
+
+## Kenapa DAG harus tipis?
+
+Rule project kita:
+
+~~~text
+dags/
+→ WHEN + IN WHAT ORDER
+
+src/
+→ HOW
+~~~
+
+Misalnya feature engineering bug.
+
+Fix reusable function di src/features.
+
+Jangan copy 200 line Pandas logic ke DAG.
+
+Benefit:
+
+- bisa unit test tanpa Airflow,
+- bisa dipanggil script,
+- lebih reusable,
+- DAG lebih readable.
+
+---
+
+## Cara design DAG dari nol
+
+Jangan mulai dari syntax Airflow.
+
+Mulai dari whiteboard.
+
+### Step 1 — tulis proses natural language
+
+~~~text
+download
+validate
+clean
+aggregate
+save
+~~~
+
+### Step 2 — tentukan boundary
+
+Tanya:
+
+> “Kalau step ini gagal, apakah saya ingin tahu dan retry secara terpisah?”
+
+Kalau iya, mungkin cocok jadi task.
+
+### Step 3 — define dependency
+
+~~~text
+validate depends on download
+aggregate depends on validate
+~~~
+
+### Step 4 — implement reusable logic
+
+Di luar DAG.
+
+### Step 5 — wire ke Airflow
+
+Baru setelah itu bikin orchestration.
+
+---
+
+## Scheduling
+
+Production Airflow sering daily/hourly.
+
+Workshop kita manual trigger karena historical replay.
+
+Kalau pakai real clock, kita harus nunggu besok buat demo Jan 28. Nggak lucu. 😭
+
+Manual trigger bikin lifecycle bisa dipercepat tanpa mengubah dependency logic.
+
+---
 
 ## Idempotency
 
-A good pipeline should handle reruns predictably.
+Retry itu normal.
 
-For example, releasing the same historical date should not silently duplicate data.
+Task sebaiknya aman dijalankan ulang.
 
-Our scripts and orchestration check existing outputs or rebuild deterministic outputs where appropriate.
+~~~text
+run Jan 27
+→ output A
 
-Idempotency is a useful production habit:
+rerun Jan 27
+→ output A lagi
+~~~
 
-> rerunning the same logical work should not randomly corrupt state.
+bukan duplicate rows atau random corruption.
 
-## Debugging Airflow
+Idempotency bikin retry lebih aman.
 
-Useful questions:
-
-1. Did the DAG parse?
-2. Which task failed?
-3. What was the task log?
-4. Did the input file exist?
-5. Was MLflow reachable?
-6. Did a previous upstream task actually produce the expected artifact?
-
-Do not debug the whole DAG as one giant object.
-
-Debug the failed task and its dependency.
+---
 
 ## Airflow vs GitHub Actions
 
-This distinction matters.
+Sering ketuker karena dua-duanya automation.
 
 ~~~text
 Airflow
-→ orchestrates data / ML workflows
+→ data / ML workflow
 
 GitHub Actions
-→ reacts to code repository events
+→ repository change workflow
 ~~~
 
-Examples:
+Contoh:
 
 ~~~text
 new taxi batch
@@ -374,10 +469,44 @@ new pull request
 → GitHub Actions
 ~~~
 
-They can interact, but they solve different trigger problems.
+---
 
-## Takeaway
+## Debugging mindset
 
-Airflow is not “a place to put Python code”.
+Kalau Airflow gagal, jangan bilang:
 
-Airflow is a system for making workflow dependencies visible, schedulable, observable, and repeatable.
+> “Airflow error.”
+
+Tanya lebih specific:
+
+~~~text
+DAG mana?
+run mana?
+task mana?
+exception apa?
+input artifact ada?
+dependency service reachable?
+~~~
+
+Contoh actionable:
+
+> aggregate_demand failed karena daily parquet belum ada.
+
+Itu jauh lebih gampang ditangani.
+
+---
+
+## Checkpoint
+
+Setelah section ini, coba jawab:
+
+1. DAG itu apa?
+2. Task itu apa?
+3. Dependency itu apa?
+4. XCom dipakai buat apa?
+5. Kenapa DataFrame besar jangan lewat XCom?
+6. Kenapa DAG kita tipis?
+7. Kenapa daily replay dan training dipisah?
+8. Airflow beda apa dengan GitHub Actions?
+
+Kalau bisa jawab, core Airflow concept-nya sudah kebayang.

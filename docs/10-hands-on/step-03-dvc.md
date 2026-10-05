@@ -1,18 +1,39 @@
-# Step 3 — DVC Snapshot
+# Step 3 — DVC: Bikin Training Data Punya Identity
+
+Sekarang kita punya snapshot.
+
+Tapi kalau cuma file di folder, pertanyaan reproducibility masih ada.
+
+> “File ini state yang mana? Kalau dependency berubah, gimana kita tahu harus rebuild?”
+
+DVC masuk di sini.
+
+---
 
 ## Goal
 
-Turn “I trained from some Parquet file” into a reproducible data pipeline stage.
+Setelah step ini:
 
-## 1. Open dvc.yaml
+- kalian ngerti stage dependency,
+- bisa reproduce training snapshot,
+- ngerti Git vs DVC,
+- ngerti kenapa snapshot + hash masuk model lineage.
 
-Before running anything, inspect:
+---
+
+## 1. Buka dvc.yaml dulu
+
+Jangan langsung run command.
+
+Open file.
+
+Cari:
 
 ~~~text
-dvc.yaml
+create_training_snapshot
 ~~~
 
-Find:
+Baca:
 
 ~~~text
 cmd
@@ -20,92 +41,141 @@ deps
 outs
 ~~~
 
-Try to explain them in your own words.
+Coba tebak meaning sebelum lanjut.
 
-A useful translation:
+---
+
+## 2. Translate ke bahasa manusia
 
 ~~~text
 cmd
-→ what should I run?
+→ cara bikin output
 
 deps
-→ what could change the result?
+→ hal yang kalau berubah bisa mempengaruhi output
 
 outs
-→ what result should exist?
+→ artifact hasil stage
 ~~~
 
-## 2. Reproduce the stage
+Ini seperti build recipe.
+
+---
+
+## 3. Run repro
 
 ~~~bash
 uv run dvc repro create_training_snapshot
 ~~~
 
-DVC checks whether the dependencies changed.
+Observe output.
 
-If needed, it executes the snapshot script.
+Kalau stage up-to-date, DVC bisa bilang nggak perlu rerun.
 
-## 3. Inspect status
+Kalau dependency berubah, stage reproduce.
+
+---
+
+## 4. Run status
 
 ~~~bash
 uv run dvc status
 ~~~
 
-If everything is current, DVC should not report that the stage needs reproduction.
+Interpret result.
 
-## 4. Run again
+Kalau no changes, pipeline state aligned.
+
+---
+
+## 5. Run repro lagi
 
 ~~~bash
 uv run dvc repro create_training_snapshot
 ~~~
 
-Notice that a reproducibility tool is not only about “running commands”.
+Pertanyaan:
 
-It understands dependency state.
+> “Kenapa tool reproducibility justru kadang tidak menjalankan command?”
 
-## 5. What should be in Git?
+Karena dia tahu output masih valid relatif terhadap dependencies.
 
-DVC metadata and pipeline definitions can be versioned.
+---
 
-Generated data stays outside normal Git history.
+## 6. Inspect cache
 
-Mental model:
-
-~~~text
-Git commit
-→ code + DVC metadata
-
-DVC cache
-→ heavy data content
-~~~
-
-## 6. Why this matters for models
-
-Suppose model v1 and v2 use different snapshots.
-
-We want lineage such as:
+Lihat:
 
 ~~~text
-model v1
-→ snapshot A
-
-model v2
-→ snapshot B
+.dvc/cache/
 ~~~
 
-This is much stronger than both models saying they came from features.parquet.
+Jangan edit manual.
+
+Itu internal data store.
+
+---
+
+## 7. Git thought experiment
+
+Kalau snapshot Parquet 500 MB berubah 20 kali dan setiap version masuk Git normal, apa yang terjadi?
+
+Repository history bisa bengkak.
+
+DVC separate large content handling dari source history.
+
+---
+
+## 8. Hash connection
+
+Project juga calculate SHA256 snapshot dan log ke MLflow.
+
+Kenapa both DVC + SHA?
+
+DVC manage pipeline artifact state.
+
+SHA logged ke experiment memberi compact identity trace.
+
+---
+
+## 9. Mini challenge
+
+Bayangin model version 7 punya MAE aneh.
+
+Apa chain investigation?
+
+~~~text
+model v7
+↓
+MLflow run
+↓
+dataset snapshot name + hash
+↓
+DVC/data state
+↓
+feature code Git revision
+~~~
+
+Ini lineage thinking.
+
+---
+
+## Common mistake
+
+Jangan edit snapshot lama yang sudah dipakai model.
+
+Bikin snapshot baru.
+
+Kalau old snapshot mutable, historical lineage jadi bohong.
+
+---
 
 ## Checkpoint
 
-You should now be able to answer:
+Coba explain ke teman sebelah:
 
-> Why do we need both Git and DVC?
+> “Kenapa DVC ada kalau kita sudah punya Git?”
 
-Short answer:
+Kalau jawabannya lebih detail dari “buat file besar”, bagus.
 
-~~~text
-Git tracks project source state.
-DVC helps track/reproduce data pipeline artifacts.
-~~~
-
-Next: log experiments with MLflow.
+Next kita track experiment.

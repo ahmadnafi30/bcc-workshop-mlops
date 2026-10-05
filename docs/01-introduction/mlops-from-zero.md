@@ -1,187 +1,444 @@
-# MLOps from Zero
+# MLOps from Zero — Kenapa Machine Learning Butuh Lifecycle Sendiri?
 
-## Start from a normal ML project
+Kalau kalian search “What is MLOps?” di internet, sering banget ketemu kalimat:
 
-A simple ML project might look like:
+> MLOps is DevOps for Machine Learning.
+
+Arah definisinya nggak salah. Tapi buat pemula, itu kadang belum membantu karena malah muncul pertanyaan baru: “DevOps aja belum terlalu ngerti, terus kenapa ML perlu versi khusus?”
+
+Jadi kita mulai dari problem, bukan definisi.
+
+---
+
+## Project ML paling sederhana
+
+Misalnya kalian punya:
 
 ~~~text
-notebook.ipynb
-dataset.csv
-model.pkl
+project/
+├── notebook.ipynb
+├── data.csv
+└── model.pkl
 ~~~
 
-For experimentation, that is fine.
+Di notebook, kalian load data, train, evaluate, lalu save model.
 
-The difficulty starts when the model becomes something other people depend on.
+Result:
 
-## Restaurant analogy
+~~~text
+MAE = 10.2
+~~~
 
-Think of the model as a recipe.
+Untuk experimentation, itu fine.
 
-| Restaurant | ML system |
-| --- | --- |
-| recipe | model code |
-| ingredients | data |
-| ingredient batch | dataset version |
-| kitchen process | training pipeline |
-| cooking log | experiment tracking |
-| approved menu item | registered model |
-| waiter | prediction API |
-| kitchen environment | container |
-| manager schedule | orchestrator |
-| quality dashboard | monitoring |
-| update recipe | retraining |
+Problem baru muncul ketika model berubah dari:
 
-The main lesson:
+> “Eksperimen saya.”
 
-> **A model is a component, not the whole system.**
+menjadi:
 
-## Practical definition
+> “Something other people depend on.”
 
-For this workshop:
+Begitu ada dependency ke orang atau system lain, requirement-nya ikut berubah.
 
-> MLOps is the set of practices that make an ML lifecycle reproducible, deployable, observable, and maintainable.
+---
 
-### Reproducible
+## Problem pertama: reproducibility
 
-Can we recreate the result later?
+Tiga minggu kemudian kalian buka folder data.
 
-We need to know:
+~~~text
+data.csv
+data_final.csv
+data_fix.csv
+data_fix_bener.csv
+data_final_bener_2.csv
+~~~
 
-- code version,
-- data version,
-- parameters,
-- runtime environment.
+Relatable? 😭
 
-### Deployable
+Model yang MAE 10.2 tadi pakai yang mana?
 
-Can another application actually use it?
+Terus ternyata feature engineering pernah direvisi. Versi scikit-learn beda. Parameter pernah diganti. Random seed mungkin beda.
 
-We need:
+Jadi training context itu bukan cuma code.
 
-- a stable artifact,
-- a serving interface,
-- a predictable runtime.
+~~~text
+Code
++
+Data
++
+Parameters
++
+Environment
++
+Randomness
+~~~
 
-### Observable
+Kalau satu berubah, result bisa berubah.
 
-Can we see what is happening?
+Makanya kita butuh beberapa layer:
 
-Examples:
+~~~text
+Git
+→ code history
 
-- request count,
-- API latency,
-- current model version,
-- recent MAE.
+DVC
+→ training data snapshot
 
-### Maintainable
+MLflow
+→ experiment context
 
-Can the system safely change?
+uv
+→ environment consistency
+~~~
 
-Examples:
+Perhatikan bahwa tools ini saling melengkapi, bukan saling menggantikan.
 
-- automated checks,
-- challenger models,
-- retraining,
-- rollback.
+---
 
-## Why Git alone is not enough
+## Problem kedua: deployability
 
-Traditional software behavior mostly comes from code.
+Kalian punya file model. Backend developer tanya:
 
-ML behavior comes from:
+> “Cara aplikasi gue request prediction gimana?”
+
+Kalau jawabannya:
+
+> “Import file Python saya, load model, terus bikin lag feature manual.”
+
+Technically bisa, tapi coupling-nya tinggi banget.
+
+Backend jadi harus tahu model framework, feature order, lag logic, rolling window, model path, dan historical data.
+
+Lebih clean kalau kita punya contract:
+
+~~~http
+POST /predict
+~~~
+
+Request:
+
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:00:00"
+}
+~~~
+
+Response:
+
+~~~json
+{
+  "predicted_trip_count": 147.8
+}
+~~~
+
+Client nggak perlu tahu internal model implementation. Itu abstraction boundary.
+
+---
+
+## Problem ketiga: observability
+
+Sekarang API hidup.
+
+HTTP 200. Latency 80 ms.
+
+Apakah sistem sehat?
+
+Belum tentu.
+
+### Case A — API sehat, model jelek
+
+~~~text
+HTTP 200
+latency 60 ms
+zero server error
+~~~
+
+Tapi prediction meleset jauh terus-menerus.
+
+Operationally sehat. Model-wise buruk.
+
+### Case B — model bagus, service bermasalah
+
+Model accuracy masih bagus, tapi API latency 15 detik dan request timeout.
+
+Model-wise sehat. Service-wise buruk.
+
+Jadi ML system punya minimal dua health dimension:
+
+~~~text
+System Health
++
+Model Health
+~~~
+
+Ini konsep yang harus benar-benar kalian pegang.
+
+---
+
+## Problem keempat: maintainability
+
+Data dunia nyata berubah.
+
+Behavior berubah. Seasonality berubah. Business context berubah.
+
+Contoh taxi:
+
+~~~text
+Training:
+January
+
+Later:
+February / March
+different traffic
+different event
+different demand pattern
+~~~
+
+Model yang bagus di January belum tentu bagus selamanya.
+
+Jadi lifecycle production bukan:
+
+~~~text
+train
+↓
+deploy
+↓
+finish
+~~~
+
+lebih realistis:
+
+~~~text
+train
+↓
+deploy
+↓
+observe
+↓
+evaluate
+↓
+retrain if needed
+↓
+review
+↓
+promote
+↓
+observe again
+~~~
+
+Itu loop.
+
+---
+
+## Jadi MLOps itu apa?
+
+Sekarang definisinya lebih meaningful.
+
+Di workshop ini kita pakai definisi practical:
+
+> **MLOps adalah practices dan engineering yang membuat lifecycle Machine Learning menjadi reproducible, deployable, observable, dan maintainable.**
+
+Empat kata ini penting:
+
+~~~text
+reproducible
+deployable
+observable
+maintainable
+~~~
+
+Kalau mau ingat MLOps, ingat empat itu.
+
+---
+
+## Kenapa ML beda dari software biasa?
+
+Traditional software behavior mostly ditentukan code.
+
+Machine Learning beda.
+
+Behavior model dipengaruhi:
 
 ~~~text
 code
-+
 data
-+
-parameters
-+
-model artifact
-~~~
-
-Two people can run the same Git commit with different training data and get different models.
-
-Git remains essential, but data and experiment lineage need additional handling.
-
-## Why experiment tracking exists
-
-Imagine:
-
-~~~text
-run A → MAE 14.2
-run B → MAE 11.7
-run C → MAE 12.0
-~~~
-
-Then someone asks:
-
-- Which dataset was run B using?
-- What was the learning rate?
-- Where is the model file?
-- Which run became production?
-
-That bookkeeping is exactly where experiment tracking becomes useful.
-
-## Why orchestration exists
-
-A repeated workflow might be:
-
-~~~text
-new data
-  ↓
-validate
-  ↓
-aggregate
-  ↓
 features
-  ↓
+parameters
+library version
+random seed
+training process
+~~~
+
+Artinya source control code saja belum cukup menjelaskan output model.
+
+Makanya ML engineering punya concern tambahan:
+
+- dataset lineage,
+- experiment tracking,
+- model registry,
+- model monitoring,
+- retraining policy.
+
+---
+
+## Git vs DVC vs MLflow
+
+Ini confusion yang super common.
+
+### Git
+
+Pertanyaan:
+
+> “Code version yang mana?”
+
+### DVC
+
+Pertanyaan:
+
+> “Training snapshot exact yang dipakai apa?”
+
+### MLflow
+
+Pertanyaan:
+
+> “Run ini parameter, metric, artifact, dan dataset context-nya apa?”
+
+Simplified:
+
+~~~text
+Git
+→ what code?
+
+DVC
+→ what data?
+
+MLflow
+→ what experiment result?
+~~~
+
+Ketiganya nyambung.
+
+---
+
+## Airflow masuk di mana?
+
+Bayangin pipeline:
+
+~~~text
+download
+↓
+validate
+↓
+aggregate
+↓
+features
+↓
 train
-  ↓
+↓
 evaluate
 ~~~
 
-You can run this manually once.
+Kalau sekali jalan manual, gampang.
 
-Repeated execution is where ordering, retries, visibility, and failure handling become important.
+Kalau setiap hari? Kalau validate gagal? Kalau task kelima butuh output task ketiga? Kalau data belum datang?
 
-Airflow manages the workflow. It does not make the model smarter.
+Mulai terasa kita butuh orchestration.
 
-## Why ML monitoring is special
+Airflow coordinate workflow. Airflow bukan bikin model lebih pintar.
 
-A normal web service asks:
+---
 
-- Is it alive?
-- Is it slow?
-- Are requests failing?
+## Docker masuk di mana?
 
-An ML system also asks:
+Project works di laptop kalian.
 
-- Are predictions still accurate?
-
-That answer can be delayed.
+Di laptop teman:
 
 ~~~text
-prediction now
-+
-ground truth later
-=
-model performance
+ModuleNotFoundError
+different Python
+missing system package
 ~~~
 
-That is why prediction logging and delayed evaluation matter.
+Classic.
 
-## MLOps is not a tool checklist
+Docker bantu package runtime environment.
 
-Installing Docker, Airflow, and MLflow does not automatically create good MLOps.
+Intuition-nya:
 
-The important practices are:
+> “Daripada saya kasih list instalasi panjang, saya definisikan environment yang konsisten.”
 
-- reproducibility,
-- traceability,
-- automation,
-- observability,
-- safe model lifecycle management.
+Docker nggak solve bad model atau bad data. Dia solve environment consistency layer.
 
-Tools are implementation choices.
+---
+
+## CI/CD masuk di mana?
+
+Setiap ada pull request, siapa yang memastikan test, lint, docs, dan Docker build jalan?
+
+Kalau jawabannya:
+
+> “Semoga contributor ingat.”
+
+itu fragile.
+
+GitHub Actions automate repository checks.
+
+Perhatikan bedanya:
+
+~~~text
+code changed
+→ CI/CD
+
+model performance degraded
+→ monitoring/retraining
+~~~
+
+Dua trigger yang berbeda.
+
+---
+
+## Monitoring masuk di mana?
+
+Begitu service live, kita butuh feedback loop.
+
+Operational feedback:
+
+~~~text
+request rate
+latency
+errors
+service health
+~~~
+
+Model feedback:
+
+~~~text
+prediction
+vs
+actual
+↓
+MAE / RMSE
+~~~
+
+Tanpa feedback, production system seperti nyetir mobil tanpa dashboard. Mobilnya mungkin jalan, tapi kita nggak tahu kondisi mesin atau bensinnya.
+
+---
+
+## MLOps bukan checklist tools
+
+MLOps bukan:
+
+~~~text
+Airflow ✅
+Docker ✅
+MLflow ✅
+Grafana ✅
+~~~
+
+Kalau tools ada tapi training nggak reproducible, model nggak traceable, dan performance nggak dimonitor, tools tersebut cuma dekorasi architecture diagram.
+
+Fokus kita adalah lifecycle. Tool cuma implementasi.

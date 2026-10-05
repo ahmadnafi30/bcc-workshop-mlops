@@ -1,47 +1,119 @@
-# FastAPI
+# FastAPI — Membungkus Model Jadi HTTP Service yang Enak Dipakai
 
-## Why FastAPI?
+FastAPI bukan “ML tool”.
 
-FastAPI gives us a small HTTP application around prediction logic.
+Dan justru itu point-nya.
 
-The project separates:
+Machine Learning production banyak banget bersentuhan dengan normal software engineering.
 
-~~~text
-api/
-→ HTTP concerns
+Kita butuh interface yang:
 
-src/serving/
-→ ML serving logic
-~~~
+- typed,
+- validated,
+- documented,
+- testable,
+- gampang dipakai client.
 
-That separation makes testing easier.
+FastAPI cocok banget untuk itu.
 
-## Main files
+---
+
+## Folder separation
 
 ~~~text
 api/
 ├── main.py
 ├── schemas.py
 └── dependencies.py
+
+src/serving/
+├── feature_provider.py
+├── model_loader.py
+└── predictor.py
 ~~~
 
-### main.py
+Kenapa nggak semuanya di api/main.py?
 
-Defines endpoints and maps Python exceptions into HTTP responses.
+Karena HTTP concern dan ML domain concern beda.
 
-### schemas.py
+Kalau besok kita ganti FastAPI dengan framework lain, model logic seharusnya nggak perlu ditulis ulang total.
 
-Defines request and response shapes using Pydantic models.
+---
 
-### dependencies.py
+## schemas.py — contract
 
-Creates reusable objects such as the predictor.
+Pydantic schema define bentuk request/response.
 
-## Endpoint: GET /health
+Contoh request:
 
-Purpose:
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:00:00"
+}
+~~~
 
-> Is the API process alive?
+Validation bisa catch:
+
+~~~text
+zone_id <= 0
+target minute != 00
+timezone format unsupported
+~~~
+
+Lebih baik reject request invalid di boundary daripada biarkan error muncul jauh di model layer.
+
+---
+
+## main.py — HTTP layer
+
+Responsibility:
+
+- endpoint,
+- middleware,
+- exception → HTTP status,
+- response schema.
+
+Bukan tempat:
+
+- train model,
+- 200 lines Pandas,
+- model registry implementation.
+
+HTTP layer harus relatively thin.
+
+---
+
+## dependencies.py — dependency wiring
+
+Kita create predictor lewat dependency.
+
+Benefit besar saat testing.
+
+Production:
+
+~~~text
+real predictor
+→ MLflow
+→ real model
+~~~
+
+Test:
+
+~~~text
+fake predictor
+→ deterministic result
+~~~
+
+Jadi API contract bisa dites tanpa menyalakan seluruh MLOps stack.
+
+---
+
+# GET /health
+
+~~~http
+GET /health
+~~~
 
 Response:
 
@@ -51,24 +123,33 @@ Response:
 }
 ~~~
 
-This endpoint intentionally does not require MLflow to be healthy.
+Kenapa endpoint ini **nggak sekalian check MLflow, data history, champion, Prometheus, dan segalanya?**
 
-Why?
+Karena kita ingin signal yang specific.
 
-Because two questions are different:
+Kalau /health fail karena MLflow down, kita nggak tahu:
 
 ~~~text
-Is FastAPI alive?
-Is the model dependency ready?
+FastAPI process mati?
+atau
+dependency MLflow yang mati?
 ~~~
 
-## Endpoint: GET /model-info
+Health endpoint project ini menjawab narrow question:
 
-Purpose:
+> “FastAPI process bisa respond nggak?”
 
-> Which registered model is currently selected by the serving alias?
+Dependency readiness bisa dilihat dari endpoint lain.
 
-Example information:
+---
+
+# GET /model-info
+
+Endpoint ini answer:
+
+> “Model apa yang sekarang dipakai?”
+
+Response include:
 
 ~~~text
 model_name
@@ -78,145 +159,246 @@ run_id
 model_uri
 ~~~
 
-If champion is missing, this endpoint can return 503.
-
-## Endpoint: POST /predict
-
-Request:
-
-~~~json
-{
-  "zone_id": 161,
-  "target_datetime": "2025-01-28T18:00:00"
-}
-~~~
-
-Response contains:
+Kalau champion missing:
 
 ~~~text
-zone_id
-target_datetime
-predicted_trip_count
-model_name
-model_version
-model_alias
-run_id
-model_uri
+503 Service Unavailable
 ~~~
 
-Including model metadata makes debugging much easier.
+Interpretation:
 
-If someone asks:
+> API alive, tapi dependency model belum ready.
 
-> “Which model created this prediction?”
+Ini lebih informative daripada generic 500.
 
-the response already gives us useful lineage.
+---
 
-## HTTP status codes in this project
+# POST /predict
 
-### 200
-
-Request succeeded.
-
-### 422
-
-The request structure may be valid JSON, but prediction cannot be built from the supplied input or available history.
-
-Examples:
-
-- target time is not at the start of an hour,
-- required historical demand is missing.
-
-### 503
-
-The API process is alive, but the model dependency is not ready.
-
-Example:
-
-- champion alias does not exist in MLflow Registry.
-
-## Dependency injection
-
-FastAPI can inject reusable dependencies into endpoints.
-
-Our predictor is created through a dependency function.
-
-That makes tests easier because we can replace the real predictor with a fake predictor.
-
-## Why fake dependencies in tests?
-
-Unit tests should not require:
-
-- a real MLflow server,
-- a real registered model,
-- a huge TLC dataset.
-
-We override the dependency and test the API contract separately.
-
-That means:
+Flow:
 
 ~~~text
-API test
-→ test HTTP behavior
-
-serving test
-→ test feature + model behavior
-
-integration demo
-→ test the real stack
+request
+↓
+Pydantic validation
+↓
+feature provider
+↓
+model loader
+↓
+predictor
+↓
+prediction logger
+↓
+metric observer
+↓
+response
 ~~~
 
-Different test levels answer different questions.
+Perhatikan layering.
 
-## Before starting locally
+Endpoint nggak bikin rolling feature sendiri.
 
-Start the shared local MLflow server first:
+Dia delegate ke serving logic.
 
-~~~bash
-uv run python scripts/start_mlflow.py
+---
+
+## Kenapa 422?
+
+422 berarti request bisa dipahami secara struktur, tapi tidak valid untuk semantic use case.
+
+Contoh:
+
+~~~text
+target_datetime = 18:30
 ~~~
 
-Make sure the registered model already has a `champion` alias. The API resolves that alias instead of hard-coding a model version.
+Model kita hourly.
 
-## Start locally
+Atau history 168 jam belum lengkap.
+
+Client request tidak bisa dipenuhi dengan contract current model.
+
+---
+
+## Kenapa 503?
+
+503 berarti service secara umum hidup, tapi dependency sementara unavailable.
+
+Contoh:
+
+~~~text
+champion alias belum ada
+MLflow registry unavailable
+~~~
+
+Ini berbeda dari validation error.
+
+---
+
+## Middleware
+
+HTTP middleware wrap setiap request.
+
+Conceptual:
+
+~~~text
+request arrives
+↓
+start timer
+↓
+endpoint runs
+↓
+response generated
+↓
+stop timer
+↓
+record latency + status
+~~~
+
+Prometheus metric update terjadi di sini.
+
+Kenapa middleware?
+
+Karena kita nggak mau copy metric timing code ke setiap endpoint.
+
+Cross-cutting concern cocok di middleware.
+
+---
+
+## /metrics
+
+Prometheus scrape:
+
+~~~http
+GET /metrics
+~~~
+
+Endpoint ini operational, bukan business API.
+
+Makanya hidden dari main Swagger schema.
+
+Client taxi prediction nggak perlu tahu metric endpoint.
+
+---
+
+## Swagger UI
+
+Start:
 
 ~~~bash
 uv run uvicorn api.main:app --reload
 ~~~
 
-Open Swagger UI:
+Open:
 
 ~~~text
 http://127.0.0.1:8000/docs
 ~~~
 
-Swagger is especially useful for beginners because you can inspect schemas and send requests without writing curl commands.
+Swagger useful banget buat workshop karena peserta bisa:
 
-## Metrics endpoint
+- lihat endpoint,
+- lihat schema,
+- coba request,
+- lihat status code,
+- lihat response.
 
-FastAPI also exposes:
+Tanpa harus hafal curl dulu.
+
+---
+
+## Testing layers
+
+Jangan semua test dijadikan full integration test.
+
+### Unit test
+
+Test function kecil.
+
+### API contract test
+
+FastAPI + fake predictor.
+
+Focus request/response/status.
+
+### Integration
+
+Real MLflow + model + history + API.
+
+Lebih berat.
+
+Kenapa dipisah?
+
+Kalau every unit test harus boot MLflow dan download model, test jadi lambat dan flaky.
+
+---
+
+## Path cardinality
+
+Prometheus metric label bisa bahaya.
+
+Kalau path arbitrary dipakai raw:
 
 ~~~text
-GET /metrics
+/user/1
+/user/2
+/user/3
+...
 ~~~
 
-Prometheus scrapes this endpoint later.
+bisa create banyak time series.
 
-It is hidden from the main OpenAPI workshop interface because it is operational infrastructure, not a user-facing prediction API.
+Project normalize path yang dikenal.
 
-## Common errors
+Unknown path jadi:
 
-### 503 model champion unavailable
+~~~text
+other
+~~~
 
-Check:
+Ini contoh operational design detail yang kecil tapi important.
 
-1. MLflow is running;
-2. a model was registered;
-3. a model version was promoted to champion;
-4. MLFLOW_TRACKING_URI points to the correct server.
+---
 
-### 422 history missing
+## Common debugging
 
-The model needs up to 168 hours of history.
+### /health 200, /predict 503
 
-Make sure processed demand exists for the full lookback window.
+API sehat.
+
+Model dependency problem.
+
+### /predict 422
+
+Request/history problem.
+
+### connection refused
+
+API process / port problem.
+
+### model version unexpected
+
+Check champion alias.
+
+---
+
+## Mini challenge
+
+Kalau besok mau tambah endpoint batch prediction, apakah semua model loading logic di-copy ke endpoint baru?
+
+No.
+
+Pattern yang lebih sehat:
+
+~~~text
+new schema
+↓
+reuse predictor/service logic
+↓
+thin endpoint wrapper
+~~~
+
+Framework layer tipis, domain logic reusable.
+
+Pattern ini mirip Airflow DAG tipis yang call src functions.

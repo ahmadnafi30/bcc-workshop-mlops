@@ -1,44 +1,109 @@
-# Git Workflow
+# Git Workflow — Kenapa Kita Nggak Langsung Commit ke Main?
 
-## Why more than main?
+Kalau project personal kecil, commit langsung ke main itu convenient.
 
-For a personal experiment, direct commits to main are convenient.
+Tapi begitu repository mulai dipakai team, workshop, atau ada release yang harus stabil, kita butuh sedikit structure.
 
-For collaborative work, we want a small safety boundary.
-
-~~~text
-feat/* or fix/*
-        ↓
-      develop
-        ↓
-       main
-~~~
-
-## Branch roles
-
-### feat/* — workbench
-
-This is where a feature is built and changed freely.
-
-Example:
+Project ini pakai:
 
 ~~~text
-feat/add-drift-dashboard
+feat/* / fix/* / docs/* / chore/*
+              ↓
+           develop
+              ↓
+            main
 ~~~
 
-### develop — integration
+Ini bukan satu-satunya branching strategy di dunia.
 
-Completed features meet here.
+Tapi cukup simple buat workshop dan cukup realistis buat ngenalin integration flow.
 
-A PR into develop should pass tests, linting, docs build, and Docker validation.
+---
 
-### main — stable workshop release
+## main = stable release
 
-Main is the version we are comfortable showing to participants.
+Main seharusnya merepresentasikan version yang:
 
-A PR into main should come from develop.
+- sudah lewat integration,
+- CI green,
+- siap didemokan,
+- nggak berisi half-finished feature.
 
-## Normal workflow
+Mental model:
+
+> Kalau presenter clone main pagi workshop, harusnya aman.
+
+---
+
+## develop = integration branch
+
+Develop adalah tempat feature selesai ketemu satu sama lain.
+
+Bayangin dua feature:
+
+~~~text
+feat/new-api
+feat/new-monitoring
+~~~
+
+Masing-masing green sendiri.
+
+Tapi pas digabung, bisa conflict atau behavior berubah.
+
+Develop kasih stage buat integration sebelum stable release.
+
+---
+
+## feat/* = workbench
+
+Feature branch itu tempat eksperimen implementation.
+
+Contoh:
+
+~~~text
+feat/add-weather-data
+feat/improve-api-cache
+~~~
+
+Di sini commit bisa beberapa kali.
+
+Setelah feature coherent, buka PR ke develop.
+
+---
+
+## fix/*
+
+Untuk bug fix.
+
+Contoh:
+
+~~~text
+fix/prevent-feature-leakage
+~~~
+
+Kenapa naming useful?
+
+Karena dari branch name aja reviewer langsung tahu intent.
+
+---
+
+## docs/*
+
+Documentation-only work.
+
+Contoh branch yang kita pakai buat rewrite ini:
+
+~~~text
+docs/interactive-indonesia-workshop
+~~~
+
+Walaupun “cuma docs”, CI tetap jalan.
+
+Karena docs adalah workshop product.
+
+---
+
+## Flow feature normal
 
 ~~~bash
 git switch develop
@@ -46,7 +111,9 @@ git pull
 git switch -c feat/my-feature
 ~~~
 
-After coding:
+Work.
+
+Commit.
 
 ~~~bash
 git add .
@@ -54,69 +121,159 @@ git commit -m "feat: add my feature"
 git push -u origin feat/my-feature
 ~~~
 
-PR:
+Open PR:
 
 ~~~text
 feat/my-feature
-      ↓
-   develop
+↓
+develop
 ~~~
 
-Release:
+Setelah develop stable:
 
 ~~~text
 develop
-   ↓
- main
+↓
+main
 ~~~
 
-## Why not feat → main?
+---
 
-Because individually-correct changes can conflict when combined.
+## Kenapa PR?
 
-Develop gives us an integration point before stable release.
+Pull Request bukan cuma merge button.
 
-## CI policy
+PR jadi review surface.
 
-Allowed:
+Kita bisa lihat:
+
+- diff,
+- CI status,
+- comment,
+- discussion,
+- approval.
+
+Bahkan kalau team cuma dua orang, PR history useful buat audit kenapa change masuk.
+
+---
+
+## Commit message
+
+Project pakai simple conventional prefix.
 
 ~~~text
-feat/*  → develop
-fix/*   → develop
-docs/*  → develop
-chore/* → develop
-
-develop → main
+feat:
+fix:
+docs:
+refactor:
+test:
+ci:
+chore:
 ~~~
 
-The CI workflow checks PR direction.
+Kenapa?
 
-Repository branch protection can be enabled in GitHub Settings for an even stricter setup.
+Supaya history readable.
 
-## Commit messages
-
-We use simple Conventional Commit-style prefixes:
-
-| Prefix | Purpose |
-| --- | --- |
-| feat | functionality |
-| fix | bug |
-| docs | documentation |
-| refactor | structure without behavior change |
-| test | tests |
-| ci | automation |
-| chore | maintenance |
-
-Prefer:
+Compare:
 
 ~~~text
-feat: add model performance monitoring
+update
+fix
+fix again
+last fix
 ~~~
 
-over:
+dengan:
 
 ~~~text
-update stuff
+feat: add monitoring endpoint
+fix: prevent future leakage
+docs: expand Airflow tutorial
 ~~~
 
-Readable history is part of maintainability.
+History kedua jauh lebih informative.
+
+---
+
+## Squash merge
+
+Feature branch kadang punya banyak commit kecil.
+
+~~~text
+try 1
+fix typo
+fix test
+fix import
+~~~
+
+Saat merge ke develop, squash bisa turn jadi satu logical commit.
+
+Benefit: integration history lebih clean.
+
+Tapi jangan blindly squash kalau commit history memang punya meaningful independent steps.
+
+---
+
+## Branch policy di CI
+
+Project CI validate direction.
+
+Expected:
+
+~~~text
+feature-ish branch
+→ develop
+
+develop
+→ main
+~~~
+
+Kalau docs branch langsung PR ke main, policy fail.
+
+Kenapa encode process di CI?
+
+Karena documentation rule tanpa enforcement gampang dilanggar.
+
+---
+
+## Branch protection / ruleset
+
+CI policy membantu, tapi GitHub repository idealnya juga punya protection.
+
+Contoh:
+
+- require PR,
+- require CI,
+- block direct push,
+- restrict force push.
+
+Ini beda dengan CI check.
+
+CI bisa bilang “fail”, tapi admin permission bisa saja still override.
+
+Ruleset memberi governance lebih kuat.
+
+---
+
+## Rewriting history
+
+Project pernah rewrite history sekali saat cleanup besar.
+
+Itu okay **sebelum** workflow stabil dan kalau coordinated.
+
+Tapi setelah team collaboration jalan, force rewrite shared branch dangerous.
+
+Rule sehat:
+
+> Bersihkan history early; setelah stable, hindari rewriting main tanpa alasan sangat kuat.
+
+---
+
+## Checkpoint
+
+1. Main, develop, feat punya role apa?
+2. Kenapa feature nggak langsung main?
+3. PR berguna buat apa selain merge?
+4. Squash merge kapan useful?
+5. CI branch policy beda apa dengan GitHub branch protection?

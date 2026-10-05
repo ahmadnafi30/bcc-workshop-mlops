@@ -1,51 +1,74 @@
-# Problem Statement
+# Problem Statement — Kita Sebenarnya Lagi Predict Apa?
 
-## Prediction target
+Sebelum ngomong MLOps, kita harus jelas dulu ML problem-nya.
 
-We predict:
+Karena MLOps yang bagus nggak bisa menyelamatkan problem formulation yang kabur.
 
-> **the number of Yellow Taxi pickups in one Manhattan taxi zone for one target hour.**
+Use case kita:
 
-Example:
+> **Predict jumlah Yellow Taxi pickups di setiap Manhattan taxi zone untuk satu jam ke depan.**
 
-~~~text
-target:
-zone 161 at 18:00
+Simple kalimatnya, tapi ada beberapa detail penting.
 
-output:
-predicted_trip_count
-~~~
+---
 
-## What information is allowed?
+## Unit prediction kita
 
-For target 18:00, the model may use:
+Model tidak predict “NYC demand” secara global.
 
-- demand at 17:00,
-- demand at 16:00,
-- yesterday at 18:00,
-- last week at 18:00,
-- recent rolling averages,
-- hour and weekday.
-
-It may **not** use actual 18:00 demand.
-
-That would be leakage.
-
-## Raw vs model granularity
-
-Raw:
+Model predict per:
 
 ~~~text
-one row = one taxi trip
+zone
+×
+target hour
 ~~~
 
-Model:
+Contoh:
 
 ~~~text
-one row = one zone × one hour
+Zone 161
+Target hour: 2025-01-28 18:00
+Prediction: 147 pickups
 ~~~
 
-Example aggregation:
+Jadi setiap row model merepresentasikan satu combination:
+
+~~~text
+one zone × one hour
+~~~
+
+---
+
+## Kenapa satu jam ahead?
+
+Kenapa nggak next 5 minutes? Kenapa nggak besok?
+
+Karena satu jam cukup reasonable buat workshop:
+
+- historical lag masih relevant,
+- pattern harian masih strong,
+- use case mudah dipahami,
+- ground truth datang relatif cepat,
+- monitoring/replay enak didemokan.
+
+Satu jam juga bikin konsep online feature cukup jelas.
+
+Untuk target 18:00, history terbaru yang boleh dipakai adalah sampai 17:00.
+
+---
+
+## Raw data granularity vs model granularity
+
+NYC TLC raw data:
+
+~~~text
+one row
+=
+one taxi trip
+~~~
+
+Contoh:
 
 | pickup time | zone |
 | --- | ---: |
@@ -53,67 +76,223 @@ Example aggregation:
 | 17:10 | 161 |
 | 17:44 | 162 |
 
-becomes:
+Model kita nggak butuh detail individual trip.
+
+Kita aggregate:
 
 | timestamp | zone_id | trip_count |
 | --- | ---: | ---: |
 | 17:00 | 161 | 2 |
 | 17:00 | 162 | 1 |
 
-## Scope
+Jadi transform utama pertama:
 
-Core workshop:
+~~~text
+trip events
+↓
+hourly demand time series
+~~~
 
-- Yellow Taxi,
-- Manhattan pickup zones,
-- early 2025 historical data,
-- one-hour forecast horizon,
-- pickup count target.
+Ini penting karena model kita sebenarnya learning temporal demand pattern, bukan characteristic individual passenger.
 
-## Metrics
+---
 
-Primary:
+## Input apa yang boleh dipakai?
+
+Target:
+
+~~~text
+18:00
+~~~
+
+Boleh:
+
+~~~text
+17:00 demand
+16:00 demand
+yesterday 18:00
+last week 18:00
+recent rolling average
+hour=18
+day_of_week
+~~~
+
+Tidak boleh:
+
+~~~text
+actual 18:00 demand
+future 19:00 demand
+rolling window yang include 18:00 actual
+~~~
+
+Kenapa?
+
+Karena waktu prediction dibuat, actual 18:00 belum diketahui.
+
+Kalau model train pakai informasi future, validation metric bisa terlihat keren tapi production prediction impossible.
+
+Itulah leakage.
+
+---
+
+## Business interpretation
+
+Kalau model predict high demand di suatu zone, secara conceptual itu bisa bantu:
+
+- fleet positioning,
+- dispatch planning,
+- capacity planning,
+- demand awareness.
+
+Workshop ini bukan claim bahwa model kita siap dipakai NYC operations.
+
+Kita pakai scenario yang realistic enough buat lifecycle learning.
+
+---
+
+## Primary metric: MAE
+
+MAE = Mean Absolute Error.
+
+Formula intuition:
+
+~~~text
+absolute prediction errors
+↓
+average
+~~~
+
+Contoh:
+
+~~~text
+prediction = 150
+actual = 160
+error = 10
+
+prediction = 80
+actual = 70
+error = 10
+~~~
+
+MAE ignore direction, focus magnitude.
+
+Kalau:
+
+~~~text
+MAE = 10
+~~~
+
+intuition-nya:
+
+> On average, prediction meleset sekitar 10 pickups per zone-hour.
+
+Itu gampang dijelaskan ke non-ML audience.
+
+---
+
+## Secondary metric: RMSE
+
+RMSE lebih sensitif ke large error.
+
+Misalnya dua model punya MAE mirip, tapi salah satunya kadang miss ekstrem.
+
+RMSE bisa lebih tinggi.
+
+Makanya kita log both:
 
 ~~~text
 MAE
-~~~
+→ easy average error interpretation
 
-MAE 10 means the model is wrong by around 10 pickups per zone-hour on average.
-
-Secondary:
-
-~~~text
 RMSE
+→ more sensitive to big misses
 ~~~
 
-RMSE reacts more strongly to large errors.
+---
 
-## Baseline
+## Kenapa baseline penting?
 
-Our naive baseline is:
+Baseline kita:
 
 ~~~text
-prediction(t) = demand(t - 24 hours)
+prediction(t)
+=
+demand(t - 24h)
 ~~~
 
-In plain language:
+Alias:
 
-> Use the same hour yesterday.
+> “Prediksi jam ini = demand jam yang sama kemarin.”
 
-A more complicated model should beat this baseline before its complexity feels justified.
+Kelihatannya sederhana.
 
-## Why this is good for MLOps
+Tapi taxi demand punya daily pattern, jadi baseline ini bisa cukup kuat.
 
-A normal assignment might stop after train + evaluate.
+Ini bagus.
 
-This project continues into:
+Karena main model harus **earn its complexity**.
+
+Kalau complex model kalah dari baseline simple, pertanyaan yang sehat adalah:
+
+> “Kenapa kita pakai model lebih kompleks?”
+
+bukan:
+
+> “Gimana caranya tetap deploy model kompleks ini?”
+
+---
+
+## Success criteria model
+
+Main model considered useful kalau:
 
 ~~~text
-tracking
-registry
-serving
-monitoring
-retraining
+model MAE
+<
+baseline MAE
 ~~~
 
-That continuation is the important part.
+Tapi di MLOps context, success nggak berhenti di offline metric.
+
+System juga harus:
+
+- reproducible,
+- servable,
+- observable,
+- maintainable.
+
+Jadi ML metric adalah satu dimension dari project quality.
+
+---
+
+## Scope limitation
+
+Kita fokus:
+
+~~~text
+Yellow Taxi
+Manhattan
+early 2025
+one-hour horizon
+pickup count
+~~~
+
+Kenapa Manhattan saja?
+
+Supaya dataset lebih manageable tapi tetap punya banyak zones dan meaningful spatial variation.
+
+Workshop goal bukan maximize NYC coverage.
+
+Goal-nya punya use case cukup realistic tanpa bikin participant laptop menangis. 😭
+
+---
+
+## Checkpoint
+
+Coba jawab:
+
+1. Model kita predict apa exactly?
+2. Satu row model represent apa?
+3. Kenapa actual target hour nggak boleh jadi feature?
+4. MAE 10 artinya apa secara intuitif?
+5. Kenapa baseline lag_24h bukan baseline asal-asalan?

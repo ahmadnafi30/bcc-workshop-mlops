@@ -1,20 +1,46 @@
-# Step 8 — GitHub Actions CI/CD
+# Step 8 — CI/CD: Sekarang Kita Simulasikan Cara Kerja Team
+
+Local project sudah works.
+
+Sekarang pertanyaan:
+
+> “Kalau ada orang ubah code, siapa yang memastikan semuanya masih sehat?”
+
+Kita pakai GitHub workflow.
+
+---
 
 ## Goal
 
-Understand what happens after a repository change is pushed.
+Setelah step ini:
 
-## Branch flow
+- ngerti branch flow,
+- bisa baca CI run,
+- ngerti setiap quality check,
+- ngerti delivery ke GHCR,
+- ngerti kenapa feature nggak langsung main.
+
+---
+
+## 1. Review branch flow
 
 ~~~text
-feat/* or fix/*
-        ↓
-      develop
-        ↓
-       main
+feat/* / fix/* / docs/* / chore/*
+              ↓
+           develop
+              ↓
+            main
 ~~~
 
-## 1. Create a practice branch
+Question:
+
+> “Kenapa nggak feature langsung main?”
+
+Karena develop jadi integration zone.
+
+---
+
+## 2. Create practice docs branch
 
 ~~~bash
 git switch develop
@@ -22,7 +48,9 @@ git pull
 git switch -c docs/workshop-practice
 ~~~
 
-Make a harmless documentation change.
+Edit satu docs line harmless.
+
+Commit:
 
 ~~~bash
 git add .
@@ -30,72 +58,168 @@ git commit -m "docs: practice contribution flow"
 git push -u origin docs/workshop-practice
 ~~~
 
-## 2. Open PR to develop
+---
 
-Correct direction:
+## 3. Open PR to develop
 
-~~~text
-docs/workshop-practice
-        ↓
-      develop
-~~~
-
-CI should run automatically.
-
-## 3. Observe CI
-
-Jobs include:
-
-~~~text
-branch policy
-Python + docs quality
-Docker build - api
-Docker build - mlflow
-Docker build - airflow
-~~~
-
-Quality checks include Ruff, pytest, and a strict MkDocs build.
-
-Docker builds catch packaging errors that unit tests cannot see.
-
-## 4. Release direction
-
-Stable release PR:
+Base:
 
 ~~~text
 develop
-   ↓
- main
 ~~~
 
-PRs directly from feature branches to main are rejected by the branch-policy job.
-
-## 5. Delivery
-
-Successful CI on main triggers container delivery:
+Head:
 
 ~~~text
-tested commit
-   ↓
-build images
-   ↓
-tag
-   ↓
-push to GHCR
+docs/workshop-practice
 ~~~
 
-## 6. Why no automatic cloud deploy?
+Jangan ke main.
 
-This workshop has no real cloud production target. We stop honestly at a deployable container image instead of adding fake SSH or Kubernetes commands.
+Lihat CI start.
+
+---
+
+## 4. Open Branch Policy job
+
+Apa yang dia check?
+
+PR direction.
+
+Coba imagine kalau base main tapi head docs/workshop-practice.
+
+Expected fail.
+
+Ini governance process encoded di CI.
+
+---
+
+## 5. Open Python + docs quality
+
+Steps:
+
+~~~text
+checkout
+setup uv
+sync
+ruff
+pytest
+mkdocs strict
+~~~
+
+Click satu step.
+
+Read log.
+
+CI bukan black box.
+
+---
+
+## 6. Open Docker build jobs
+
+Ada matrix:
+
+~~~text
+api
+mlflow
+airflow
+~~~
+
+Pertanyaan:
+
+> “Kenapa tests green belum cukup?”
+
+Karena packaging bisa fail.
+
+Docker build is separate validation.
+
+---
+
+## 7. Merge to develop
+
+Kalau practice, kalian nggak harus benar-benar merge kalau repo workshop shared.
+
+Presenter bisa demo dari existing PR.
+
+Concept:
+
+~~~text
+feature
+↓
+develop
+↓
+integration CI
+~~~
+
+---
+
+## 8. Release PR
+
+Stable release:
+
+~~~text
+develop
+↓
+main
+~~~
+
+Branch policy expect direction ini.
+
+---
+
+## 9. After main CI
+
+Container Delivery triggers.
+
+Open workflow.
+
+Observe jobs:
+
+~~~text
+Publish api
+Publish mlflow
+Publish airflow
+~~~
+
+---
+
+## 10. GHCR
+
+Published image punya tags.
+
+Cari:
+
+~~~text
+latest
+sha-...
+~~~
+
+Question:
+
+> “Untuk exact rollback, kalian lebih percaya latest atau SHA?”
+
+SHA.
+
+---
+
+## Mini challenge
+
+Kalau model champion berubah tapi code nggak berubah, apakah GitHub Actions necessarily harus run?
+
+Tidak.
+
+Model lifecycle bisa move lewat Registry.
+
+Ini perbedaan code lifecycle vs model lifecycle.
+
+---
 
 ## Checkpoint
 
-Explain the difference:
-
-~~~text
-Airflow
-→ data/ML workflow automation
-
-GitHub Actions
-→ repository change automation
-~~~
+1. Kenapa develop ada?
+2. Branch policy check apa?
+3. Ruff vs pytest?
+4. Kenapa MkDocs build di CI?
+5. Docker matrix buat apa?
+6. GHCR role?
+7. latest vs SHA?

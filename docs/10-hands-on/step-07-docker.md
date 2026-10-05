@@ -1,38 +1,74 @@
-# Step 7 — Docker and Docker Compose
+# Step 7 — Docker: Bawa Semua Service ke Environment yang Lebih Konsisten
+
+Sekarang local flow jalan.
+
+Tapi workshop real punya laptop berbeda.
+
+Kita ingin reduce:
+
+> “Di laptop saya works.”
+
+masalah.
+
+Sekarang kita pindah dari local processes ke container stack.
+
+---
 
 ## Goal
 
-Move from separate local processes into a reproducible multi-service local stack.
+Setelah step ini:
 
-## Before starting
+- Docker images build,
+- Compose services up,
+- local MLflow state tetap ada,
+- API bisa resolve champion dari Docker MLflow,
+- kalian ngerti networking dan volumes.
 
-Stop local MLflow, FastAPI, and Airflow processes with Ctrl+C. Docker Compose wants the same host ports.
+---
 
-## MLflow continuity
+## 0. Stop local processes dulu
 
-Both local MLflow and the Docker MLflow service use:
+Stop:
+
+- MLflow local,
+- FastAPI local,
+- Airflow local.
+
+Ctrl+C.
+
+Kenapa?
+
+Karena Compose mau bind port sama.
+
+Kalau local MLflow masih pakai 5000:
 
 ~~~text
-.mlflow/
+port already in use
 ~~~
 
-So your experiments and registry state can survive the transition from local mode to Compose mode.
+---
 
-## 1. Build and start
+## 1. Build + start
 
 ~~~bash
 docker compose up -d --build
 ~~~
 
-The first build can take a while, especially the Airflow image.
+First build bisa lama.
 
-## 2. Check services
+Airflow particularly heavy.
+
+Jangan cancel cuma karena beberapa menit.
+
+---
+
+## 2. Check status
 
 ~~~bash
 docker compose ps
 ~~~
 
-Expected long-running services:
+Look for:
 
 ~~~text
 mlflow
@@ -42,83 +78,187 @@ prometheus
 grafana
 ~~~
 
-## 3. Open interfaces
+Status healthy/running.
 
-| Service | URL |
-| --- | --- |
-| MLflow | http://localhost:5000 |
-| Airflow | http://localhost:8080 |
-| FastAPI | http://localhost:8000 |
-| Swagger | http://localhost:8000/docs |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
+---
 
-## 4. Verify registry state
+## 3. Open MLflow
 
-Open MLflow and confirm the champion still exists.
+~~~text
+http://localhost:5000
+~~~
 
-Then open:
+Pertanyaan penting:
+
+> “Experiment dan champion tadi masih ada nggak?”
+
+Harusnya ada.
+
+Kenapa?
+
+Local helper dan Compose share:
+
+~~~text
+.mlflow/
+~~~
+
+Ini continuity fix yang sengaja dibuat.
+
+---
+
+## 4. Open API model-info
 
 ~~~text
 http://localhost:8000/model-info
 ~~~
 
-If it returns champion metadata, local-to-container state continuity is working.
+Kalau champion metadata keluar, berarti:
 
-## 5. Understand addresses
+~~~text
+API container
+↓
+network
+↓
+MLflow container
+↓
+shared registry state
+~~~
 
-From your browser:
+working.
+
+---
+
+## 5. Network exercise
+
+Dari browser:
 
 ~~~text
 localhost:5000
 ~~~
 
-From another Compose container:
+Tapi environment variable API:
 
 ~~~text
-mlflow:5000
+http://mlflow:5000
 ~~~
 
-The service is the same, but the network perspective is different.
+Coba explain kenapa beda.
 
-## 6. Logs
+Kalau kalian jawab:
 
-~~~bash
-docker compose logs -f
-~~~
+> “Karena localhost di container refer ke container itu sendiri.”
 
-One service:
+correct.
+
+---
+
+## 6. Inspect logs
 
 ~~~bash
 docker compose logs -f api
 ~~~
 
-## 7. Workspace
+Send prediction dari Swagger.
 
-One-off project command:
+Lihat logs.
+
+Stop log follow dengan Ctrl+C.
+
+Container tetap hidup.
+
+---
+
+## 7. Inspect volumes conceptually
+
+Run:
+
+~~~bash
+docker volume ls
+~~~
+
+Kalian mungkin lihat Compose volumes.
+
+Pertanyaan:
+
+> “Kenapa .mlflow nggak muncul sebagai named volume?”
+
+Karena .mlflow adalah bind mount host folder.
+
+---
+
+## 8. Workspace
 
 ~~~bash
 docker compose run --rm workspace python scripts/doctor.py
 ~~~
 
-Workspace is a tool container, not a long-running service.
+Ini create temporary workspace container.
 
-## 8. Stop
+Command selesai → container remove.
 
-Keep state:
+Useful buat one-off task.
+
+---
+
+## 9. Restart service
+
+Coba:
+
+~~~bash
+docker compose restart api
+~~~
+
+Apakah MLflow state hilang?
+
+No.
+
+Service process lifecycle beda dari persistent storage.
+
+---
+
+## 10. Stop stack
 
 ~~~bash
 docker compose down
 ~~~
 
-Remove named volumes too:
+Start lagi:
+
+~~~bash
+docker compose up -d
+~~~
+
+Named volumes tetap.
+
+---
+
+## Mini challenge
+
+Apa bedanya:
+
+~~~bash
+docker compose down
+~~~
+
+dengan:
 
 ~~~bash
 docker compose down -v
 ~~~
 
-The second command resets Airflow, Prometheus, and Grafana local volume state. The bind-mounted .mlflow folder is separate.
+Jawaban:
+
+-v remove named volumes juga.
+
+Jangan run destructive command tanpa ngerti state apa yang hilang.
+
+---
 
 ## Checkpoint
 
-Explain image vs container, localhost vs service name, and bind mount vs named volume.
+1. Image vs container?
+2. Host port vs container port?
+3. localhost vs service name?
+4. Bind mount vs named volume?
+5. Kenapa MLflow state survive?
+6. Kenapa service restart tidak otomatis delete data?

@@ -1,158 +1,288 @@
-# Monitoring Concepts
+# Monitoring — API Hijau Belum Berarti Modelnya Bagus
 
-## Two health questions
+Ini bagian yang menurutku salah satu paling penting di whole workshop.
 
-An ML system has at least two different health dimensions.
+Karena banyak ML project berhenti di:
+
+~~~text
+model deployed
+↓
+done
+~~~
+
+Padahal justru setelah deployment kita masuk environment yang paling unpredictable: dunia nyata.
+
+Model sekarang melihat data baru.
+
+Kita butuh feedback.
+
+---
+
+## Dua health dimension
 
 ### System health
 
+Pertanyaan:
+
 ~~~text
-Is the API alive?
-Is it slow?
-Are requests failing?
-How much traffic is arriving?
+API hidup?
+latency berapa?
+error rate?
+request rate?
+service reachable?
 ~~~
 
 ### Model health
 
+Pertanyaan:
+
 ~~~text
-Are predictions still accurate?
-Which model version is serving?
-Is recent MAE getting worse?
-Should we retrain?
+prediction masih akurat?
+recent MAE naik?
+model version mana?
+perlu retrain?
 ~~~
 
-A fast API can serve a bad model.
+Dua-duanya penting.
 
-A good model can sit behind a broken API.
+---
 
-We need both views.
+## Case A — service bagus, model jelek
 
-## Analogy: delivery restaurant
+~~~text
+HTTP 200
+latency 50 ms
+zero error
+~~~
 
-Operational monitoring asks:
+Tapi:
 
-> Is the kitchen open? Are orders delayed?
+~~~text
+actual 200
+prediction 80
+~~~
 
-Model monitoring asks:
+berulang-ulang.
 
-> Does the food still taste good?
+Prometheus operational dashboard bisa kelihatan green.
 
-Both matter, but they measure different things.
+Tapi model clearly nggak trustworthy.
+
+---
+
+## Case B — model bagus, service jelek
+
+Offline/recent model metric bagus.
+
+Tapi API:
+
+~~~text
+latency 20 sec
+timeouts
+5xx
+~~~
+
+Model bagus, tapi user tetap nggak bisa pakai.
+
+---
+
+## Analogi restoran
+
+Operational monitoring:
+
+> “Restoran buka nggak? Pesanan datang cepat nggak?”
+
+Model monitoring:
+
+> “Makanannya masih enak nggak?”
+
+Restoran bisa serve cepat tapi makanan jelek.
+
+Bisa juga makanan enak tapi customer nunggu satu jam.
+
+Health dimension berbeda.
+
+---
 
 ## Delayed ground truth
 
-For target 18:00:
+Ini yang bikin ML monitoring unik.
+
+Saat jam 17:00 kita predict demand jam 18:00:
 
 ~~~text
-before 18:00
 prediction exists
-
-after 18:00
-actual demand becomes available
+actual 18:00 belum complete
 ~~~
 
-We cannot know prediction error before the actual outcome exists.
+Ground truth datang kemudian.
 
-So we log predictions first, evaluate them later.
+Jadi flow:
+
+~~~text
+predict
+↓
+log prediction
+↓
+wait
+↓
+actual available
+↓
+join prediction + actual
+↓
+calculate error
+~~~
+
+Model performance monitoring naturally delayed.
+
+---
 
 ## Prediction log
 
-Stored as JSONL:
+Kita simpan:
 
 ~~~text
 data/monitoring/predictions.jsonl
 ~~~
 
-Important fields:
+Isi penting:
 
-- zone,
-- target time,
-- prediction,
-- model version,
-- run ID.
+~~~text
+logged_at
+zone_id
+target_datetime
+prediction
+model_version
+run_id
+~~~
+
+Kenapa model_version dan run_id?
+
+Supaya performance bisa di-attribusikan ke model yang benar.
+
+Kalau champion berubah, kita nggak mau error lama dianggap berasal dari model baru.
+
+---
 
 ## Evaluation table
 
-When ground truth becomes available:
+Saat ground truth ada:
 
 ~~~text
 prediction
 +
-processed actual demand
+actual
 ↓
-absolute error
-squared error
+absolute_error
+squared_error
 ~~~
 
-Output:
+Disimpan ke evaluations parquet.
 
-~~~text
-data/monitoring/evaluations.parquet
-~~~
+Sekarang kita punya evidence per prediction.
 
-## Performance summary
+---
 
-The project writes:
+## Recent window
 
-~~~text
-data/monitoring/performance_summary.json
-~~~
+Kenapa nggak pakai all-time MAE?
 
-It contains values such as:
+Bayangin model sangat bagus selama 6 bulan, lalu minggu ini jelek.
 
-- recent MAE,
-- recent RMSE,
-- reference MAE,
-- threshold MAE,
-- number of evaluated predictions,
-- retraining recommendation.
+All-time average bisa tetap kelihatan baik karena historical good performance mendominasi.
 
-## Reference performance
+Kita lebih interested pada recent behavior.
 
-We do not choose an arbitrary fixed number such as:
+Makanya ada recent window/limit.
+
+---
+
+## Reference MAE
+
+Kita nggak hard-code:
 
 ~~~text
 if MAE > 20
+then retrain
 ~~~
 
-Instead we compare against the champion's validation MAE from MLflow.
+Kenapa 20?
+
+Arbitrary.
+
+Kita anchor ke champion validation performance.
 
 Example:
 
 ~~~text
-champion validation MAE = 10
+reference MAE = 10
 multiplier = 1.25
-
 threshold = 12.5
 ~~~
 
-This makes the threshold relative to known model quality.
+Kalau recent MAE > 12.5 dan sample cukup, retrain recommended.
 
-## Minimum sample
+---
 
-We also require enough evaluated predictions.
+## Minimum samples
 
-Why?
+Satu weird prediction nggak cukup buat conclude model rusak.
 
-A single weird hour should not immediately cause retraining.
+Could be outlier.
 
-Monitoring decisions should look for a pattern, not panic over one outlier.
-
-## Drift vs performance degradation
-
-This workshop directly monitors performance degradation using ground truth.
-
-Data drift is related but different.
+Makanya ada minimum sample.
 
 ~~~text
-data drift
-→ input distribution changed
-
-performance degradation
-→ prediction error got worse
+min_samples = 100
 ~~~
 
-Drift can happen without accuracy loss, and accuracy can degrade for reasons beyond simple feature distribution drift.
+Decision butuh enough evidence.
 
-A future extension could add Evidently or custom drift metrics.
+---
+
+## Drift vs degradation
+
+Jangan campur.
+
+### Data drift
+
+Input distribution berubah.
+
+### Performance degradation
+
+Prediction error memburuk.
+
+Drift bisa terjadi tanpa accuracy drop.
+
+Accuracy drop juga bisa terjadi tanpa simple drift indicator.
+
+Workshop monitor performance karena ground truth tersedia.
+
+Evidently atau dedicated drift monitoring bisa jadi extension.
+
+---
+
+## Monitoring should lead to action
+
+Dashboard cantik tapi nggak ada decision process kurang meaningful.
+
+Project kita expose:
+
+~~~text
+retrain_recommended
+~~~
+
+Airflow monitoring DAG consume decision tersebut.
+
+Jadi feedback loop benar-benar connect ke action.
+
+---
+
+## Checkpoint
+
+1. System health beda apa dengan model health?
+2. Kenapa ground truth delayed?
+3. Kenapa prediction harus dilog?
+4. Kenapa recent window lebih useful daripada all-time?
+5. Kenapa threshold relative ke champion?
+6. Drift dan degradation beda apa?

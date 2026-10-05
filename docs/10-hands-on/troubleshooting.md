@@ -1,26 +1,30 @@
-# Troubleshooting
+# Troubleshooting — Jangan Debug Seluruh MLOps Stack Sekaligus
 
-Debug the smallest failing boundary first.
+Kalau system banyak komponen, instinct beginner sering:
 
-## TLC base URL shows AccessDenied
+> “Semuanya error.”
 
-That is expected for directory listing. Use the bootstrap script or an exact monthly file object.
+Padahal debugging lebih efektif kalau kita identify **boundary paling kecil yang fail**.
 
-~~~bash
-uv run python scripts/bootstrap_data.py
-~~~
+Use checklist ini from bottom to top.
 
-## Wrong Python
+---
+
+## 1. Setup layer
+
+### uv command not found
+
+uv belum installed / PATH belum update.
+
+### Wrong Python
 
 ~~~bash
 uv run python --version
 ~~~
 
-Expected: Python 3.11.x.
+Expected 3.11.x.
 
-## ModuleNotFoundError
-
-Core:
+### Module missing
 
 ~~~bash
 uv sync
@@ -38,67 +42,126 @@ Docs:
 uv sync --group docs
 ~~~
 
-## Snapshot missing
+---
 
-~~~bash
-uv run dvc repro create_training_snapshot
-~~~
+## 2. Data layer
 
-Make sure the feature dataset exists first.
+### TLC base URL AccessDenied
 
-## FastAPI 503
+Normal kalau buka directory prefix.
 
-Meaning: API process is alive but champion cannot be resolved.
+Use bootstrap script.
 
-Check MLflow, registered model, champion alias, and MLFLOW_TRACKING_URI.
+### Historical file missing
 
-## Switched to Docker and model disappeared
+Check exact date under data folders.
 
-Use the shared helper:
+### Feature build fail
 
-~~~bash
-uv run python scripts/start_mlflow.py
-~~~
+Check processed demand completeness.
 
-Local and Docker modes then share .mlflow state.
+---
 
-Stop the local server before Compose to avoid port 5000 conflict.
+## 3. Model layer
 
-## FastAPI 422
+### Snapshot missing
 
-Usually incomplete 168-hour demand history or an invalid target time.
+Run DVC repro or manual snapshot creation.
 
-## Port already in use
+### Model worse than baseline
 
-Common ports:
+Not infrastructure bug.
 
-~~~text
-3000 Grafana
-5000 MLflow
-8000 FastAPI
-8080 Airflow
-9090 Prometheus
-~~~
+Inspect ML/features/model.
 
-Stop the process/container currently using the port.
+Do not manipulate metric.
 
-## Airflow DAG missing
+---
 
-Check:
+## 4. MLflow layer
+
+### UI unreachable
+
+Is start_mlflow process running?
+
+Port 5000 free?
+
+### Registry empty after Docker transition
+
+Workshop local + Docker should share .mlflow.
+
+Pastikan kalian pakai helper project dan Compose current config.
+
+### Champion missing
+
+Promote registered version.
+
+---
+
+## 5. Airflow layer
+
+### DAG missing
 
 ~~~bash
 uv run --group airflow airflow dags list
 ~~~
 
-A missing DAG is usually a parse/import problem.
+Missing DAG usually parse/import error.
 
-## Airflow task failed
+### Task failed
 
-Open the failed task log and ask which input/dependency failed.
+Open task log.
 
-Avoid debugging the entire stack at once.
+Ask:
 
-## Prometheus target down
+~~~text
+input exists?
+service reachable?
+exception?
+upstream output?
+~~~
+
+---
+
+## 6. API layer
+
+### Connection refused
+
+FastAPI process/container not listening.
+
+### /health 200, /model-info 503
+
+API alive, model dependency unavailable.
+
+### /predict 422
+
+Semantic input/history issue.
+
+Check target time and 168h history.
+
+---
+
+## 7. Docker layer
+
+### Port already in use
+
+Stop local process.
+
+### API cannot reach MLflow
+
+Check MLFLOW_TRACKING_URI.
+
+Inside Compose should point service hostname.
+
+### Data missing inside container
+
+Check bind mount.
+
+---
+
+## 8. Monitoring layer
+
+### Prometheus target DOWN
 
 Open:
 
@@ -106,27 +169,66 @@ Open:
 http://localhost:9090/targets
 ~~~
 
-The API target should be reachable as api:8000 from inside Compose.
+Check API metrics reachable.
 
-## Grafana empty
+### Grafana empty
 
-Check in order:
-
-1. API traffic succeeded;
-2. /metrics has taxi metrics;
-3. Prometheus target is UP;
-4. Prometheus query returns data;
-5. Grafana datasource is healthy.
-
-## CI branch policy fails
-
-Allowed:
+Debug chain:
 
 ~~~text
-feat/*, fix/*, docs/*, chore/* → develop
-develop → main
+traffic?
+↓
+API metric?
+↓
+Prometheus scrape?
+↓
+query?
+↓
+Grafana datasource?
 ~~~
 
-## Windows issues
+### MAE panel empty
 
-WSL2 is usually smoother for the Docker + Airflow portion. Avoid mixing multiple Python environments without knowing which one owns the files and commands.
+Need:
+
+~~~text
+prediction log
++
+ground truth
++
+evaluate_predictions
+~~~
+
+---
+
+## 9. CI layer
+
+### Branch policy fail
+
+Check PR direction.
+
+### Ruff fail
+
+Read exact file/line.
+
+### Docker build fail
+
+Python tests green does not imply image build green.
+
+Read build logs.
+
+---
+
+## Golden rule
+
+Jangan random restart semua service setiap error.
+
+Itu bisa hide root cause.
+
+Tanya:
+
+> “Apa boundary pertama yang menghasilkan output yang salah?”
+
+Then debug there.
+
+MLOps stack besar jadi manageable kalau kalian treat sebagai chain of smaller systems.

@@ -1,10 +1,26 @@
-# Feature Engineering Pipeline
+# Data Pipeline — Feature Engineering: Dari Hourly Demand Jadi Model Matrix
 
-## Goal
+Processed demand belum langsung ready buat model.
 
-Convert processed hourly demand into model-ready rows.
+Kita perlu transform temporal history jadi numerical features.
 
-Input:
+Command:
+
+~~~bash
+uv run python scripts/build_features.py
+~~~
+
+Output:
+
+~~~text
+data/features/taxi_demand_features.parquet
+~~~
+
+---
+
+## Input expectation
+
+Input minimum:
 
 ~~~text
 timestamp
@@ -12,28 +28,30 @@ zone_id
 trip_count
 ~~~
 
-Output includes:
+Rows harus:
+
+- timestamp valid,
+- chronological,
+- complete enough per zone.
+
+---
+
+## Step 1 — Sort
 
 ~~~text
-calendar features
-lag features
-rolling features
-target_trip_count
+zone_id
+timestamp
 ~~~
 
-## Run
+Kenapa sorting first?
 
-~~~bash
-uv run python scripts/build_features.py
-~~~
+Shift/rolling rely on sequence.
 
-Default output:
+Kalau row order random, lag jadi nonsense.
 
-~~~text
-data/features/taxi_demand_features.parquet
-~~~
+---
 
-## Calendar features
+## Step 2 — Calendar features
 
 From timestamp:
 
@@ -43,81 +61,151 @@ day_of_week
 is_weekend
 ~~~
 
-## Lag features
+Tidak perlu historical demand buat ini.
 
-Created per zone:
+Target time itself known at prediction time, jadi safe.
 
-~~~text
-lag_1h
-lag_2h
-lag_3h
-lag_24h
-lag_168h
-~~~
+---
 
-Important phrase:
-
-> **per zone**
-
-We must not shift the entire table without grouping, because demand from one taxi zone must never become a lag for another zone.
-
-## Rolling features
-
-Also per zone:
+## Step 3 — Lag per zone
 
 ~~~text
-rolling_mean_3h
-rolling_mean_6h
-rolling_mean_24h
+group by zone
+↓
+shift 1,2,3,24,168
 ~~~
 
-Implementation uses a one-hour shift before rolling.
+Per-zone grouping critical.
 
-That enforces:
+Kalau tidak, boundary antar zone contamination.
+
+---
+
+## Step 4 — Rolling
+
+Kita shift history dulu.
+
+Then rolling.
 
 ~~~text
-target hour
-is never inside
-its own historical feature
+previous demand
+↓
+rolling 3h
+rolling 6h
+rolling 24h
 ~~~
 
-## Sorting matters
+Kenapa shift first?
 
-Before shift/rolling:
+Prevent target leakage.
+
+---
+
+## Step 5 — Target
+
+Target:
 
 ~~~text
-sort by zone_id, timestamp
+target_trip_count
+=
+current hour demand
 ~~~
 
-Time-series operations assume rows are in the correct order.
+Feature lihat past.
 
-If the data is shuffled, shift can silently create nonsense.
+Target adalah current.
 
-## Drop incomplete rows
+---
 
-The longest lag needs 168 hours.
+## Step 6 — Drop incomplete warm-up
 
-Rows without complete model features are removed from the final model-ready dataset.
+First week belum punya lag_168h.
 
-That is why the first week acts as history.
+Kalau model input butuh complete features, rows incomplete dropped.
 
-## Leakage checklist
+Warm-up history tetap useful sebagai source lag.
 
-For a target time t:
+---
 
-- calendar info at t: allowed;
-- demand at t - 1h: allowed;
-- demand at t - 24h: allowed;
-- rolling window ending at t - 1h: allowed;
-- actual demand at t: target only, never a feature;
-- future demand: forbidden.
+## Batch vs online feature path
 
-## Why one feature function for training?
+Training:
 
-Training and serving must agree on feature definitions.
+~~~text
+batch dataframe
+→ build many rows
+~~~
 
-This project has separate batch and online construction paths, but they follow the same feature contract.
+Serving:
 
-That concept is called **training-serving consistency**.
+~~~text
+one target request
+→ look up history
+→ build one feature row
+~~~
 
-A production feature store is one way larger systems manage that problem. We keep it explicit in Python for learning.
+Implementation path berbeda, semantics harus sama.
+
+Ini training-serving consistency problem.
+
+---
+
+## Tests penting
+
+Feature test seharusnya check exact expected value.
+
+Contoh synthetic sequence:
+
+~~~text
+0,1,2,...,199
+~~~
+
+Untuk hour 168:
+
+~~~text
+lag_1h = 167
+lag_24h = 144
+lag_168h = 0
+~~~
+
+Kenapa synthetic useful?
+
+Karena expected result bisa dihitung manual.
+
+---
+
+## Leakage test
+
+Rolling 3h target 168 expected average dari:
+
+~~~text
+165
+166
+167
+~~~
+
+bukan include 168.
+
+Kalau test dapat different, implementation suspicious.
+
+---
+
+## Feature schema contract
+
+Model expected column order disimpan sebagai constant.
+
+Kenapa?
+
+DataFrame column order/type bisa matter.
+
+Serving harus produce compatible input.
+
+---
+
+## Checkpoint
+
+1. Sorting kenapa first?
+2. Lag kenapa group by zone?
+3. Rolling kenapa shift?
+4. Warm-up rows kenapa drop?
+5. Batch feature vs online feature beda implementation tapi harus sama semantics — kenapa?

@@ -1,18 +1,26 @@
-# Retraining
+# Retraining — Kapan Model Harus Belajar Lagi?
 
-## Retraining should answer a reason
+“Retrain model setiap hari” kedengarannya automation banget.
 
-A weak rule is:
+Tapi apakah selalu masuk akal?
 
-~~~text
-retrain every day because ML
-~~~
+Belum tentu.
 
-A better question is:
+Retraining punya cost:
 
-> What evidence says the current model needs a new candidate?
+- compute,
+- time,
+- experiment noise,
+- validation effort,
+- governance risk.
 
-Our workshop uses recent prediction error.
+Jadi pertanyaan yang lebih sehat:
+
+> **Evidence apa yang bikin kita percaya model perlu candidate baru?**
+
+Workshop kita pakai performance degradation.
+
+---
 
 ## Decision rule
 
@@ -24,35 +32,73 @@ recent MAE
 champion validation MAE × 1.25
 ~~~
 
-and:
+dan:
 
 ~~~text
 evaluated predictions >= 100
 ~~~
 
-Both values are configurable.
+Dua condition.
 
-## Why relative threshold?
+Kenapa?
 
-Model quality depends on the task.
+Karena threshold doang tanpa sample count bisa overreact.
 
-An MAE of 20 might be terrible for one problem and excellent for another.
+---
 
-Using champion validation MAE gives the threshold context.
+## Example
 
-## Why minimum sample?
-
-One strange hour is not enough evidence.
-
-A minimum evaluation count reduces overreaction.
-
-## Monitoring DAG
+Champion validation:
 
 ~~~text
-taxi_model_monitoring
+MAE = 10
 ~~~
 
-Flow:
+Multiplier:
+
+~~~text
+1.25
+~~~
+
+Threshold:
+
+~~~text
+12.5
+~~~
+
+Recent MAE:
+
+~~~text
+13.4
+~~~
+
+Evaluated predictions:
+
+~~~text
+350
+~~~
+
+Condition terpenuhi.
+
+Monitoring recommend retrain.
+
+---
+
+## Kalau recent MAE 13.4 tapi sample cuma 5?
+
+No retraining recommendation.
+
+Kenapa?
+
+Five samples terlalu sedikit buat confident conclusion.
+
+Automation yang mature nggak harus agresif.
+
+Kadang best action adalah wait for more evidence.
+
+---
+
+## Monitoring DAG
 
 ~~~text
 evaluate_model
@@ -60,83 +106,203 @@ evaluate_model
 maybe_retrain
 ~~~
 
-If healthy:
+Kalau healthy:
 
 ~~~text
-stop
+not_needed
 ~~~
 
-If degraded:
+Kalau degraded:
 
 ~~~text
+latest evaluated date
+↓
 new snapshot
-    ↓
+↓
 train
-    ↓
+↓
 validation
-    ↓
-MLflow
-    ↓
-beat baseline?
-    ↓
+↓
+MLflow tracking
+↓
+candidate evaluation
+↓
 register challenger
 ~~~
 
-## Moving validation window
+---
 
-Initial snapshot:
+## Kenapa snapshot baru?
+
+Karena retraining harus punya frozen dataset identity.
+
+Kita nggak mau run training dari moving “latest” file lalu kehilangan context.
+
+Snapshot baru punya cutoff date dan fingerprint.
+
+---
+
+## Validation window ikut maju
+
+Ini penting.
+
+Initial model:
 
 ~~~text
-older rows → training
-last 5 days → validation
+older period
+→ train
+
+latest 5 days
+→ validation
 ~~~
 
-A later retraining snapshot follows the same rule.
+Saat snapshot maju ke February, validation juga maju.
 
-That prevents validation from staying frozen forever in January while training moves into February.
+Kenapa?
 
-## Automatic retraining vs automatic promotion
+Kalau validation tetap stuck di January, kita cuma tahu model baru bagus di old period.
 
-These are different decisions.
+Retraining harus evaluate pada more recent holdout.
 
-We allow:
+---
+
+## Kenapa beat baseline dulu?
+
+Candidate baru harus minimal justify complexity-nya terhadap naive rule.
+
+Kalau retrained model kalah dari naive lag_24h:
+
+> Kenapa kita register sebagai candidate?
+
+Nggak ada alasan kuat.
+
+---
+
+## Automatic retraining ≠ automatic promotion
+
+Ini governance boundary paling penting.
+
+Project allow:
 
 ~~~text
 monitoring
 → automatic retraining
-→ automatic challenger registration
+→ automatic challenger
 ~~~
 
-We do not automatically do:
+Tapi stop sebelum:
 
 ~~~text
 challenger
 → champion
 ~~~
 
-Why?
+Kenapa?
 
-Because a model can beat the naive baseline without necessarily being better than the current champion in every important way.
+Karena candidate bisa beat baseline tapi belum tentu better than current champion on every relevant dimension.
 
-Manual promotion keeps governance visible in the workshop.
+Kita mungkin mau inspect:
 
-## Candidate review
+- validation MAE,
+- recent production-like MAE,
+- data period,
+- anomaly,
+- business constraint,
+- regression risk.
 
-Before promotion, inspect:
+---
 
-- candidate validation MAE,
-- candidate RMSE,
-- snapshot date,
-- dataset fingerprint,
-- MLflow run,
-- current champion performance.
+## Manual promotion bukan anti-automation
 
-Then promote explicitly.
+Kadang orang mikir:
 
-## Retraining is not continual learning
+> “Kalau masih manual berarti belum MLOps.”
 
-This project retrains a batch model from a newer snapshot.
+No.
 
-That is different from online or continual learning where model parameters may update incrementally as data arrives.
+Automation level harus sesuai risk dan governance.
 
-Keeping the distinction clear prevents terminology confusion.
+High-risk action bisa intentionally require approval.
+
+MLOps bukan goal “semua harus auto”.
+
+Goal-nya reliable lifecycle.
+
+---
+
+## Retraining vs continual learning
+
+Retraining workshop kita adalah batch retraining.
+
+~~~text
+new snapshot
+↓
+train new model
+~~~
+
+Continual/online learning beda.
+
+Model parameter update incrementally seiring data datang.
+
+Jangan pakai istilah interchangeable.
+
+---
+
+## Setelah champion berubah
+
+Serving layer resolve champion alias.
+
+Loader akan detect version change setelah refresh interval.
+
+Jadi lifecycle:
+
+~~~text
+new champion
+↓
+serving detects alias change
+↓
+reload model
+↓
+future predictions use new version
+~~~
+
+Application source code nggak perlu hard-code version baru.
+
+---
+
+## Closed loop
+
+Sekarang lifecycle lengkap:
+
+~~~text
+serve
+↓
+observe
+↓
+evaluate
+↓
+degradation?
+↓
+retrain
+↓
+challenger
+↓
+review
+↓
+promote
+↓
+serve again
+~~~
+
+Ini salah satu core outcome workshop.
+
+---
+
+## Checkpoint
+
+1. Kenapa nggak retrain tiap hari aja?
+2. Kenapa minimum samples penting?
+3. Kenapa validation window harus ikut maju?
+4. Kenapa retrained model harus compare baseline?
+5. Automatic retraining beda apa dengan automatic promotion?
+6. Batch retraining beda apa dengan continual learning?

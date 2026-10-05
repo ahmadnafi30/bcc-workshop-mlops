@@ -1,38 +1,38 @@
-# Prometheus
+# Prometheus — Ngumpulin Angka System Health dari Service Kita
 
-## What Prometheus does
+FastAPI sudah expose metrics.
 
-Prometheus collects numeric time-series metrics.
+Sekarang siapa yang collect angka itu over time?
 
-It works mainly through a pull model:
+Prometheus.
+
+Prometheus adalah time-series monitoring system.
+
+---
+
+## Pull model
+
+Prometheus biasanya scrape target.
 
 ~~~text
 Prometheus
-   ↓ scrape
+↓ GET
 FastAPI /metrics
 ~~~
 
-Every few seconds Prometheus asks the API:
+Setiap interval, dia ambil current metric sample.
 
-> What are your metric values now?
+Kenapa pull?
 
-## Metrics endpoint
+Prometheus central server tahu target dan schedule scraping.
 
-FastAPI exposes:
+Service cukup expose endpoint.
 
-~~~text
-/metrics
-~~~
+---
 
-The response follows the Prometheus exposition format.
+## Metric type: Counter
 
-You normally do not read the entire output manually. Prometheus scrapes and stores it.
-
-## Metric types in our project
-
-### Counter
-
-A value that increases.
+Counter only goes up, kecuali process restart reset.
 
 Example:
 
@@ -40,25 +40,17 @@ Example:
 taxi_api_requests_total
 ~~~
 
-Useful question:
+Questions:
 
-> How many requests happened?
+> Total request berapa?
 
-### Histogram
+Kalau mau request per second, kita derive rate dari counter.
 
-Collects a distribution into buckets.
+---
 
-Example:
+## Metric type: Gauge
 
-~~~text
-taxi_api_request_duration_seconds
-~~~
-
-This supports latency percentile estimates such as p95.
-
-### Gauge
-
-A value that can move up or down.
+Gauge bisa naik/turun.
 
 Example:
 
@@ -66,32 +58,56 @@ Example:
 taxi_model_recent_mae
 ~~~
 
-## Metrics we expose
+MAE bisa berubah dua arah.
 
-Operational:
+Gauge cocok.
 
-~~~text
-taxi_api_requests_total
-taxi_api_request_duration_seconds
-taxi_predictions_total
-taxi_prediction_trip_count
-taxi_model_version_info
-~~~
+---
 
-Model monitoring:
+## Metric type: Histogram
+
+Histogram record observation distribution ke buckets.
+
+Example:
 
 ~~~text
-taxi_model_recent_mae
-taxi_model_reference_mae
-taxi_model_retrain_recommended
-taxi_model_evaluated_predictions
+request latency
 ~~~
+
+Kenapa nggak cuma average?
+
+Average bisa hide tail latency.
+
+Example:
+
+~~~text
+99 requests = 50 ms
+1 request = 10 sec
+~~~
+
+Average mungkin still kelihatan okay-ish, tapi user unlucky dapat terrible latency.
+
+Histogram support percentile estimation.
+
+---
+
+## p50, p95
+
+### p50
+
+Median-ish typical latency.
+
+### p95
+
+95% request ada di bawah/sekitar threshold itu.
+
+Tail performance lebih terlihat.
+
+---
 
 ## Labels
 
-Prometheus metrics can have labels.
-
-Example:
+Metric bisa punya labels:
 
 ~~~text
 method=POST
@@ -99,65 +115,90 @@ path=/predict
 status=200
 ~~~
 
-Labels are powerful but dangerous when they have too many unique values.
+Label bikin one metric name punya dimension.
+
+Powerful.
+
+Tapi ada danger.
+
+---
 
 ## Cardinality
 
-Imagine using request_id as a label.
+Kalau label punya millions unique values:
 
-Every request creates a new time series.
+~~~text
+request_id
+user_id
+timestamp
+arbitrary URL
+~~~
 
-That can explode storage and memory usage.
+Prometheus create tons of time series.
 
-So we avoid arbitrary high-cardinality labels such as:
+Memory/storage explode.
 
-- request ID,
-- user ID,
-- every timestamp,
-- every raw URL.
+Makanya project normalize paths.
 
-Detailed prediction data belongs in logs or tables, not Prometheus labels.
+Detailed per-prediction info masuk logs/table, bukan Prometheus label.
+
+---
 
 ## Scrape config
 
-Our config points to:
+Prometheus config target:
 
 ~~~text
-api:8000/metrics
+api:8000
 ~~~
 
-Inside Docker Compose, api is the service hostname.
+Kenapa api bukan localhost?
 
-## Open Prometheus
+Karena Prometheus container berada di Compose network.
 
-~~~text
-http://localhost:9090
-~~~
+Service DNS name = api.
 
-Try a query:
+---
+
+## Query
+
+Raw counter:
 
 ~~~text
 taxi_api_requests_total
 ~~~
 
-Then try a rate:
+Rate:
 
 ~~~text
 sum(rate(taxi_api_requests_total[1m]))
 ~~~
 
-The second query changes the question from total count to request rate.
+Yang satu jawab cumulative.
 
-## Prometheus is not a dashboard tool
+Yang satu jawab recent request rate.
 
-Prometheus has a simple query UI, but Grafana becomes the main visualization layer.
+PromQL memungkinkan transform time-series.
 
-Think:
+---
 
-~~~text
-Prometheus
-→ collect + query
+## Prometheus bukan log storage
 
-Grafana
-→ visualize
-~~~
+Jangan masukkan entire prediction payload sebagai metric.
+
+Metrics cocok buat numeric aggregate over time.
+
+Logs/events cocok buat detailed record.
+
+Different observability signals punya role berbeda.
+
+---
+
+## Checkpoint
+
+1. Scrape itu apa?
+2. Counter, Gauge, Histogram beda apa?
+3. Kenapa p95 useful?
+4. Apa itu cardinality?
+5. Kenapa request_id buruk jadi label?
+6. Metrics beda apa dengan prediction log?

@@ -1,24 +1,43 @@
-# Grafana
+# Grafana — Dari Metric Mentah Jadi Dashboard yang Bisa Dibaca Manusia
 
-## What Grafana adds
+Prometheus punya data.
 
-Prometheus stores and queries metrics.
+Tapi kalau setiap kali mau inspect system kita harus ngetik query satu-satu, kurang nyaman.
 
-Grafana turns them into dashboards that are easier for humans to scan.
+Grafana jadi visualization layer.
 
-Analogy:
+Mental model:
 
 ~~~text
 Prometheus
-→ database + calculator
+→ collect + query
 
 Grafana
-→ control room screens
+→ visualize + dashboard
 ~~~
+
+---
+
+## Datasource
+
+Grafana perlu tahu data source.
+
+Project provision:
+
+~~~text
+Prometheus
+http://prometheus:9090
+~~~
+
+Di Compose network, hostname prometheus resolve ke Prometheus container.
+
+---
 
 ## Provisioning
 
-Our dashboard and datasource are stored in Git.
+Dashboard kita tidak dibuat manual lalu cuma hidup di laptop presenter.
+
+Config disimpan di repo.
 
 ~~~text
 monitoring/grafana/
@@ -26,111 +45,147 @@ monitoring/grafana/
 └── dashboards/
 ~~~
 
-Why is this better than manually clicking a dashboard together?
-
-Because:
+Benefit:
 
 ~~~text
 git clone
+↓
 docker compose up
-→ same dashboard
+↓
+same dashboard
 ~~~
 
-The dashboard becomes reproducible configuration.
+Dashboard jadi code/config artifact.
 
-## Datasource
+Bisa versioned dan reviewed.
 
-Grafana connects to:
+---
 
-~~~text
-http://prometheus:9090
-~~~
+## Panel utama
 
-Again, service-to-service communication uses Docker service names.
-
-## Dashboard panels
-
-The starter dashboard includes:
+Dashboard menampilkan:
 
 - API request rate,
-- API p95 latency,
+- p95 latency,
 - prediction count,
-- retraining recommendation,
 - recent MAE,
 - reference MAE,
+- retrain recommendation,
 - current model version.
 
-## p50 vs p95
+Kenapa combine operational + model metric?
 
-Suppose latency is usually fast, but a few requests are very slow.
-
-Average latency can hide that.
-
-Percentiles help answer:
+Supaya satu view bisa bantu differentiate:
 
 ~~~text
-p50
-→ typical middle request
-
-p95
-→ 95% of requests are at or below this latency
+service problem
+vs
+model problem
 ~~~
 
-p95 is often useful for spotting poor tail behavior.
+---
 
-## Open Grafana
+## Dashboard empty bukan berarti broken
+
+Kalau belum ada traffic:
 
 ~~~text
-http://localhost:3000
+request rate = no data / zero
 ~~~
 
-The dashboard is provisioned under the MLOps folder.
+Normal.
 
-## Empty dashboard?
-
-A dashboard cannot visualize traffic that never happened.
-
-Generate real HTTP prediction traffic:
+Generate actual API traffic:
 
 ~~~bash
-uv run python scripts/generate_api_traffic.py --date 2025-01-28 --start-hour 17 --end-hour 18
+uv run python scripts/generate_api_traffic.py   --date 2025-01-28   --start-hour 17   --end-hour 18
 ~~~
 
-This script goes through FastAPI, so request-rate and latency metrics actually move. The separate `replay_predictions.py` script calls the predictor directly and is better for faster batch model evaluation, but it intentionally bypasses FastAPI operational metrics.
+Kenapa script ini lewat HTTP?
 
-Then give Prometheus a scrape interval to collect the metrics.
+Supaya middleware metrics beneran triggered.
 
-## Dashboard is not the monitor itself
+Direct predictor replay nggak create HTTP latency metric.
 
-Grafana does not magically know model quality.
+---
 
-The chain is:
+## Data chain
+
+Kalau recent MAE panel kosong, debug chain:
 
 ~~~text
-prediction logs
+prediction happened?
 ↓
-evaluation script
+prediction log written?
 ↓
-performance summary
+ground truth exists?
 ↓
-FastAPI metrics endpoint
+evaluate_predictions ran?
 ↓
-Prometheus
+performance_summary exists?
 ↓
-Grafana
+/metrics exposes gauge?
+↓
+Prometheus scraped?
+↓
+Grafana query correct?
 ~~~
 
-Understanding that chain makes debugging much easier.
+Observability debugging juga perlu dependency thinking.
 
-## Future improvements
+---
 
-A larger project could add:
+## Dashboard bukan source of truth sendiri
 
-- alerts,
-- per-service resource metrics,
-- data freshness,
-- queue depth,
-- prediction distribution drift,
-- SLO panels.
+Grafana visualize.
 
-The workshop dashboard intentionally starts with a small set that tells a coherent story.
+Dia bukan tempat business logic retrain.
+
+Decision summary dihasilkan monitoring pipeline.
+
+Prometheus scrape metric.
+
+Grafana visualize.
+
+Separation:
+
+~~~text
+logic
+→ monitoring code
+
+metrics storage
+→ Prometheus
+
+visualization
+→ Grafana
+~~~
+
+---
+
+## Alerting?
+
+Grafana/Prometheus ecosystem bisa alert.
+
+Workshop belum fokus ke alert channel.
+
+Future extension:
+
+~~~text
+retrain_recommended = 1
+↓
+alert
+↓
+Slack/email/on-call
+~~~
+
+Tapi jangan buru-buru add alert sebelum metric quality jelas.
+
+---
+
+## Checkpoint
+
+1. Grafana beda apa dengan Prometheus?
+2. Provisioning dashboard benefit-nya apa?
+3. Kenapa dashboard bisa kosong padahal Grafana sehat?
+4. Kalau MAE panel kosong, dependency chain apa yang dicek?
+5. Kenapa retraining logic nggak ditaruh di Grafana?

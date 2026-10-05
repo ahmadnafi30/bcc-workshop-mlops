@@ -1,116 +1,137 @@
-# Bootstrap & Historical Data Preparation
+# Data Pipeline — Bootstrap & Replay: Dari Official Data ke Production-like Daily Batch
 
-## Goal
+Bagian ini connect dataset concept dengan actual implementation.
 
-At the end of this section, we want:
+Kita punya official monthly TLC data.
+
+Tapi production-like pipeline kita ingin menerima data gradually.
+
+Jadi kita butuh beberapa phase:
 
 ~~~text
-official TLC source
-      ↓
+download
+↓
 compact replay source
-      ↓
-initial hourly demand history
+↓
+release one logical day
+↓
+validate
+↓
+aggregate
 ~~~
 
-## Step 1 — bootstrap official data
+---
+
+## Bootstrap bukan production ingestion
+
+Bootstrap adalah initial preparation.
+
+Kita download historical dataset upfront karena workshop tidak bisa menunggu data real datang selama berminggu-minggu.
+
+Command:
 
 ~~~bash
 uv run python scripts/bootstrap_data.py
 ~~~
 
-Default months are configured in the script.
-
-What happens:
-
-1. download zone lookup;
-2. download monthly Yellow Taxi Parquet;
-3. validate month format;
-4. read the useful columns;
-5. filter Manhattan;
-6. remove timestamps outside the month;
-7. save compact replay data.
-
-## Why validate external data?
-
-Even official data is still external input.
-
-A robust pipeline does not blindly assume every file has exactly the expected schema forever.
-
-That is why ingestion code checks important columns and date ranges.
-
-## Data folders
+Output source:
 
 ~~~text
-data/
-├── source/
-│   ├── tlc/
-│   └── replay/
-└── metadata/
+data/source/tlc/
 ~~~
 
-The original download and prepared replay data have different responsibilities.
-
-## Step 2 — inspect the data
-
-Optional notebook:
+Output compact:
 
 ~~~text
-notebooks/01-data-exploration.ipynb
+data/source/replay/
 ~~~
 
-Start Jupyter:
+---
+
+## Kenapa replay source compact?
+
+Official monthly TLC punya banyak columns.
+
+Core use case cuma perlu:
+
+~~~text
+pickup datetime
+pickup location
+~~~
+
+Kalau setiap daily simulation harus scan full source dengan semua columns, wasteful.
+
+Jadi replay preparation:
+
+~~~text
+official file
+↓
+select fields
+↓
+filter Manhattan
+↓
+validate month
+↓
+compact parquet
+~~~
+
+---
+
+## Release daily batch
+
+Script:
 
 ~~~bash
-uv run jupyter lab
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
 ~~~
 
-The notebook is intentionally lightweight.
-
-We are checking:
-
-- row count,
-- time range,
-- missing values,
-- Manhattan zones,
-- sample hourly aggregation.
-
-This is a sanity check, not a full analytics project.
-
-## Step 3 — prepare initial historical demand
-
-~~~bash
-uv run python scripts/prepare_historical_demand.py
-~~~
-
-Default range:
+Concept:
 
 ~~~text
-2025-01-01
-through
-2025-01-26
+monthly replay source
+↓
+filter one date
+↓
+data/raw/trips/2025-01-27.parquet
 ~~~
 
-Why this range?
+Sekarang downstream cuma melihat logical day tersebut.
+
+---
+
+## Validation
+
+Daily batch harus dicek sebelum processing.
+
+Kita validate:
+
+- file tidak empty,
+- timestamp parseable,
+- date sesuai requested logical date,
+- pickup location available.
+
+Kenapa validate date?
+
+Bayangin file Jan 27 accidentally berisi Jan 28.
+
+Kalau langsung aggregate, future data leak masuk history.
+
+Data quality issue bisa berubah jadi modeling issue.
+
+---
+
+## Aggregate
+
+Daily trip events jadi demand grid.
 
 ~~~text
-Jan 1–7
-warm-up for lag_168h
-
-Jan 8–21
-training
-
-Jan 22–26
-validation
-~~~
-
-## Aggregation
-
-The raw replay source still has one row per trip.
-
-Aggregation creates:
-
-~~~text
-one row = one Manhattan zone × one hour
+trip rows
+↓
+group by hour + zone
+↓
+fill zero-demand combinations
+↓
+processed demand parquet
 ~~~
 
 Output:
@@ -119,31 +140,86 @@ Output:
 data/processed/demand/YYYY-MM-DD.parquet
 ~~~
 
-## Complete grid
+---
 
-A missing trip group is not the same thing as a missing time step.
+## Initial historical demand
 
-If a zone has zero pickups, we still need:
-
-~~~text
-trip_count = 0
-~~~
-
-So the preprocessing code creates every hour × zone combination and fills missing counts with zero.
-
-## Manual daily replay
-
-Later, to simulate new data:
+Kita punya special initial preparation:
 
 ~~~bash
-uv run python scripts/simulate_daily_data.py --date 2025-01-27
-uv run python scripts/prepare_daily_demand.py --date 2025-01-27
+uv run python scripts/prepare_historical_demand.py
 ~~~
 
-This manual path is useful before we let Airflow orchestrate the same logic.
+Kenapa nggak replay Jan 1 sampai 26 manual satu-satu?
 
-## Why learn the manual path first?
+Bisa.
 
-Because orchestration should not hide understanding.
+Tapi workshop bakal habis waktu click run 26 kali.
 
-If the Airflow task fails, you should still know what underlying command and data transformation it represents.
+Initial history adalah bootstrap state.
+
+Production simulation mulai setelah model established.
+
+---
+
+## Daily replay dan idempotency
+
+Suppose Jan 27 task run dua kali.
+
+Ideal outcome sama.
+
+Kalau second run append duplicate trips, monitoring dan features rusak.
+
+Makanya output generated deterministically per logical date.
+
+Idempotency bikin retries safe.
+
+---
+
+## Why file partition per day?
+
+Per-day file bikin:
+
+- logical boundaries jelas,
+- replay mudah,
+- ground truth lookup mudah,
+- task input/output mudah dijelaskan.
+
+Production could use partitioned object store/table, tapi concept sama.
+
+---
+
+## Common failure
+
+### Missing replay source
+
+Bootstrap belum selesai.
+
+### Date out of source range
+
+Requested date nggak ada.
+
+### Empty Manhattan batch
+
+Could indicate source/filter bug.
+
+### Wrong schema
+
+External source changed atau corrupt.
+
+Fail early.
+
+---
+
+## Checkpoint
+
+Coba trace Jan 27:
+
+~~~text
+official monthly file
+→ replay monthly file
+→ raw daily trip
+→ processed daily demand
+~~~
+
+Kalau masing-masing role jelas, next feature pipeline gampang.

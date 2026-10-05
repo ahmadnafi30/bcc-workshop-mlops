@@ -1,94 +1,218 @@
-# Baseline Training
+# Baseline Training — Sebelum Tools MLOps, Kita Harus Punya ML Workflow yang Benar Dulu
 
-## Why train manually before MLflow?
+Ada temptation kalau workshop MLOps:
 
-If we install MLflow before we have an experiment, the tool feels abstract.
+> Langsung buka MLflow, Airflow, Docker.
 
-So first we run a plain ML workflow.
+Padahal itu bikin tools jadi abstrak.
 
-## Models
+Jadi kita sengaja build model secara manual dulu.
+
+Biar peserta punya pain point nyata sebelum tooling masuk.
+
+---
+
+## Dua model yang dibandingkan
 
 ### Naive 24-hour baseline
 
+Rule:
+
 ~~~text
-prediction(t) = demand(t - 24h)
+prediction(t)
+=
+demand(t - 24h)
 ~~~
 
-No fitting required.
+No fitting.
+
+No fancy hyperparameter.
+
+Cuma yesterday same hour.
 
 ### HistGradientBoostingRegressor
 
-Uses:
+Main model pakai:
 
+- calendar feature,
 - zone category,
-- calendar features,
-- lag features,
-- rolling features.
+- lags,
+- rolling means.
 
-## Run
+---
 
-After data and features:
+## Kenapa baseline bukan optional?
 
-~~~bash
-uv run python scripts/train_model.py
-~~~
+Tanpa baseline, MAE 10.2 terlihat bagus atau jelek?
 
-The script:
+Kita nggak punya context.
 
-1. loads the training snapshot;
-2. creates chronological train/validation split;
-3. evaluates naive baseline;
-4. trains gradient boosting;
-5. evaluates the model;
-6. saves local artifacts.
-
-## Why compare against a naive rule?
-
-Because sophistication is not automatically value.
-
-If:
+Kalau baseline 8:
 
 ~~~text
-ML model MAE = 15
-baseline MAE = 10
+main model = 10.2
+baseline = 8
 ~~~
 
-then the simple baseline is currently better.
+Main model worse.
 
-That is valuable information.
+Kalau baseline 15:
+
+~~~text
+main model = 10.2
+baseline = 15
+~~~
+
+Now improvement meaningful.
+
+Baseline bikin complexity accountable.
+
+---
 
 ## Time split
 
-The validation data happens after training data.
+Kita nggak random split.
 
-This better resembles how the model will encounter future observations.
+Initial:
 
-Random row splitting is often a bad default for time-dependent forecasting problems.
+~~~text
+Jan 8–21
+train
 
-## Local artifacts
+Jan 22–26
+validation
+~~~
 
-Manual training can create:
+Kenapa chronological?
+
+Karena production prediction selalu future relatif ke training history.
+
+Random split bisa blur temporal boundary.
+
+---
+
+## Kenapa Jan 1–7 nggak train?
+
+Because lag_168h.
+
+Row Jan 1 tidak punya data one week before.
+
+Jan 1–7 provide warm-up history.
+
+Feature complete mulai Jan 8.
+
+---
+
+## Model training flow
+
+~~~text
+load snapshot
+↓
+time split
+↓
+evaluate naive baseline
+↓
+prepare model matrix
+↓
+train HGB
+↓
+predict validation
+↓
+MAE / RMSE
+↓
+compare
+↓
+save local artifact
+~~~
+
+Notice MLOps belum masuk.
+
+Ini deliberate.
+
+---
+
+## Local artifact
+
+Manual path bisa save:
 
 ~~~text
 models/taxi_demand_model.joblib
 models/initial_metrics.json
 ~~~
 
-They are local generated artifacts and are ignored by Git.
+Kenapa folder models nggak committed?
 
-Later, MLflow becomes the system of record for experiment artifacts.
+Generated model binary bukan source code.
 
-## What should you inspect?
+Nanti MLflow artifact store jadi management layer yang lebih appropriate.
 
-After the run:
+---
 
-- training row count,
-- validation row count,
-- baseline MAE,
-- model MAE,
-- RMSE,
-- whether the model beats baseline.
+## Metrics jangan invented
 
-Do not only ask “did the script finish?”
+Salah satu rule docs/project:
 
-Ask whether the result makes sense.
+> Jangan tulis angka performance actual kalau belum benar-benar dijalankan.
+
+Kenapa?
+
+Karena dataset, environment, code bisa berubah.
+
+Workshop presenter harus run pipeline dan use observed metrics.
+
+Ini juga scientific honesty.
+
+---
+
+## Model kalah baseline gimana?
+
+Ini interesting.
+
+Jangan “fix” metric cuma supaya demo kelihatan bagus.
+
+Kalau model kalah:
+
+1. inspect feature quality,
+2. check leakage or split,
+3. tune model reasonably,
+4. accept baseline if still better.
+
+MLOps bukan tentang memaksa fancy model menang.
+
+---
+
+## Why HGB?
+
+HistGradientBoosting dipilih karena:
+
+- fast enough,
+- tabular,
+- CPU friendly,
+- sklearn ecosystem,
+- easy serving.
+
+Kita deliberately tidak pilih deep learning supaya workshop focus ke lifecycle.
+
+---
+
+## Reproducibility seeds
+
+Model punya random_state.
+
+Kenapa?
+
+Supaya run lebih deterministic.
+
+Tapi full reproducibility tetap bisa dipengaruhi library version/hardware.
+
+Makanya environment tracking tetap penting.
+
+---
+
+## Checkpoint
+
+1. Kenapa baseline wajib?
+2. Kenapa time split?
+3. Warm-up period dari mana?
+4. Kalau main model kalah baseline, response yang sehat apa?
+5. Kenapa local model artifact bukan source code?

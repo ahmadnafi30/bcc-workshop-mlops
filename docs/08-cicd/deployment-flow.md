@@ -1,64 +1,48 @@
-# Container Delivery
+# Container Delivery — Dari Source Code Jadi Artifact yang Siap Dipakai Environment Lain
 
-## What happens after CI succeeds?
+Setelah CI green, source code sudah verified.
 
-On main:
+Tapi deployment platform biasanya nggak mau clone repo lalu build random di production.
+
+Kita ingin deliver artifact.
+
+Project kita pilih Docker image sebagai artifact.
+
+---
+
+## Flow
 
 ~~~text
+main commit
+↓
 CI success
-   ↓
+↓
 Container Delivery
-   ↓
-build exact tested revision
-   ↓
+↓
+build image
+↓
 tag image
-   ↓
-push to GHCR
+↓
+push GHCR
 ~~~
 
-GHCR means GitHub Container Registry.
+GHCR = GitHub Container Registry.
 
-## Images
+---
 
-The workflow publishes separate images for:
+## Kenapa build image lagi?
 
-~~~text
-api
-mlflow
-airflow
-~~~
+CI Docker build:
 
-Naming pattern:
+> “Can this image build successfully?”
 
-~~~text
-ghcr.io/<owner>/bcc-workshop-mlops-api
-~~~
+Delivery Docker build:
 
-## Why tag with commit SHA?
+> “Produce the artifact we actually publish.”
 
-A tag such as latest is convenient but movable.
+CD checkout exact tested commit.
 
-~~~text
-latest
-today → commit A
-tomorrow → commit B
-~~~
-
-A SHA-based tag points to a specific code revision.
-
-That makes audit and rollback easier.
-
-## Why rebuild in delivery?
-
-CI proves:
-
-> This image can be built.
-
-Delivery creates the artifact we actually publish.
-
-The delivery job checks out the exact commit that passed CI.
-
-That preserves a clean chain:
+Jadi:
 
 ~~~text
 tested revision
@@ -66,46 +50,132 @@ tested revision
 published revision
 ~~~
 
-## Why no automatic cloud deployment?
+Ini lineage.
 
-Because we do not have a real target environment in this workshop.
+---
 
-Adding fake SSH commands just to say “we have CD” would teach the wrong lesson.
+## Image naming
 
-Our boundary is honest:
+Project punya separate image:
 
 ~~~text
-code
-↓
-verified
-↓
-container image
-↓
-GHCR
-↓
-ready for a deployment platform
+...-api
+...-mlflow
+...-airflow
 ~~~
 
-A future extension could deploy that image to:
+Kenapa separate?
 
-- a VPS,
+Karena service responsibility beda.
+
+Deployment target nanti bisa scale/update independently.
+
+---
+
+## Tag latest
+
+Convenient:
+
+~~~text
+latest
+~~~
+
+Tapi pointer bergerak.
+
+Hari ini latest = A.
+
+Besok latest = B.
+
+Useful buat casual pull, kurang ideal buat exact audit.
+
+---
+
+## SHA tag
+
+~~~text
+sha-abc123
+~~~
+
+Represent exact Git revision.
+
+Kalau incident:
+
+> “Image mana yang running?”
+
+SHA tag lebih informative.
+
+---
+
+## Rollback application
+
+Suppose image latest broken.
+
+Deployment platform bisa pin previous SHA.
+
+Ini application rollback.
+
+Jangan confuse dengan model rollback.
+
+### Application rollback
+
+Docker image version.
+
+### Model rollback
+
+MLflow champion version.
+
+MLOps punya dua version dimensions.
+
+---
+
+## Kenapa workshop berhenti di GHCR?
+
+Karena kita belum define real target production environment.
+
+Kalau kita tambahin:
+
+~~~text
+ssh fake-server
+kubectl apply
+~~~
+
+tanpa environment real, itu theater.
+
+Better teaching:
+
+> Continuous Delivery selesai saat verified artifact siap di registry.
+
+Nanti extension bisa deploy ke:
+
+- VM,
 - Cloud Run,
 - ECS,
-- Kubernetes,
-- another container platform.
+- Kubernetes.
 
-## Rollback mental model
+---
 
-If a bad application image is deployed, a platform can pull an older SHA-tagged image.
+## Artifact immutability
 
-This is separate from **model rollback**, where MLflow champion can point to an older model version.
+Idealnya published artifact tidak dimodifikasi diam-diam.
 
-MLOps often has both:
+Kalau code berubah:
 
 ~~~text
-application version
-and
-model version
+new commit
+→ new image
+→ new tag/digest
 ~~~
 
-They need separate lineage.
+Bukan edit container running manual.
+
+Ini infrastructure hygiene.
+
+---
+
+## Checkpoint
+
+1. Kenapa deployment artifact perlu?
+2. CI build dan delivery build beda tujuan apa?
+3. latest dan SHA tag tradeoff?
+4. Application rollback beda apa dengan model rollback?
+5. Kenapa workshop nggak fake auto-deploy?

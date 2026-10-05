@@ -1,17 +1,41 @@
-# Dataset
+# Dataset — Dari Jutaan Taxi Trips Jadi Data yang Bisa Dipakai Model
 
-## Main source
+Dataset utama kita berasal dari **NYC Taxi & Limousine Commission Yellow Taxi Trip Records**.
 
-We use official **NYC TLC Yellow Taxi Trip Records**.
+Ini official public trip data.
 
-Raw fields we care about:
+Tapi raw dataset punya jauh lebih banyak field daripada yang kita butuhkan.
+
+Jadi ingestion kita deliberately selective.
+
+---
+
+## Field utama
+
+Untuk demand counting, dua field paling penting:
 
 ~~~text
 tpep_pickup_datetime
 PULocationID
 ~~~
 
-Taxi zone lookup fields:
+Kenapa cuma dua?
+
+Karena target kita adalah:
+
+> berapa banyak pickup terjadi di zone tertentu per jam.
+
+Kita nggak butuh fare, tip, payment type, passenger count, dan field lain untuk core model.
+
+Feature minimal yang relevan membuat pipeline lebih ringan dan konsep lebih jelas.
+
+---
+
+## Taxi Zone Lookup
+
+PULocationID cuma numeric ID.
+
+Supaya kita tahu ID itu Manhattan atau borough lain, kita pakai taxi zone lookup:
 
 ~~~text
 LocationID
@@ -19,106 +43,242 @@ Borough
 Zone
 ~~~
 
-## Why does the base URL show AccessDenied?
-
-If you open the CloudFront directory URL directly, you may see an XML AccessDenied response.
-
-That does not mean the data files are blocked.
-
-The storage endpoint simply does not provide public directory listing.
-
-Known object paths work, for example:
+Flow:
 
 ~~~text
-https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet
+PULocationID
+↓
+join/lookup
+↓
+Borough
+↓
+filter Manhattan
 ~~~
 
-Our bootstrap code builds the exact monthly object path automatically.
+---
 
-Mental model:
+## Kenapa base CloudFront URL AccessDenied?
+
+Ini common confusion.
+
+Kalau buka:
 
 ~~~text
-browse folder
-❌
-
-request exact known file
-✅
+https://d37ci6vzurychx.cloudfront.net/trip-data
 ~~~
+
+bisa muncul:
+
+~~~text
+AccessDenied
+~~~
+
+Itu bukan berarti monthly file nggak bisa diakses.
+
+CloudFront/S3 prefix tersebut tidak expose public directory listing.
+
+Known object path tetap accessible.
+
+Contoh:
+
+~~~text
+.../yellow_tripdata_2025-01.parquet
+~~~
+
+Analogi:
+
+> Kalian tahu alamat rumah specific, tapi kompleksnya nggak kasih daftar semua penghuni.
+
+Bootstrap script tahu exact object name, jadi download tetap works.
+
+---
+
+## Kenapa Parquet?
+
+Parquet itu columnar format.
+
+Kalau dataset punya banyak columns, kita bisa baca hanya yang dibutuhkan.
+
+~~~text
+read:
+pickup_datetime
+pickup_zone
+~~~
+
+tanpa load semua fare/payment columns.
+
+Benefit:
+
+- I/O lebih kecil,
+- memory lebih kecil,
+- type metadata lebih baik dibanding CSV,
+- suitable buat analytics.
+
+---
 
 ## Bootstrap flow
+
+Command:
 
 ~~~bash
 uv run python scripts/bootstrap_data.py
 ~~~
 
-The script:
-
-1. downloads taxi zone metadata;
-2. downloads monthly Yellow Taxi Parquet;
-3. keeps the useful columns;
-4. filters Manhattan pickup zones;
-5. removes rows outside the expected month;
-6. creates a smaller replay source.
-
-Folders:
+Behind the scenes:
 
 ~~~text
-data/source/tlc
-data/source/replay
-data/metadata
-~~~
-
-## Why Parquet?
-
-Parquet is columnar.
-
-We can read only the columns we need instead of loading the entire source schema.
-
-That saves I/O and memory.
-
-## Why source and replay are separate
-
-~~~text
-official file
-    ↓
-select useful columns
-    ↓
+download zone lookup
+↓
+download monthly TLC parquet
+↓
+validate month
+↓
+read useful columns
+↓
 filter Manhattan
-    ↓
-compact replay file
+↓
+drop invalid/out-of-month rows
+↓
+write compact replay parquet
 ~~~
 
-The source is the original package. Replay is the workshop-ready version.
+---
 
-## Optional weather
+## Kenapa source dan replay dipisah?
 
-The full workshop works with TLC data alone.
-
-Later, weather can enrich features such as:
-
-- temperature,
-- rainfall,
-- snowfall,
-- wind speed.
+Kita punya:
 
 ~~~text
-Taxi Data ─────┐
-               ├── Feature Engineering
-Weather Data ──┘
+data/source/tlc/
+data/source/replay/
 ~~~
 
-Weather is an extension, not a requirement.
+### TLC source
 
-## Git and generated data
+Original downloaded monthly file.
 
-Generated data is ignored by Git.
+### Replay source
 
-Git should track the code that creates the data, while DVC later helps track training snapshots.
+Compact workshop-ready file setelah select useful columns + Manhattan filter.
 
-## Timezone simplification
+Kenapa nggak overwrite source?
 
-The workshop treats pickup timestamps as naive NYC local wall-clock time.
+Karena source dan derived artifact punya responsibility berbeda.
 
-For the main hands-on period around January and February, this keeps the explanation simple.
+Original source useful untuk:
 
-A production design should explicitly handle timezone and daylight-saving transitions.
+- reprocessing,
+- audit,
+- experimenting with additional fields.
+
+Replay source optimized buat hands-on.
+
+---
+
+## Data quality itu penting
+
+Official data bukan berarti kita boleh blind trust.
+
+Pipeline tetap check:
+
+- expected columns,
+- valid timestamp,
+- month consistency,
+- pickup location presence.
+
+Kenapa?
+
+External data schema bisa berubah.
+
+Corrupted file bisa terjadi.
+
+Dan bug ingestion jauh lebih murah ditangkap di awal daripada setelah model training.
+
+Pattern sehat:
+
+~~~text
+ingest
+↓
+validate
+↓
+transform
+~~~
+
+---
+
+## Optional weather feature
+
+Weather bisa jadi useful external feature.
+
+Taxi demand mungkin berubah saat:
+
+- hujan,
+- snow,
+- temperature extreme,
+- wind.
+
+Tapi kita sengaja nggak include weather di core pipeline.
+
+Kenapa?
+
+Karena workshop already punya banyak lifecycle concept.
+
+Weather berarti tambah:
+
+- second data source,
+- API/download logic,
+- timestamp alignment,
+- missing data,
+- join strategy.
+
+Itu bagus jadi extension setelah core lifecycle clear.
+
+---
+
+## Generated data nggak masuk Git
+
+Folder data ada di repo sebagai structure, tapi generated files ignored.
+
+Kenapa?
+
+Git bukan tempat ideal buat repeatedly version large Parquet.
+
+Kita track:
+
+~~~text
+code
+config
+pipeline definition
+~~~
+
+dan DVC bantu training data snapshot.
+
+---
+
+## Timezone caveat
+
+TLC timestamp kita treat sebagai naive NYC local wall-clock time.
+
+Kenapa?
+
+Biar beginner workflow lebih simple.
+
+Tapi production real harus lebih explicit tentang:
+
+- timezone,
+- UTC conversion,
+- daylight saving time.
+
+Workshop main period avoid DST transition, jadi simplification ini relatively safe untuk hands-on.
+
+Yang penting: simplification-nya **disadari**, bukan accidentally ignored.
+
+---
+
+## Checkpoint
+
+1. Kenapa cuma dua raw columns utama?
+2. Taxi zone lookup dipakai buat apa?
+3. Kenapa AccessDenied di folder URL bukan berarti file unavailable?
+4. Kenapa source dan replay dipisah?
+5. Kenapa external official data tetap perlu validation?

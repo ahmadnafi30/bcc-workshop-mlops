@@ -1,78 +1,133 @@
-# Step 6 — FastAPI Serving
+# Step 6 — FastAPI: Sekarang Model Kita Harus Bisa Dipakai System Lain
+
+Sampai sini model sudah punya champion di Registry.
+
+Tapi kalau mau dipakai application lain, kita butuh stable interface.
+
+Sekarang kita bikin model “keluar dari notebook” dan bisa di-request lewat HTTP.
+
+---
 
 ## Goal
 
-Use the champion model through HTTP instead of calling the Python model object directly.
+Setelah step ini:
 
-## 1. Start shared local MLflow
+- MLflow champion tersedia,
+- FastAPI hidup,
+- health endpoint works,
+- model-info menunjukkan champion,
+- prediction request berhasil,
+- kalian ngerti behind-the-scenes online feature construction.
+
+---
+
+## 1. Pastikan MLflow jalan
+
+Kalau local server sudah stop:
 
 ~~~bash
 uv run python scripts/start_mlflow.py
 ~~~
 
-The helper uses the local .mlflow directory, the same state directory later mounted by Docker Compose.
-
-## 2. Check champion
-
-Open MLflow at:
+Open:
 
 ~~~text
 http://127.0.0.1:5000
 ~~~
 
-The registered model should have a champion alias. If not:
+Check champion alias.
 
-~~~bash
-uv run python scripts/promote_model.py --version <VERSION>
+---
+
+## 2. Pertanyaan sebelum start API
+
+Kalau champion alias belum ada, menurut kalian /health harus fail nggak?
+
+Think.
+
+Answer project kita:
+
+~~~text
+/health
+→ tetap bisa 200
+
+/model-info
+→ 503
 ~~~
 
-## 3. Make sure historical demand exists
+Kenapa?
 
-For a Jan 28 target, processed history must cover the required 168-hour lookback before the target hour.
+Karena FastAPI process hidup, tapi model dependency belum ready.
 
-If you followed the Airflow section, replay Jan 27 and Jan 28 first.
+Signal dipisah.
 
-## 4. Start FastAPI
+---
+
+## 3. Start API
 
 ~~~bash
 uv run uvicorn api.main:app --reload
 ~~~
 
-Swagger:
+Open:
 
 ~~~text
 http://127.0.0.1:8000/docs
 ~~~
 
-## 5. Health check
+Swagger UI akan jadi playground kita.
 
-~~~bash
-curl http://127.0.0.1:8000/health
-~~~
+---
+
+## 4. GET /health
+
+Click endpoint.
+
+Try it out.
 
 Expected:
 
 ~~~json
-{"status": "ok"}
+{
+  "status": "ok"
+}
 ~~~
 
-Health only answers whether the API process is alive. It does not prove the model registry is ready.
+Ini health process, bukan full system certification.
 
-## 6. Model info
+---
 
-~~~bash
-curl http://127.0.0.1:8000/model-info
+## 5. GET /model-info
+
+Try.
+
+Expected fields:
+
+~~~text
+model_name
+model_version
+model_alias
+run_id
+model_uri
 ~~~
 
-Look for model name, version, alias, run ID, and model URI.
+Pause.
 
-This endpoint answers:
+Tanya ke audience:
 
-> Which model is the API actually using?
+> “Kenapa run_id ikut dikembalikan? User butuh?”
 
-## 7. Prediction
+End user mungkin nggak.
 
-POST in Swagger:
+Tapi operational/debugging lineage useful.
+
+Kalau prediction aneh, kita bisa trace model source run.
+
+---
+
+## 6. POST /predict
+
+Request:
 
 ~~~json
 {
@@ -81,42 +136,138 @@ POST in Swagger:
 }
 ~~~
 
-Internal flow:
+Before click Execute, coba tebak:
+
+> “Apakah API langsung pass dua field ini ke model?”
+
+No.
+
+Model butuh lags/rolling.
+
+Service harus build feature.
+
+---
+
+## 7. Behind the scenes
 
 ~~~text
-request
-   ↓
-validation
-   ↓
-load past demand
-   ↓
-online features
-   ↓
-resolve champion
-   ↓
+zone + target time
+↓
+load historical demand
+↓
+verify 168h history
+↓
+build calendar feature
+↓
+build lag
+↓
+build rolling
+↓
+load champion
+↓
 predict
-   ↓
-prediction log
-   ↓
+↓
+log prediction
+↓
+record metric
+↓
 response
 ~~~
 
-## 8. Read more than the prediction
+Ini jauh lebih banyak daripada model.predict.
 
-The response also contains model_version, model_alias, and run_id.
+Serving layer adalah real application logic.
 
-Those fields give us prediction lineage.
+---
 
-## Common errors
+## 8. Try invalid time
 
-### 503
+Request:
 
-API is alive, but champion cannot be resolved. Check MLflow and the registry alias.
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:30:00"
+}
+~~~
 
-### 422
+Expected 422.
 
-The request cannot be turned into a valid prediction. Common causes are incomplete history or a target time that is not exactly on the hour.
+Kenapa?
+
+Model granularity hourly.
+
+18:30 nggak match contract.
+
+Validation fail early.
+
+---
+
+## 9. Check prediction log
+
+Setelah successful prediction:
+
+~~~text
+data/monitoring/predictions.jsonl
+~~~
+
+Open last line.
+
+Cari:
+
+- zone,
+- target,
+- prediction,
+- version,
+- run ID.
+
+Ini akan dipakai Step 9.
+
+---
+
+## 10. Try /metrics
+
+Open:
+
+~~~text
+http://127.0.0.1:8000/metrics
+~~~
+
+Raw text kelihatan messy.
+
+Itu normal.
+
+Prometheus nanti baca.
+
+Coba search:
+
+~~~text
+taxi_api_requests_total
+~~~
+
+Kalian sudah mulai lihat operational telemetry.
+
+---
+
+## Mini challenge
+
+Kalau model champion berubah dari v1 ke v2, apakah API source code perlu edit?
+
+No.
+
+Loader resolve champion.
+
+Kalau API restart, dia load current champion.
+
+Saat running, loader juga periodically refresh metadata.
+
+---
 
 ## Checkpoint
 
-You should be able to explain why the client sends zone and target time instead of internal lag features.
+1. Kenapa health tidak check semua dependency?
+2. Model-info useful buat apa?
+3. Kenapa client tidak kirim lag features?
+4. 422 vs 503 bedanya?
+5. Prediction log dipakai untuk apa?
+6. Kenapa metrics endpoint raw text?

@@ -1,89 +1,230 @@
-# Presenter Demo Checklist
+# Presenter Demo Checklist — Biar Workshop Live Nggak Bergantung Sama Keberuntungan
 
 Presenters:
 
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
-## Before workshop day
+Live demo itu beda dengan local development.
 
-### Repository
+Yang bisa fail bukan cuma code.
 
-- main and develop aligned;
-- CI on main green;
-- docs strict build green;
-- no generated data or secret committed.
+Ada:
 
-### Environment
+- venue Wi-Fi,
+- package download,
+- port conflict,
+- Docker cache,
+- browser login,
+- laptop battery. 😭
+
+Jadi kita prepare.
+
+---
+
+## H-1: repository
+
+Check:
 
 ~~~bash
-uv sync --group docs
-uv sync --group airflow
+git status
+git branch
 uv run pytest
+uv run ruff check src api scripts tests
+uv run --group docs mkdocs build --strict
 ~~~
 
-### Data
+Pastikan main stable.
 
-Pre-download TLC data if internet may be unreliable.
+---
 
-Prepare at least the historical dates required by the live demo.
+## H-1: data
 
-### MLflow backup state
+Jangan bergantung ke live TLC download kalau venue internet uncertain.
 
-Keep one known-good experiment, registered model, and champion ready in .mlflow.
+Pre-bootstrap data.
 
-You can still demonstrate the steps live; the backup prevents network problems from stopping the workshop.
+Verify required dates.
 
-### Docker
+---
 
-If time is limited:
+## H-1: MLflow
+
+Prepare known-good backup:
+
+- experiment,
+- model run,
+- registered version,
+- champion.
+
+Live demo tetap bisa train, tapi backup prevents session stuck.
+
+---
+
+## H-1: Docker images
+
+Pre-build:
 
 ~~~bash
 docker compose build
 ~~~
 
-before participants arrive.
+First Airflow build bisa lama.
 
-### Ports
+Workshop bukan tempat ideal nonton pip install 10 menit. 😭
 
-Check 3000, 5000, 8000, 8080, and 9090.
+---
 
-## Teaching sequence
+## Before audience arrives
 
-1. start from the model-only problem;
-2. show trip data → hourly demand → features;
-3. compare baseline and ML model;
-4. introduce DVC and MLflow;
-5. draw workflow before showing Airflow;
-6. use Swagger for serving;
-7. explain Compose networking;
-8. open a real GitHub Actions run;
-9. generate API traffic and show Grafana;
-10. finish with healthy vs degraded retraining paths.
+Check ports:
 
-## Useful browser tabs
+~~~text
+3000
+5000
+8000
+8080
+9090
+~~~
 
-- workshop docs,
-- GitHub Actions,
-- MLflow,
-- Airflow,
-- FastAPI Swagger,
-- Prometheus Targets,
-- Grafana.
+Close unrelated services.
 
-## If live demo fails
+---
 
-1. name the failed layer;
-2. show the expected dependency;
-3. use prepared state if needed;
-4. continue the lifecycle explanation.
+## Browser tabs
 
-The workshop is about understanding MLOps, not proving that venue Wi-Fi is reliable.
+Siapkan:
 
-## Final participant question
+1. Docs
+2. GitHub Actions
+3. MLflow
+4. Airflow
+5. Swagger
+6. Prometheus Targets
+7. Grafana
+
+Urutkan tab sesuai teaching flow.
+
+---
+
+## Teaching flow recommendation
+
+### Opening
+
+Jangan langsung sebut 10 tools.
+
+Mulai:
+
+> “Model sudah jadi. Terus sekarang problem berikutnya apa?”
+
+Build curiosity.
+
+### Data
+
+Show one trip row.
+
+Then show hourly aggregate.
+
+Biar transformation concrete.
+
+### Feature
+
+Ask audience:
+
+> “Kalau target 18:00, actual 18:00 boleh jadi feature nggak?”
+
+Make leakage interactive.
+
+### Baseline
+
+Before showing model metric, ask:
+
+> “Kalau kemarin jam yang sama dipakai prediction, kira-kira strong nggak?”
+
+### DVC
 
 Ask:
 
-> If the API is fast but model accuracy is getting worse, which monitoring path tells us?
+> “Kalau feature file berubah tapi nama sama, model lama pakai yang mana?”
 
-A good answer mentions prediction logs, delayed ground truth, and model performance evaluation.
+### MLflow
+
+Show messy experiment scenario first.
+
+Then UI.
+
+### Airflow
+
+Draw DAG manually before UI.
+
+Audience harus predict graph dulu.
+
+### FastAPI
+
+Ask:
+
+> “Client perlu kirim lag_168h nggak?”
+
+Then show simple request.
+
+### Docker
+
+Ask why localhost from container fails.
+
+### CI/CD
+
+Show real PR run.
+
+### Monitoring
+
+Generate traffic live.
+
+Grafana movement gives nice visual feedback.
+
+### Retraining
+
+Show healthy path too.
+
+Emphasize:
+
+> no retrain can be correct.
+
+---
+
+## Backup strategy
+
+Kalau live training fail:
+
+- use prepared MLflow run,
+- continue Registry section.
+
+Kalau Docker fail:
+
+- use local services,
+- explain intended container boundary.
+
+Kalau Grafana fail:
+
+- show Prometheus raw metrics and provisioned dashboard config.
+
+Goal workshop = understanding lifecycle.
+
+Bukan proving laptop perfect.
+
+---
+
+## Final audience challenge
+
+Minta satu volunteer explain:
+
+~~~text
+data
+→ model
+→ serving
+→ monitoring
+→ retraining
+~~~
+
+Then presenters bantu fill gaps.
+
+Kalau audience bisa explain causal flow, session berhasil.

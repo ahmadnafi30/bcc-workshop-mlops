@@ -1,146 +1,275 @@
-# MLflow Model Registry
+# MLflow Model Registry — Experiment Bagus Belum Tentu Langsung Production
 
-## Tracking and Registry are different
+Ini transition penting.
 
-Tracking answers:
+Kita sudah punya experiment tracking.
 
-> What experiments did we run?
+Ada run bagus.
 
-Registry answers:
+Pertanyaannya:
 
-> Which model versions are candidates for use?
+> “Apakah run bagus itu langsung jadi production model?”
 
-Think of:
+Jawabannya: belum tentu.
+
+Tracking dan serving punya lifecycle boundary.
+
+Model Registry masuk buat manage **model versions yang dianggap candidate untuk dipakai**.
+
+---
+
+## Analogi: audition vs cast utama
+
+Bayangin film.
+
+Ada banyak orang ikut audition.
+
+Itu experiment runs.
+
+Beberapa orang bagus dan masuk shortlist.
+
+Itu registered model versions.
+
+Satu orang akhirnya dipilih jadi pemeran utama.
+
+Itu champion.
+
+Candidate yang lagi diuji bisa disebut challenger.
+
+Jadi:
 
 ~~~text
-experiment notebook
-vs
-approved model catalog
+experiment run
+≠
+automatically production
 ~~~
 
-## Register a run
+---
 
-After tracked training, take the model run ID:
+## Registered Model
 
-~~~bash
-uv run python scripts/register_model.py --run-id <RUN_ID>
-~~~
-
-The model becomes a registered version.
-
-Example:
+Kita punya logical model name:
 
 ~~~text
 taxi-demand-forecasting-model
-└── version 1
 ~~~
 
-A new registration creates another version:
+Di bawah nama itu ada version:
 
 ~~~text
 version 1
 version 2
 version 3
+...
 ~~~
 
-## Aliases
+Setiap version bisa trace balik ke source MLflow run.
 
-We use:
+---
+
+## Kenapa versioning?
+
+Kalau model baru datang, kita tidak overwrite model lama diam-diam.
+
+Kita punya:
+
+~~~text
+v1
+v2
+v3
+~~~
+
+Benefit:
+
+- audit,
+- comparison,
+- rollback,
+- promotion history.
+
+---
+
+## Alias
+
+Project kita pakai alias:
 
 ~~~text
 challenger
 champion
 ~~~
 
-### challenger
+Alias itu pointer.
 
-A candidate we want to evaluate.
-
-### champion
-
-The model selected for serving.
-
-Aliases are pointers.
+Contoh:
 
 ~~~text
 champion
-   ↓
+↓
 version 3
 ~~~
 
-Later:
+Besok setelah review:
 
 ~~~text
 champion
-   ↓
+↓
 version 5
 ~~~
 
-The application still asks for champion.
-
-## Why aliases are useful
-
-Bad serving code:
+Serving code tetap request:
 
 ~~~text
-load model version 3
+champion
 ~~~
 
-Every promotion requires application code changes.
+Dia nggak perlu hard-code version number.
 
-Better:
+---
+
+## Kenapa alias lebih baik dari hard-coded version?
+
+Bad:
 
 ~~~text
-load champion
+API loads version 3
 ~~~
 
-Now model governance can change the pointer without hard-coding a new version.
+Setiap promotion:
 
-## Promotion
+~~~text
+edit code
+commit
+deploy
+~~~
 
-Promotion is explicit:
+Padahal yang berubah cuma model selection.
+
+Dengan alias:
+
+~~~text
+API loads champion
+~~~
+
+Model governance dan application source lebih loosely coupled.
+
+---
+
+## Challenger
+
+Challenger = candidate baru.
+
+Misalnya retraining menghasilkan model yang beat baseline.
+
+Kita register sebagai challenger.
+
+Kenapa belum champion?
+
+Karena threshold internal training belum tentu cukup buat automatic production approval.
+
+Mungkin kita masih mau review:
+
+- validation period,
+- recent production MAE,
+- feature distribution,
+- data quality,
+- business constraint.
+
+---
+
+## Champion
+
+Champion = model yang approved untuk serving.
+
+Project kita sengaja manual promotion.
+
+Command:
 
 ~~~bash
-uv run python scripts/promote_model.py --version 1
+uv run python scripts/promote_model.py --version <VERSION>
 ~~~
 
-Why not automatically promote every new model?
+Kenapa manual?
 
-Because:
+Bukan karena automation jelek.
+
+Tapi karena workshop mau menunjukkan governance boundary:
 
 ~~~text
-new
+automatic retraining
 ≠
-approved
+automatic production promotion
 ~~~
 
-The workshop automates challenger creation but keeps the final production choice visible.
+Dua decision itu bisa punya risk level berbeda.
 
-## Lineage
+---
 
-A model version keeps a source run ID.
+## Rollback
 
-So we can trace:
+Suppose v5 jadi champion lalu ternyata behavior jelek.
+
+Kalau v3 masih ada, alias bisa diarahkan balik.
+
+Mental model:
 
 ~~~text
-champion alias
-   ↓
+champion pointer
+v5
+↓
+move back
+↓
+v3
+~~~
+
+Lebih clean daripada restore random file backup.
+
+---
+
+## Lineage chain
+
+Ini salah satu bagian paling powerful.
+
+~~~text
+champion
+↓
 model version
-   ↓
-MLflow run
-   ↓
-metrics + params + dataset fingerprint
+↓
+source MLflow run
+↓
+metrics + params
+↓
+dataset snapshot + SHA
 ~~~
 
-That traceability is one of the strongest reasons to use a registry.
+Kalau ada pertanyaan:
 
-## Rollback idea
+> “Production prediction ini berasal dari model apa?”
 
-If a newly promoted model behaves badly, an alias can be moved back to an older version.
+kita bisa trace.
 
-That gives a simple mental model for rollback:
+MLOps bukan cuma automation. Traceability juga sangat penting.
 
-~~~text
-change pointer
-not application code
-~~~
+---
+
+## Registry bukan model storage doang
+
+Kalau kalian cuma lihat Registry sebagai tempat save file model, kalian kehilangan bagian governance-nya.
+
+Registry membantu manage:
+
+- version identity,
+- alias,
+- lineage,
+- lifecycle state.
+
+Model file bisa saja physically stored di artifact storage, tapi Registry memberi semantic management layer.
+
+---
+
+## Checkpoint
+
+1. Tracking beda apa dengan Registry?
+2. Kenapa experiment bagus nggak langsung production?
+3. Version dan alias beda apa?
+4. Challenger vs champion?
+5. Kenapa manual promotion masih masuk akal?
+6. Kalau champion baru jelek, rollback concept-nya gimana?

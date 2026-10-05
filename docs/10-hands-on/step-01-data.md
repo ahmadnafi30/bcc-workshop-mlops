@@ -1,95 +1,154 @@
-# Step 1 — Data Bootstrap
+# Step 1 — Data: Dari Official TLC File Sampai Hourly Demand
+
+Sekarang environment sudah ready.
+
+Kita mulai dari source paling bawah di lifecycle: **data**.
+
+Goal step ini bukan sekadar download file.
+
+Kita ingin ngerti:
+
+~~~text
+source data
+↓
+filtered replay source
+↓
+daily batch
+↓
+hourly demand
+~~~
+
+Kalau data layer nggak clear, tools di atasnya juga bakal confusing.
+
+---
 
 ## Goal
 
-Prepare a compact local copy of NYC TLC data that can be replayed like incoming production data.
+Setelah step ini:
 
-## Mental model
+- official taxi data ter-download,
+- zone lookup tersedia,
+- replay source terbentuk,
+- initial historical demand Jan 1–26 siap,
+- kalian ngerti raw granularity vs model granularity.
 
-We have two forms:
+---
 
-~~~text
-official source
-→ original package
+## 1. Sebelum download, buka dataset docs
 
-replay source
-→ smaller workshop-ready package
-~~~
+Raw TLC punya satu row per trip.
 
-We keep both roles separate.
+Coba jawab:
 
-## 1. Bootstrap
+> “Kalau target kita jumlah pickup per zone per jam, apakah model perlu satu row per individual trip?”
+
+No.
+
+Kita akan aggregate.
+
+Tapi raw source tetap penting sebagai starting point.
+
+---
+
+## 2. Bootstrap
 
 ~~~bash
 uv run python scripts/bootstrap_data.py
 ~~~
 
-Default behavior prepares the configured 2025 months.
+First run bisa makan waktu.
 
-This can take time because official monthly Parquet files are large.
+Jangan panik kalau tidak instant.
 
-## 2. What the script does
+### Behind the scenes
 
 ~~~text
-download taxi zone lookup
-       ↓
-download Yellow Taxi month
-       ↓
-read pickup time + pickup zone
-       ↓
-filter Manhattan
-       ↓
+download zone lookup
+↓
+download monthly Yellow Taxi parquet
+↓
 validate expected month
-       ↓
-write compact replay parquet
+↓
+select pickup time + pickup zone
+↓
+filter Manhattan
+↓
+write compact replay data
 ~~~
 
-## 3. Inspect folders
+---
 
-After a successful bootstrap:
+## 3. Inspect output
+
+Lihat:
 
 ~~~text
-data/
-├── metadata/
-│   └── taxi_zone_lookup.csv
-└── source/
-    ├── tlc/
-    │   └── yellow_tripdata_....parquet
-    └── replay/
-        └── yellow_tripdata_....parquet
+data/source/tlc/
+data/source/replay/
+data/metadata/
 ~~~
 
-These files are ignored by Git.
+Pertanyaan:
 
-## 4. Why the CloudFront directory is AccessDenied
+> “Kenapa original dan replay dipisah?”
 
-If you open the base trip-data URL and see AccessDenied, that does not mean the monthly file is inaccessible.
+Karena responsibility berbeda.
 
-The storage does not expose a directory listing.
+Original source = downloaded source.
 
-The code requests an exact file name.
+Replay = smaller derived data optimized buat workshop lifecycle.
 
-## 5. Optional notebook exploration
+Kalau nanti preprocessing berubah, original source masih ada.
+
+---
+
+## 4. Open taxi zone lookup
+
+Cari:
+
+~~~text
+data/metadata/taxi_zone_lookup.csv
+~~~
+
+Buka beberapa row.
+
+Kalian akan lihat mapping:
+
+~~~text
+LocationID
+Borough
+Zone
+~~~
+
+Sekarang PULocationID numeric punya meaning.
+
+---
+
+## 5. Optional notebook
 
 ~~~bash
 uv run jupyter lab
 ~~~
 
-Open:
+Open notebook exploration.
 
-~~~text
-notebooks/01-data-exploration.ipynb
-~~~
+Jangan cuma run all.
 
-Questions to answer:
+Coba jawab:
 
-- How many rows are in the replay source?
-- How many pickup zones remain?
-- What is the time range?
-- Are timestamps missing?
-- Which zones have many pickups?
+- min timestamp?
+- max timestamp?
+- berapa Manhattan zone?
+- ada missing?
+- zone mana paling ramai?
 
-Do not spend the whole workshop doing EDA. The notebook is a sanity check.
+Tujuan EDA ini bukan bikin 30 chart.
+
+Tujuan EDA:
+
+> “Apakah data yang masuk masuk akal?”
+
+---
 
 ## 6. Prepare initial history
 
@@ -97,9 +156,7 @@ Do not spend the whole workshop doing EDA. The notebook is a sanity check.
 uv run python scripts/prepare_historical_demand.py
 ~~~
 
-This prepares Jan 1–26 by default.
-
-Output pattern:
+Output per day:
 
 ~~~text
 data/processed/demand/2025-01-01.parquet
@@ -107,26 +164,109 @@ data/processed/demand/2025-01-01.parquet
 data/processed/demand/2025-01-26.parquet
 ~~~
 
-## 7. Why one file per day?
+---
 
-It matches the replay story.
+## 7. Kenapa Jan 1–26?
 
-Later Airflow can process:
+Kita sengaja desain:
 
 ~~~text
-Jan 27 batch
-Jan 28 batch
-Jan 29 batch
+Jan 1–7
+→ warm-up history
+
+Jan 8–21
+→ training
+
+Jan 22–26
+→ validation
 ~~~
 
-without pretending all production data arrived at once.
+Longest lag = 168 hours = 7 days.
+
+Tanpa warm-up, Jan 8 nggak punya lag one week.
+
+---
+
+## 8. Inspect satu processed day
+
+Pakai Python cepat:
+
+~~~bash
+uv run python -c "import pandas as pd; df=pd.read_parquet('data/processed/demand/2025-01-26.parquet'); print(df.head()); print(df.shape)"
+~~~
+
+Lihat columns.
+
+Expected concept:
+
+~~~text
+timestamp
+zone_id
+trip_count
+~~~
+
+---
+
+## 9. Zero-demand thought experiment
+
+Misalnya zone 161 jam 03:00 nggak ada trip.
+
+Kalau kita cuma group raw trip yang exist, row itu hilang.
+
+Pertanyaan:
+
+> “Hilang berarti missing data atau zero demand?”
+
+Dalam problem kita: zero demand.
+
+Makanya pipeline build complete zone-hour grid dan fill zero.
+
+Ini small detail yang sangat penting.
+
+---
+
+## 10. Historical replay manual
+
+Coba release Jan 27:
+
+~~~bash
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
+~~~
+
+Lalu:
+
+~~~bash
+uv run python scripts/prepare_daily_demand.py --date 2025-01-27
+~~~
+
+Sekarang kalian melakukan secara manual apa yang nanti Airflow orchestrate.
+
+Ini deliberate.
+
+Kita mau understand process sebelum automation.
+
+---
+
+## Mini challenge
+
+Coba jawab:
+
+1. Kalau CloudFront base folder AccessDenied, apakah monthly file pasti unavailable?
+2. Kenapa source dan replay dipisah?
+3. Kenapa model data granularity beda dari raw?
+4. Kenapa zero-demand row harus dibuat?
+5. Kenapa ada warm-up 7 hari?
+
+---
 
 ## Checkpoint
 
-Verify one file exists:
+Pastikan:
 
 ~~~text
 data/processed/demand/2025-01-26.parquet
 ~~~
 
-If it does, continue to feature engineering.
+exists.
+
+Next kita bikin model-ready features.

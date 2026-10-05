@@ -1,45 +1,28 @@
-# Model Serving
+# Model Serving — Model Sudah Jadi, Terus Dipakai Orang Lain Gimana?
 
-## From model file to usable service
+Sampai sini kita sudah punya model yang ditrain, ditrack, dan diregister.
 
-Training produces a model.
+Kalau project berhenti di notebook, sebenarnya model masih belum terlalu useful buat system lain.
 
-But another application cannot conveniently call:
+Bayangin backend engineer datang dan bilang:
 
-~~~text
-open this Python process
-import sklearn
-load this file
-build the exact features
-predict
-~~~
+> “Gue mau prediction buat zone 161 jam 18:00. Gimana caranya?”
 
-for every request.
+Kalau jawaban kita:
 
-Model serving creates a stable interface around the model.
+> “Buka Python, load model, terus bikin feature lag_1h, lag_24h, rolling_mean_3h, jangan lupa category dtype, terus predict.”
 
-In this workshop, the interface is HTTP through FastAPI.
+Ya backend engineer-nya mungkin langsung pulang. 😭
 
-## Analogy: kitchen and waiter
+Di sinilah model serving masuk.
 
-The trained model is like the kitchen.
+---
 
-A customer should not walk into the kitchen and manually combine ingredients.
+## Serving = bikin interface yang stable
 
-The waiter accepts a simple order:
+Client seharusnya nggak perlu tahu internal complexity model.
 
-~~~text
-zone 161
-target 18:00
-~~~
-
-The serving layer handles the internal details.
-
-That is why our API request does **not** ask clients to provide lag_24h or rolling_mean_6h.
-
-## Request contract
-
-Client sends:
+Client cukup kirim business input:
 
 ~~~json
 {
@@ -48,142 +31,325 @@ Client sends:
 }
 ~~~
 
-Backend responsibilities:
-
-1. validate the request;
-2. load historical demand;
-3. build online features;
-4. resolve the champion model;
-5. run prediction;
-6. log prediction metadata;
-7. return a response.
-
-## Online feature construction
-
-The model expects the same feature schema used during training.
-
-For target 18:00:
+Lalu service yang handle:
 
 ~~~text
-lag_1h
-→ 17:00
-
-lag_24h
-→ yesterday 18:00
-
-rolling_mean_3h
-→ recent history ending before 18:00
+request validation
+↓
+history lookup
+↓
+online feature construction
+↓
+model loading
+↓
+prediction
+↓
+prediction logging
+↓
+response
 ~~~
 
-The serving code never reads actual demand at the target hour.
+Ini abstraction boundary.
 
-This protects against leakage.
+Client tahu **what it wants**.
+
+Service tahu **how to produce it**.
+
+---
+
+## Kenapa client nggak kirim lag feature?
+
+Kita bisa saja design API:
+
+~~~json
+{
+  "zone_id": 161,
+  "lag_1h": 120,
+  "lag_24h": 140,
+  "rolling_mean_3h": 128.3,
+  "rolling_mean_24h": 130.1
+}
+~~~
+
+Secara teknis bisa.
+
+Tapi siapa yang bertanggung jawab memastikan lag feature itu benar?
+
+Sekarang setiap client harus ngerti feature engineering internal model.
+
+Kalau feature definition berubah, semua client harus update.
+
+Coupling-nya tinggi.
+
+Lebih sehat kalau client kirim domain input:
+
+~~~text
+zone
+target time
+~~~
+
+Serving layer yang transform ke model input.
+
+---
 
 ## Training-serving consistency
 
-A common production failure is:
+Ini salah satu source bug paling sneaky di production ML.
+
+Bayangin training pakai:
 
 ~~~text
-training feature definition
-≠
-serving feature definition
+rolling_mean_3h
+=
+mean of previous 3 complete hours
 ~~~
 
-Then a model can look excellent offline but receive different inputs online.
-
-Our project keeps the feature contract explicit.
-
-A larger production system might use a feature store, but the principle is the same:
-
-> Training and serving must agree on feature meaning.
-
-## Champion model
-
-Serving does not hard-code:
+Tapi serving implementation accidentally pakai:
 
 ~~~text
-version 1
+current hour included
 ~~~
 
-It asks MLflow Registry for:
+Model input semantics jadi beda.
+
+Offline metric bagus, online behavior aneh.
+
+Makanya training-serving consistency penting.
+
+Workshop kita belum pakai feature store, jadi consistency dijaga lewat explicit Python implementation dan tests.
+
+Di system besar, feature store bisa bantu centralize feature definitions.
+
+---
+
+## Prediction time dan leakage
+
+Target:
+
+~~~text
+18:00
+~~~
+
+Apa data paling baru yang boleh dipakai?
+
+~~~text
+17:00
+~~~
+
+Actual 18:00 demand belum boleh masuk.
+
+Walaupun kita pakai historical replay dan file full history technically tersedia di disk, serving function tetap enforce past-only history.
+
+Ini penting.
+
+MLOps pipeline yang sophisticated tetap bisa menghasilkan model cheating kalau leakage rule salah.
+
+Tools nggak menyelamatkan bad ML logic.
+
+---
+
+## Model loader
+
+Serving perlu model.
+
+Tapi model version bisa berubah.
+
+Kita nggak mau hard-code:
+
+~~~text
+version 3
+~~~
+
+Kita resolve:
 
 ~~~text
 champion
 ~~~
 
-This separates:
+dari MLflow Registry.
+
+Jadi application code tidak berubah saat model promotion.
+
+---
+
+## Kenapa model nggak reload setiap request?
+
+Bayangin traffic:
 
 ~~~text
-application code
-from
-model promotion decision
+100 requests/second
 ~~~
 
-## Loader cache
+Kalau setiap request:
 
-Querying Model Registry for every individual prediction would create unnecessary traffic.
+~~~text
+query Registry
+download model
+deserialize
+predict
+~~~
 
-The loader caches model metadata for a short interval.
+gila juga. 😭
 
-It periodically checks whether champion changed.
+Model loading mahal.
 
-If champion moves to a new version, the model can be reloaded.
+Kita cache loaded model.
+
+Registry metadata juga punya refresh interval.
+
+Flow:
+
+~~~text
+request
+↓
+is cached model still current?
+↓
+yes → reuse
+
+after refresh interval
+↓
+check champion version
+↓
+changed?
+yes → reload
+~~~
+
+Ini balance antara freshness dan overhead.
+
+---
 
 ## Prediction logging
 
-A successful prediction is written to:
+Setelah prediction dibuat, kita log:
 
 ~~~text
-data/monitoring/predictions.jsonl
+zone_id
+target_datetime
+predicted_trip_count
+model_version
+run_id
+logged_at
 ~~~
 
-We need this later because model accuracy cannot be calculated until actual demand exists.
+Kenapa?
 
-Each log includes information such as:
-
-- target time,
-- zone,
-- predicted count,
-- model version,
-- MLflow run ID,
-- log time.
-
-## Why JSONL?
-
-JSON Lines stores one JSON object per line.
-
-It is simple for append-only workshop logging:
+Karena beberapa jam kemudian kita mau evaluate:
 
 ~~~text
-prediction 1
-prediction 2
-prediction 3
+prediction
+vs
+actual
 ~~~
 
-A larger production system might use a database, event stream, or data warehouse.
+Kalau prediction tidak disimpan, kita kehilangan evidence tentang apa yang model bilang saat itu.
 
-## Negative regression outputs
+Model monitoring butuh historical prediction records.
 
-A regression model can mathematically return a negative number.
+---
 
-Taxi pickup count cannot be negative.
+## JSONL kenapa?
 
-The serving layer clips the final prediction at zero.
-
-That is a domain constraint applied after model inference.
-
-## Serving is not deployment
-
-Important distinction:
+Workshop pakai:
 
 ~~~text
-serving
-→ how predictions are exposed
-
-deployment
-→ how the serving application is placed into an environment
+predictions.jsonl
 ~~~
 
-FastAPI handles serving.
+One JSON per line.
 
-Docker/GHCR are part of packaging and delivery.
+Kenapa simpel banget?
+
+Karena goal-nya ngajarin lifecycle, bukan database architecture.
+
+JSONL enak buat append.
+
+Production system mungkin pakai:
+
+- database,
+- Kafka,
+- data warehouse,
+- event store.
+
+Concept-nya sama:
+
+> prediction event harus tersimpan dan traceable.
+
+---
+
+## Serving vs Deployment
+
+Sering ketuker.
+
+### Serving
+
+How prediction is exposed.
+
+~~~text
+HTTP API
+~~~
+
+### Deployment
+
+How serving application is placed in an environment.
+
+~~~text
+container
+cloud platform
+Kubernetes
+VM
+~~~
+
+FastAPI handle serving interface.
+
+Docker handle packaging.
+
+CI/CD handle artifact delivery.
+
+Different concerns.
+
+---
+
+## Prediction output bukan cuma angka
+
+Response kita include model metadata.
+
+Kenapa?
+
+Supaya kalau ada incident:
+
+> “Prediction aneh ini dibuat model mana?”
+
+kita punya clue.
+
+Traceability bukan cuma buat training.
+
+Prediction lineage juga useful.
+
+---
+
+## Negative prediction
+
+Regression model bisa mathematically output negative.
+
+Taxi pickup count nggak mungkin negative.
+
+Serving layer clip minimum zero.
+
+Ini contoh domain rule.
+
+Model output kadang perlu post-processing.
+
+Tapi hati-hati: post-processing juga bagian behavior system dan harus terdokumentasi.
+
+---
+
+## Checkpoint
+
+Coba jawab:
+
+1. Kenapa client cuma kirim zone dan target time?
+2. Apa itu training-serving consistency?
+3. Kenapa champion alias lebih baik daripada hard-coded version?
+4. Kenapa model di-cache?
+5. Kenapa prediction harus dilog?
+6. Serving dan deployment beda apa?
