@@ -1,16 +1,25 @@
-# Container Delivery — Dari Source Code Jadi Artifact yang Siap Dipakai Environment Lain
+# Container Delivery — Dari Source Code ke Artifact yang Siap Dipakai
 
 Setelah CI green, source code sudah verified.
 
-Tapi deployment platform biasanya nggak mau clone repo lalu build random di production.
+Tapi production/deployment platform biasanya tidak ideal kalau harus:
 
-Kita ingin deliver artifact.
+~~~text
+git clone
+install dependency
+build random state
+start app
+~~~
 
-Project kita pilih Docker image sebagai artifact.
+langsung di target environment.
+
+Kita ingin satu artifact yang sudah dibangun dan bisa dipull.
+
+Project kita pakai Docker image sebagai delivery artifact.
 
 ---
 
-## Flow
+# Flow
 
 ~~~text
 main commit
@@ -19,7 +28,7 @@ CI success
 ↓
 Container Delivery
 ↓
-build image
+build exact revision
 ↓
 tag image
 ↓
@@ -28,35 +37,27 @@ push GHCR
 
 GHCR = GitHub Container Registry.
 
----
-
-## Kenapa build image lagi?
-
-CI Docker build:
-
-> “Can this image build successfully?”
-
-Delivery Docker build:
-
-> “Produce the artifact we actually publish.”
-
-CD checkout exact tested commit.
-
-Jadi:
-
-~~~text
-tested revision
-=
-published revision
-~~~
-
-Ini lineage.
+Think of it as warehouse untuk container images.
 
 ---
 
-## Image naming
+# Kenapa build image lagi setelah CI?
 
-Project punya separate image:
+CI build menjawab:
+
+> “Image ini bisa dibuild nggak?”
+
+Delivery build menjawab:
+
+> “Buat artifact yang benar-benar akan kita publish.”
+
+Yang penting kedua proses refer ke same source revision.
+
+---
+
+# Image per service
+
+Kita publish separate image:
 
 ~~~text
 ...-api
@@ -64,118 +65,94 @@ Project punya separate image:
 ...-airflow
 ~~~
 
-Kenapa separate?
+Kenapa?
 
-Karena service responsibility beda.
+Karena service punya responsibility dan runtime lifecycle berbeda.
 
-Deployment target nanti bisa scale/update independently.
+Di deployment target nanti, API bisa di-update tanpa harus replace Airflow worker misalnya.
 
 ---
 
-## Tag latest
+# Tag
 
-Convenient:
+Image tanpa meaningful tag sulit ditrace.
+
+Kita punya:
 
 ~~~text
 latest
+sha-<commit>
 ~~~
 
-Tapi pointer bergerak.
+### latest
 
-Hari ini latest = A.
+Convenience pointer.
 
-Besok latest = B.
+### sha
 
-Useful buat casual pull, kurang ideal buat exact audit.
+Exact revision identity.
+
+Kalau mau deterministic deployment/rollback, SHA jauh lebih kuat.
 
 ---
 
-## SHA tag
+# Digest
+
+Selain tag, container registry juga punya content digest.
+
+Digest merepresentasikan actual image content.
+
+Dalam production serious, digest pinning bisa memberi immutability lebih kuat.
+
+Workshop cukup fokus ke SHA tag sebagai bridge Git lineage.
+
+---
+
+# Rollback
+
+Suppose release baru API punya bug.
+
+Kalau deployment platform menyimpan old SHA:
 
 ~~~text
-sha-abc123
+sha-new
+↓ problem
+sha-old
+↓ redeploy
 ~~~
 
-Represent exact Git revision.
+Itu application rollback.
 
-Kalau incident:
-
-> “Image mana yang running?”
-
-SHA tag lebih informative.
+Ingat, beda dengan model rollback.
 
 ---
 
-## Rollback application
+# Kenapa belum auto deploy?
 
-Suppose image latest broken.
+Karena deployment membutuhkan target nyata.
 
-Deployment platform bisa pin previous SHA.
+Pertanyaan production deployment biasanya:
 
-Ini application rollback.
+- server mana?
+- credentials bagaimana?
+- health rollout bagaimana?
+- rollback bagaimana?
+- network policy?
+- secrets?
+- domain/TLS?
+- scale?
 
-Jangan confuse dengan model rollback.
+Kalau kita belum punya environment real, menulis command deploy palsu tidak menambah learning yang meaningful.
 
-### Application rollback
-
-Docker image version.
-
-### Model rollback
-
-MLflow champion version.
-
-MLOps punya dua version dimensions.
-
----
-
-## Kenapa workshop berhenti di GHCR?
-
-Karena kita belum define real target production environment.
-
-Kalau kita tambahin:
-
-~~~text
-ssh fake-server
-kubectl apply
-~~~
-
-tanpa environment real, itu theater.
-
-Better teaching:
-
-> Continuous Delivery selesai saat verified artifact siap di registry.
-
-Nanti extension bisa deploy ke:
-
-- VM,
-- Cloud Run,
-- ECS,
-- Kubernetes.
+Workshop berhenti saat artifact sudah siap.
 
 ---
 
-## Artifact immutability
+# Checkpoint
 
-Idealnya published artifact tidak dimodifikasi diam-diam.
-
-Kalau code berubah:
-
-~~~text
-new commit
-→ new image
-→ new tag/digest
-~~~
-
-Bukan edit container running manual.
-
-Ini infrastructure hygiene.
-
----
-
-## Checkpoint
-
-1. Kenapa deployment artifact perlu?
-2. CI build dan delivery build beda tujuan apa?
-3. latest dan SHA tag tradeoff?
-4. Application rollback beda apa dengan model rollback?
-5. Kenapa workshop nggak fake auto-deploy?
+1. Kenapa kita butuh delivery artifact?
+2. Kenapa published revision harus sama dengan tested revision?
+3. Kenapa image service dipisah?
+4. latest vs SHA?
+5. Application rollback beda apa dengan model rollback?
+6. Kenapa workshop berhenti di GHCR?
