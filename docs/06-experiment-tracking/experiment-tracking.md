@@ -1,83 +1,197 @@
-# MLflow Experiment Tracking
+# MLflow Tracking — Experiment Notebook yang Nggak Mengandalkan Ingatan
 
-## The problem
+## Satu run masih gampang
 
-A few experiments are easy to remember.
-
-Twenty experiments are not.
-
-Imagine notes like:
+Misalnya:
 
 ~~~text
-model A maybe lr .05?
-dataset new?
-MAE 11-ish
+Run 1
+MAE = 10.8
 ~~~
 
-That is not reproducible experiment history.
+Besok:
 
-MLflow Tracking gives each run structured metadata.
+~~~text
+Run 2
+learning_rate = 0.05
+MAE = 10.2
+~~~
 
-## Analogy: laboratory notebook
+Lusa:
 
-A scientist records:
+~~~text
+Run 3
+max_iter changed
+MAE = 10.4
+~~~
 
-- experiment conditions,
-- measurement,
+Setelah 20 run:
+
+> “Yang 10.2 itu snapshot apa ya?”
+
+> “Param-nya apa?”
+
+> “Model artifact-nya yang mana?”
+
+Inilah pain yang MLflow Tracking solve.
+
+---
+
+# MLflow Tracking itu apa?
+
+Satu experiment execution dicatat sebagai **run**.
+
+Run bisa punya:
+
+~~~text
+parameters
+metrics
+tags
+artifacts
+dataset metadata
+run ID
+~~~
+
+Jadi terminal output berubah menjadi structured experiment record.
+
+---
+
+# Analogi: laboratory notebook
+
+Researcher tidak hanya menulis:
+
+~~~text
+result bagus
+~~~
+
+Dia catat:
+
 - sample,
+- setup,
+- condition,
+- measurement,
 - result.
 
-MLflow does the same for ML experiments.
+MLflow kurang lebih seperti lab notebook untuk ML experiments.
 
-## Start MLflow
+---
+
+# Start MLflow
 
 ~~~bash
 uv run python scripts/start_mlflow.py
 ~~~
 
-Open:
+UI:
 
 ~~~text
 http://127.0.0.1:5000
 ~~~
 
-The helper stores local MLflow metadata and artifacts under `.mlflow/`. Docker Compose later mounts the same directory, so the workshop can move from local mode to container mode without starting from an empty registry.
+Workshop helper menyimpan state ke:
 
-## Run tracked training
-
-~~~bash
-uv run python scripts/train_with_mlflow.py
+~~~text
+.mlflow/
 ~~~
 
-Two runs are logged:
+Folder ini juga dipakai Compose nanti.
+
+Jadi local experiment history dan Registry state tetap nyambung.
+
+---
+
+# Tracking URI
+
+Training code perlu tahu server address.
+
+Lokal:
+
+~~~text
+http://127.0.0.1:5000
+~~~
+
+Dalam Docker:
+
+~~~text
+http://mlflow:5000
+~~~
+
+Same service concept.
+
+Different network perspective.
+
+---
+
+# Experiment
+
+MLflow experiment adalah grouping run.
+
+Project kita punya experiment taxi demand forecasting.
+
+Di dalamnya ada baseline run dan model runs.
+
+---
+
+# Run
+
+Satu training execution = satu run.
+
+Kita log dua run initial:
 
 ~~~text
 naive-24h
 hist-gradient-boosting
 ~~~
 
-## What is stored?
+Kenapa baseline dilog juga?
 
-Parameters:
+Karena comparison context harus persisted.
+
+Kalau hanya model utama yang tersimpan, evidence “kenapa model ini worth it” hilang.
+
+---
+
+# Parameters
+
+Parameter = configuration/input.
+
+Contoh:
 
 ~~~text
-model_type
 learning_rate
 max_iter
+model_type
 dataset_snapshot
-dataset_sha256
 train_rows
 validation_rows
 ~~~
 
-Metrics:
+Pertanyaan yang dijawab:
+
+> Experiment dijalankan dengan setting apa?
+
+---
+
+# Metrics
+
+Metric = measured output.
 
 ~~~text
 mae
 rmse
 ~~~
 
-Tags:
+Pertanyaan:
+
+> Hasilnya bagaimana?
+
+---
+
+# Tags
+
+Tag = descriptive context.
+
+Contoh:
 
 ~~~text
 task
@@ -85,72 +199,175 @@ model_family
 stage
 ~~~
 
-Model artifact:
+Useful buat search/filter.
+
+---
+
+# Artifacts
+
+Model juga dilog sebagai MLflow artifact.
+
+Ini lebih structured daripada random file:
 
 ~~~text
-MLflow sklearn model
+model_final_bener.joblib
 ~~~
 
-## Parameter vs metric
+Artifact linked ke run.
 
-Useful distinction:
+---
 
-~~~text
-parameter
-→ input / configuration
+# Run ID
 
-metric
-→ measured result
-~~~
+Setiap run punya unique ID.
 
-Example:
+Nanti Registry model version reference source run.
+
+Chain:
 
 ~~~text
-learning_rate
-→ parameter
-
-mae
-→ metric
-~~~
-
-## Run ID
-
-Each experiment run gets a unique ID.
-
-That ID becomes important for model lineage.
-
-A registered model version can point back to the exact run that produced it.
-
-## Dataset fingerprint
-
-We log SHA256 and snapshot metadata so the run records its training data identity.
-
-This connects:
-
-~~~text
-DVC/data snapshot
+model version
 ↓
-MLflow run
+run ID
 ↓
-model artifact
+metrics
+params
+artifact
+dataset fingerprint
 ~~~
 
-## Why track baseline too?
+---
 
-Because experiment tracking should preserve the comparison context.
+# Dataset fingerprint
 
-If only the fancy model is logged, we lose the evidence that justified using it.
+Snapshot kita calculate SHA256.
 
-## What to explore in the UI
+Logged metadata:
 
-Open a run and find:
+~~~text
+dataset_snapshot
+dataset_sha256
+dataset_rows
+dataset_zones
+~~~
 
-- Parameters,
-- Metrics,
-- Tags,
-- Artifacts,
-- model signature / input example.
+Kenapa hash penting?
 
-Then compare runs side by side.
+Filename alone nggak guarantee content sama.
 
-That UI exploration is part of the workshop, not decoration.
+Hash membantu identify content.
+
+---
+
+# Run tracked training
+
+~~~bash
+uv run python scripts/train_with_mlflow.py
+~~~
+
+Expected:
+
+~~~text
+baseline run
+model run
+metric comparison
+~~~
+
+---
+
+# Explore UI
+
+Jangan cuma lihat table summary.
+
+Open run.
+
+Cari:
+
+### Parameters
+
+Model setting.
+
+### Metrics
+
+MAE/RMSE.
+
+### Tags
+
+Stage.
+
+### Artifacts
+
+Saved model.
+
+### Run ID
+
+Lineage reference.
+
+---
+
+# Compare runs
+
+MLflow UI bisa compare side-by-side.
+
+Misalnya:
+
+~~~text
+Run A
+MAE 10.8
+
+Run B
+MAE 10.2
+
+Run C
+MAE 10.5
+~~~
+
+Sekarang param difference lebih gampang dilihat.
+
+---
+
+# MLflow Tracking vs Registry
+
+Jangan campur.
+
+~~~text
+Tracking
+→ what experiments happened?
+
+Registry
+→ which model versions are managed candidates?
+~~~
+
+Most runs mungkin never masuk Registry.
+
+Itu normal.
+
+---
+
+# MLflow vs DVC
+
+Juga beda.
+
+~~~text
+DVC
+→ reproduce data artifact state
+
+MLflow
+→ record experiment context + result
+~~~
+
+Mereka complement.
+
+---
+
+# Workshop takeaway
+
+Sebelum MLflow:
+
+> “Kayaknya run kemarin paling bagus.”
+
+Setelah MLflow:
+
+> “Run abc memakai snapshot SHA xyz, learning_rate 0.05, validation MAE 10.2, dan artifact model ini.”
+
+Much better.
