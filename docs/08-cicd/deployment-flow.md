@@ -1,158 +1,613 @@
-# Container Delivery — Dari Source Code ke Artifact yang Siap Dipakai
+# Container Delivery — Dari Source Code Sampai Artifact yang Bisa Dipull
 
-Setelah CI green, source code sudah verified.
+CI kita sudah menjawab:
 
-Tapi production/deployment platform biasanya tidak ideal kalau harus:
+> “Revision ini lolos quality checks dan image bisa dibuild.”
+
+Tapi deployment target tidak ideal kalau setiap release harus:
 
 ~~~text
 git clone
-install dependency
-build random state
-start app
+install uv
+sync dependencies
+build source
+guess environment
+start process
 ~~~
 
-langsung di target environment.
+langsung di server.
 
-Kita ingin satu artifact yang sudah dibangun dan bisa dipull.
+Kita ingin satu **built artifact** yang sudah punya runtime package jelas.
 
-Project kita pakai Docker image sebagai delivery artifact.
+Untuk application kita, artifact itu Docker image.
 
 ---
 
-# Flow
+# Analogi: source recipe vs packaged product
+
+Git repository seperti resep + bahan desain.
+
+Container image seperti product yang sudah dipack.
+
+Deployment platform seharusnya menerima:
 
 ~~~text
-main commit
+artifact exact
+~~~
+
+bukan mengulang build process secara improvisasi.
+
+Ini membantu consistency antara environments.
+
+---
+
+# Full delivery flow
+
+~~~text
+develop
+↓ PR
+main
 ↓
-CI success
-↓
+CI
+↓ success
 Container Delivery
 ↓
-build exact revision
+checkout exact tested commit
 ↓
-tag image
+build service image
+↓
+tag
 ↓
 push GHCR
 ~~~
 
 GHCR = GitHub Container Registry.
 
-Think of it as warehouse untuk container images.
+Anggap sebagai warehouse image.
 
 ---
 
-# Kenapa build image lagi setelah CI?
+# Kenapa delivery hanya dari main?
 
-CI build menjawab:
+Branch lain masih development/integration.
 
-> “Image ini bisa dibuild nggak?”
+Kalau setiap feature push publish latest production-ish image:
 
-Delivery build menjawab:
+~~~text
+feat/a
+feat/b
+docs/c
+~~~
 
-> “Buat artifact yang benar-benar akan kita publish.”
+registry jadi noisy dan release semantics tidak jelas.
 
-Yang penting kedua proses refer ke same source revision.
+Main merepresentasikan stable release branch.
+
+Jadi delivery condition:
+
+~~~text
+CI success
+AND
+branch main
+AND
+push event
+~~~
+
+---
+
+# Kenapa PR tidak publish image?
+
+Pull request code belum merged.
+
+Dia candidate change.
+
+CI boleh build ephemeral image untuk verify.
+
+Tapi publish release artifact sebaiknya setelah stable integration.
+
+Separation:
+
+~~~text
+PR
+→ verify
+
+main
+→ deliver
+~~~
+
+---
+
+# Exact tested commit
+
+Ini critical.
+
+Wrong flow:
+
+~~~text
+CI tests commit A
+↓
+main advances to commit B
+↓
+CD builds latest HEAD B
+~~~
+
+Sekarang:
+
+~~~text
+tested revision
+≠
+published revision
+~~~
+
+Bad lineage.
+
+Correct:
+
+~~~text
+CI passes commit A
+↓
+workflow gives commit SHA A
+↓
+CD checkout A
+↓
+build A
+↓
+publish A
+~~~
+
+Jadi evidence CI match artifact.
+
+---
+
+# Kenapa build lagi di delivery?
+
+CI image build bisa hanya validation:
+
+> “Dockerfile target ini buildable.”
+
+Delivery build produce image yang benar-benar dikirim registry.
+
+Kita bisa optimize dengan shared cache, but semantic purpose beda.
+
+Potential advanced pattern:
+
+- build once;
+- sign/promote same artifact;
+- avoid duplicate build.
+
+Workshop keep workflow understandable.
 
 ---
 
 # Image per service
 
-Kita publish separate image:
+Project punya:
 
 ~~~text
-...-api
-...-mlflow
-...-airflow
+api
+mlflow
+airflow
 ~~~
 
-Kenapa?
+Kenapa tidak satu mega image?
 
-Karena service punya responsibility dan runtime lifecycle berbeda.
+Service punya:
 
-Di deployment target nanti, API bisa di-update tanpa harus replace Airflow worker misalnya.
+- dependency profile beda;
+- startup command beda;
+- release lifecycle beda;
+- scaling need beda.
+
+API code change mungkin tidak perlu roll Airflow.
+
+Separate image memberi deployment flexibility.
 
 ---
 
-# Tag
+# Image naming
 
-Image tanpa meaningful tag sulit ditrace.
+Pattern:
 
-Kita punya:
+~~~text
+ghcr.io/<owner>/bcc-workshop-mlops-api
+ghcr.io/<owner>/bcc-workshop-mlops-mlflow
+ghcr.io/<owner>/bcc-workshop-mlops-airflow
+~~~
+
+Name harus identify service.
+
+Kalau semua bernama:
+
+~~~text
+mlops:latest
+~~~
+
+kita kehilangan clarity.
+
+---
+
+# Tag latest
 
 ~~~text
 latest
-sha-<commit>
 ~~~
 
-### latest
+Useful buat convenience.
 
-Convenience pointer.
+Contoh local:
 
-### sha
+~~~text
+docker pull ...:latest
+~~~
 
-Exact revision identity.
+Tapi latest mutable.
 
-Kalau mau deterministic deployment/rollback, SHA jauh lebih kuat.
+Hari ini pointing A.
 
----
+Besok B.
 
-# Digest
-
-Selain tag, container registry juga punya content digest.
-
-Digest merepresentasikan actual image content.
-
-Dalam production serious, digest pinning bisa memberi immutability lebih kuat.
-
-Workshop cukup fokus ke SHA tag sebagai bridge Git lineage.
+Jadi latest bukan identity immutable.
 
 ---
 
-# Rollback
+# Tag SHA
 
-Suppose release baru API punya bug.
+~~~text
+sha-a1b2c3...
+~~~
 
-Kalau deployment platform menyimpan old SHA:
+Bridge ke Git commit.
+
+Kalau incident:
+
+> “Image production dibangun dari source mana?”
+
+Tag memberi clue direct.
+
+Ini software lineage.
+
+---
+
+# Tag vs digest
+
+Tag adalah human-friendly pointer/name.
+
+Digest adalah content-addressed identity image.
+
+Tag bisa berpindah.
+
+Digest immutable untuk exact image content.
+
+Production high-assurance deployment kadang pin digest.
+
+Workshop fokus SHA tag karena gampang connect source history.
+
+---
+
+# Registry permissions
+
+CD perlu push package.
+
+GitHub Actions menggunakan scoped permission.
+
+Rule:
+
+> Jangan hard-code personal Docker/GitHub password ke workflow.
+
+Credential management adalah part delivery security.
+
+---
+
+# Public vs private package
+
+Container registry package visibility bisa public/private tergantung repo/org setup.
+
+Kalau deployment target external perlu pull private image, dia butuh auth.
+
+Workshop tidak deep ke IAM, tapi participant perlu tahu:
+
+> “Image ada di registry” tidak otomatis berarti semua machine boleh pull.
+
+---
+
+# Delivery vs Deployment
+
+Ini distinction utama.
+
+### Delivery
+
+~~~text
+artifact built
+↓
+published
+↓
+ready to deploy
+~~~
+
+### Deployment
+
+~~~text
+artifact selected
+↓
+placed into target environment
+↓
+service started/rolled out
+↓
+health verified
+~~~
+
+Workshop selesai di Delivery.
+
+---
+
+# Kenapa tidak fake deployment?
+
+Karena target deployment nyata butuh decision:
+
+- VM atau cloud service?
+- networking?
+- TLS?
+- secret?
+- scaling?
+- health rollout?
+- zero downtime?
+- rollback?
+- observability?
+- cost?
+
+Kalau kita cuma tambah:
+
+~~~bash
+ssh server
+docker pull latest
+docker run ...
+~~~
+
+tanpa actual environment, peserta bisa mendapat false impression deployment sesederhana itu.
+
+Lebih baik boundary jujur.
+
+---
+
+# Kalau nanti deploy ke VPS?
+
+Possible future:
+
+~~~text
+GHCR image SHA
+↓
+server authenticate registry
+↓
+pull exact SHA tag
+↓
+run container
+↓
+health check
+↓
+reverse proxy/TLS
+~~~
+
+Masih perlu secret/network/rollback design.
+
+---
+
+# Kalau deploy ke Kubernetes?
+
+Flow concept sama:
+
+~~~text
+GHCR image
+↓
+Deployment manifest
+↓
+cluster pulls
+↓
+pods roll
+↓
+readiness check
+↓
+traffic
+~~~
+
+Tool beda.
+
+Artifact lineage tetap penting.
+
+---
+
+# Application rollback
+
+Suppose new API image bug.
+
+Current:
 
 ~~~text
 sha-new
-↓ problem
-sha-old
-↓ redeploy
 ~~~
 
-Itu application rollback.
+Previous good:
 
-Ingat, beda dengan model rollback.
+~~~text
+sha-old
+~~~
+
+Rollback:
+
+~~~text
+deployment target
+↓
+select sha-old
+↓
+restart/rollout
+~~~
+
+No need rebuild old source.
+
+Registry sudah punya artifact.
 
 ---
 
-# Kenapa belum auto deploy?
+# Model rollback beda
 
-Karena deployment membutuhkan target nyata.
+Suppose application image sehat, tapi champion model v5 jelek.
 
-Pertanyaan production deployment biasanya:
+Tidak perlu rollback Docker image.
 
-- server mana?
-- credentials bagaimana?
-- health rollout bagaimana?
-- rollback bagaimana?
-- network policy?
-- secrets?
-- domain/TLS?
-- scale?
+Kita bisa:
 
-Kalau kita belum punya environment real, menulis command deploy palsu tidak menambah learning yang meaningful.
+~~~text
+champion alias
+v5 → v3
+~~~
 
-Workshop berhenti saat artifact sudah siap.
+Jadi MLOps punya dua rollback dimensions:
+
+~~~text
+application artifact
+model artifact
+~~~
+
+Diagnosis harus menentukan layer.
+
+---
+
+# Example incident reasoning
+
+### Incident A
+
+~~~text
+HTTP endpoint crashes after code change
+model unchanged
+~~~
+
+Likely application rollback.
+
+### Incident B
+
+~~~text
+API healthy
+latency normal
+recent MAE spikes after model promotion
+~~~
+
+Likely model rollback/investigation.
+
+### Incident C
+
+~~~text
+new image + new champion released together
+system bad
+~~~
+
+More complex.
+
+This is why changing too many dimensions simultaneously makes diagnosis harder.
+
+---
+
+# Release coupling
+
+Mature system kadang decouple app release dan model release.
+
+Project kita sudah menunjukkan pattern itu:
+
+~~~text
+Docker image version
+independent from
+MLflow champion alias
+~~~
+
+Benefit:
+
+- model can promote without rebuilding API;
+- API bugfix can deploy without retraining model.
+
+Loose coupling.
+
+---
+
+# Artifact retention
+
+Kalau registry hanya menyimpan latest dan menghapus semua old SHA, rollback capability hilang.
+
+Production retention policy harus balance:
+
+- storage cost;
+- rollback need;
+- compliance;
+- audit history.
+
+Workshop registry kecil, tapi concept worth knowing.
+
+---
+
+# Image vulnerability/security
+
+Built artifact juga perlu security.
+
+Future CI bisa tambah:
+
+- image scanning;
+- SBOM;
+- signing;
+- provenance;
+- dependency vulnerability check.
+
+MLOps delivery tetap software supply-chain problem.
+
+Workshop belum implement semua, tapi architecture bisa berkembang ke sana.
+
+---
+
+# Delivery evidence
+
+Idealnya kita bisa trace:
+
+~~~text
+GHCR image
+↓
+tag SHA
+↓
+Git commit
+↓
+CI run
+↓
+tests/build result
+~~~
+
+Ini software artifact lineage.
+
+Compare model lineage:
+
+~~~text
+champion
+↓
+model version
+↓
+MLflow run
+↓
+snapshot fingerprint
+~~~
+
+Dua lineage chain berjalan berdampingan.
 
 ---
 
 # Checkpoint
 
-1. Kenapa kita butuh delivery artifact?
-2. Kenapa published revision harus sama dengan tested revision?
-3. Kenapa image service dipisah?
-4. latest vs SHA?
-5. Application rollback beda apa dengan model rollback?
-6. Kenapa workshop berhenti di GHCR?
+1. Kenapa deployment target sebaiknya pull built artifact, bukan build improvisasi?
+2. Kenapa delivery hanya setelah main + CI?
+3. PR image build dan release image publishing beda purpose apa?
+4. Kenapa exact tested commit harus dipublish?
+5. Kenapa service image dipisah?
+6. latest dan SHA tag beda semantics?
+7. tag dan digest beda apa?
+8. Delivery vs Deployment?
+9. Kenapa workshop tidak fake auto-deploy?
+10. Application rollback vs model rollback?
+11. Kenapa app release dan model promotion bagusnya loosely coupled?
+12. Artifact retention relate ke rollback bagaimana?
+13. Future security checks apa yang bisa ditambah?
+14. Software lineage chain dan model lineage chain beda apa?
+
+Kalau ini clear, GHCR bukan lagi sekadar “tempat upload Docker image”, tapi bagian dari traceable software delivery lifecycle.
