@@ -1,27 +1,32 @@
-# Step 6 — FastAPI: Sekarang Model Kita Harus Bisa Dipakai System Lain
+# Step 6 — FastAPI: Dari Champion di Registry Jadi Prediction yang Bisa Dipanggil Lewat HTTP
 
-Sampai sini model sudah punya champion di Registry.
+Sekarang kita punya champion model di MLflow Registry.
 
-Tapi kalau mau dipakai application lain, kita butuh stable interface.
+Kalau model cuma hidup di Registry, application lain belum bisa pakai.
 
-Sekarang kita bikin model “keluar dari notebook” dan bisa di-request lewat HTTP.
+Kita butuh serving interface.
+
+Di step ini kita akan start FastAPI, inspect endpoint, kirim prediction, dan trace apa yang terjadi dari request sampai model response.
 
 ---
 
 ## Goal
 
-Setelah step ini:
+Setelah selesai kalian harus bisa:
 
-- MLflow champion tersedia,
-- FastAPI hidup,
-- health endpoint works,
-- model-info menunjukkan champion,
-- prediction request berhasil,
-- kalian ngerti behind-the-scenes online feature construction.
+- explain health vs model readiness;
+- inspect /model-info;
+- send /predict;
+- understand 422 vs 503;
+- understand online feature construction;
+- understand champion alias resolution;
+- verify prediction logging;
+- inspect /metrics;
+- explain dependency injection/testing concept.
 
 ---
 
-## 1. Pastikan MLflow jalan
+# 1. Pastikan MLflow hidup
 
 Kalau local server sudah stop:
 
@@ -35,35 +40,50 @@ Open:
 http://127.0.0.1:5000
 ~~~
 
-Check champion alias.
-
 ---
 
-## 2. Pertanyaan sebelum start API
+# 2. Pastikan champion alias ada
 
-Kalau champion alias belum ada, menurut kalian /health harus fail nggak?
-
-Think.
-
-Answer project kita:
+Model Registry harus punya:
 
 ~~~text
-/health
-→ tetap bisa 200
-
-/model-info
-→ 503
+champion
+→ version X
 ~~~
 
-Kenapa?
+Kalau belum:
 
-Karena FastAPI process hidup, tapi model dependency belum ready.
+~~~bash
+uv run python scripts/promote_model.py --version <VERSION>
+~~~
 
-Signal dipisah.
+Question:
+
+> “Kalau champion nggak ada, apakah FastAPI tahu model mana yang approved?”
+
+No.
 
 ---
 
-## 3. Start API
+# 3. Pastikan historical demand cukup
+
+Untuk target Jan 28 18:00, online feature provider perlu up to 168h history.
+
+Jadi processed demand previous days harus exist.
+
+Check:
+
+~~~text
+data/processed/demand/
+~~~
+
+Kalau history incomplete, prediction seharusnya fail clearly.
+
+---
+
+# 4. Start FastAPI
+
+New terminal:
 
 ~~~bash
 uv run uvicorn api.main:app --reload
@@ -75,33 +95,81 @@ Open:
 http://127.0.0.1:8000/docs
 ~~~
 
-Swagger UI akan jadi playground kita.
+Ini Swagger UI.
 
 ---
 
-## 4. GET /health
+# 5. Sebelum click, lihat endpoint list
 
-Click endpoint.
+Expected:
 
-Try it out.
+~~~text
+GET /health
+GET /model-info
+POST /predict
+~~~
+
+Operational hidden endpoint:
+
+~~~text
+GET /metrics
+~~~
+
+Why hidden?
+
+Karena /metrics bukan business API participant/client utama.
+
+---
+
+# 6. Test /health
+
+Swagger atau curl:
+
+~~~bash
+curl http://127.0.0.1:8000/health
+~~~
 
 Expected:
 
 ~~~json
-{
-  "status": "ok"
-}
+{"status":"ok"}
 ~~~
 
-Ini health process, bukan full system certification.
+Interpretasi:
+
+> FastAPI process alive.
+
+Bukan:
+
+> model definitely ready.
 
 ---
 
-## 5. GET /model-info
+# 7. Kenapa health tidak load champion?
 
-Try.
+Kalau /health tergantung MLflow:
 
-Expected fields:
+~~~text
+MLflow down
+↓
+health red
+~~~
+
+Kita tidak tahu apakah API process mati atau dependency down.
+
+Simple health signal membantu isolate layer.
+
+Readiness probe production bisa dibuat lebih comprehensive separately.
+
+---
+
+# 8. Test /model-info
+
+~~~bash
+curl http://127.0.0.1:8000/model-info
+~~~
+
+Response include:
 
 ~~~text
 model_name
@@ -111,21 +179,13 @@ run_id
 model_uri
 ~~~
 
-Pause.
+Coba compare model_version dengan Registry UI.
 
-Tanya ke audience:
-
-> “Kenapa run_id ikut dikembalikan? User butuh?”
-
-End user mungkin nggak.
-
-Tapi operational/debugging lineage useful.
-
-Kalau prediction aneh, kita bisa trace model source run.
+Harus match champion alias.
 
 ---
 
-## 6. POST /predict
+# 9. Prediction request — sebelum send, predict internal flow
 
 Request:
 
@@ -136,53 +196,88 @@ Request:
 }
 ~~~
 
-Before click Execute, coba tebak:
+Sebelum Try it out, coba sebutkan internal steps.
 
-> “Apakah API langsung pass dua field ini ke model?”
-
-No.
-
-Model butuh lags/rolling.
-
-Service harus build feature.
-
----
-
-## 7. Behind the scenes
+Expected:
 
 ~~~text
-zone + target time
+validate schema
 ↓
-load historical demand
+build online features from history
 ↓
-verify 168h history
+resolve champion
 ↓
-build calendar feature
-↓
-build lag
-↓
-build rolling
-↓
-load champion
+load/reuse model
 ↓
 predict
 ↓
+clip negative if needed
+↓
 log prediction
 ↓
-record metric
+observe Prometheus metric
 ↓
-response
+return response
 ~~~
 
-Ini jauh lebih banyak daripada model.predict.
-
-Serving layer adalah real application logic.
+Baru send.
 
 ---
 
-## 8. Try invalid time
+# 10. Inspect response
 
-Request:
+Jangan cuma lihat:
+
+~~~text
+predicted_trip_count
+~~~
+
+Lihat juga:
+
+~~~text
+model_version
+model_alias
+run_id
+model_uri
+~~~
+
+Kenapa?
+
+Prediction lineage.
+
+Kalau output aneh, kita tahu model mana yang produce.
+
+---
+
+# 11. Kenapa client tidak kirim lag feature?
+
+Kalau request harus kirim:
+
+~~~text
+lag_1h
+lag_24h
+rolling_mean_3h
+...
+~~~
+
+client harus ngerti feature engineering.
+
+Bad coupling.
+
+Dengan:
+
+~~~text
+zone_id
+target_datetime
+~~~
+
+serving layer menjaga feature semantics.
+
+---
+
+# 12. Test invalid target time
+
+Try:
 
 ~~~json
 {
@@ -191,83 +286,304 @@ Request:
 }
 ~~~
 
-Expected 422.
+Expected validation failure / 422.
 
 Kenapa?
 
-Model granularity hourly.
+Model contract hourly.
 
-18:30 nggak match contract.
-
-Validation fail early.
+18:30 bukan exact target hour.
 
 ---
 
-## 9. Check prediction log
+# 13. Apa arti 422?
 
-Setelah successful prediction:
+Roughly:
+
+> Request structure diterima, tapi input tidak valid untuk domain/schema prediction.
+
+Contoh:
+
+- invalid zone;
+- target minute bukan 00;
+- historical feature unavailable.
+
+Bukan server crash.
+
+---
+
+# 14. Simulate champion missing conceptually
+
+Kalau champion alias tidak ada, /model-info atau /predict bisa return 503.
+
+Apa arti 503?
+
+> Service process alive, dependency model temporarily unavailable/not ready.
+
+Ini beda dari 422.
+
+---
+
+# 15. 422 vs 503 thought exercise
+
+### Request target 18:30
+
+~~~text
+422
+~~~
+
+Client/input problem.
+
+### MLflow unreachable
+
+~~~text
+503
+~~~
+
+Service dependency problem.
+
+Different action.
+
+---
+
+# 16. Model loader cache
+
+First request mungkin load champion model.
+
+Next requests reuse cache.
+
+Kenapa?
+
+Model load lebih mahal daripada predict.
+
+Loader periodically refresh Registry metadata.
+
+Jadi:
+
+~~~text
+cache fast
++
+still detects champion update
+~~~
+
+Tradeoff freshness vs overhead.
+
+---
+
+# 17. Prediction log
+
+Setelah successful request, inspect:
 
 ~~~text
 data/monitoring/predictions.jsonl
 ~~~
 
-Open last line.
+Optional:
 
-Cari:
+~~~bash
+tail -n 5 data/monitoring/predictions.jsonl
+~~~
 
-- zone,
-- target,
-- prediction,
-- version,
-- run ID.
+Cari request kalian.
 
-Ini akan dipakai Step 9.
+Fields:
+
+~~~text
+target_datetime
+zone_id
+predicted_trip_count
+model_version
+run_id
+logged_at
+~~~
+
+Prediction event sekarang siap untuk delayed evaluation nanti.
 
 ---
 
-## 10. Try /metrics
+# 18. Kenapa log setelah successful predict?
 
-Open:
+Kalau request invalid dan tidak ada prediction, jangan tulis fake prediction event.
+
+Monitoring hanya evaluate actual inference yang terjadi.
+
+Event semantics harus clear.
+
+---
+
+# 19. Negative output domain constraint
+
+Regression theoretically bisa predict negative.
+
+Serving result clip minimum zero.
+
+Question:
+
+> “Kenapa bukan model training saja yang guarantee?”
+
+Model mathematical output space continuous.
+
+Domain knows count cannot negative.
+
+Post-processing boundary enforce valid business output.
+
+---
+
+# 20. Open /metrics
 
 ~~~text
 http://127.0.0.1:8000/metrics
 ~~~
 
-Raw text kelihatan messy.
-
-Itu normal.
-
-Prometheus nanti baca.
-
-Coba search:
+Cari:
 
 ~~~text
 taxi_api_requests_total
+taxi_predictions_total
+taxi_model_version_info
 ~~~
 
-Kalian sudah mulai lihat operational telemetry.
+Sekarang kalian sudah mulai melihat connection FastAPI → Prometheus.
 
 ---
 
-## Mini challenge
+# 21. Request middleware
 
-Kalau model champion berubah dari v1 ke v2, apakah API source code perlu edit?
+Setiap HTTP request lewat middleware.
 
-No.
+Concept:
 
-Loader resolve champion.
+~~~text
+start timer
+↓
+endpoint
+↓
+response
+↓
+record duration
+↓
+increment request counter
+~~~
 
-Kalau API restart, dia load current champion.
-
-Saat running, loader juga periodically refresh metadata.
+Kalau endpoint fail pun status code metric tetap useful.
 
 ---
 
-## Checkpoint
+# 22. Test multiple requests
 
-1. Kenapa health tidak check semua dependency?
-2. Model-info useful buat apa?
-3. Kenapa client tidak kirim lag features?
-4. 422 vs 503 bedanya?
-5. Prediction log dipakai untuk apa?
-6. Kenapa metrics endpoint raw text?
+Send beberapa prediction.
+
+Lihat /metrics lagi.
+
+Counter harus naik.
+
+Ini good prelude sebelum Step 9 monitoring.
+
+---
+
+# 23. Swagger vs curl
+
+Swagger good buat learning.
+
+curl good buat automation/simple CLI.
+
+API contract sama.
+
+Tool client beda.
+
+Jangan confuse Swagger sebagai “FastAPI backend”. Swagger hanya interactive docs UI.
+
+---
+
+# 24. API testing architecture
+
+Project tests override predictor dependency.
+
+Kenapa?
+
+Supaya test endpoint tidak butuh real:
+
+- MLflow;
+- model;
+- Parquet history.
+
+Unit/API contract test fokus satu layer.
+
+Integration flow tetap dites lewat workshop stack.
+
+---
+
+# 25. Common error: /health works, /predict fails
+
+Jangan bilang API broken.
+
+Interpretation:
+
+~~~text
+HTTP process
+✅
+
+prediction dependency/path
+❌
+~~~
+
+Check:
+
+- champion;
+- history;
+- target;
+- MLflow;
+- model loading.
+
+Specific diagnosis.
+
+---
+
+# 26. Common error: model info version unexpected
+
+Check Registry alias.
+
+Maybe challenger baru registered tapi champion belum moved.
+
+Remember:
+
+~~~text
+challenger
+≠
+champion
+~~~
+
+API serve champion only.
+
+---
+
+# 27. Common error: history missing
+
+Online feature provider membaca processed daily demand files.
+
+Kalau lag_168h source date missing, request fail.
+
+Correct.
+
+Jangan silently fill zero, karena zero means actual no demand, bukan missing history.
+
+---
+
+# 28. Checkpoint
+
+1. /health menjawab apa?
+2. /model-info menjawab apa?
+3. /predict internal flow?
+4. Kenapa client tidak kirim lag features?
+5. 422 vs 503?
+6. Kenapa champion alias digunakan?
+7. Kenapa model di-cache?
+8. Prediction log dipakai kapan?
+9. Negative prediction diproses bagaimana?
+10. /metrics dipakai siapa?
+11. Middleware mencatat apa?
+12. Swagger role-nya apa?
+13. /health green tapi /predict fail artinya apa?
+14. Missing history kenapa tidak di-fill zero?
+
+Kalau clear, next kita package seluruh stack pakai Docker dan Compose.
