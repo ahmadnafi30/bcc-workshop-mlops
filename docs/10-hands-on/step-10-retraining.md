@@ -1,19 +1,21 @@
-# Step 10 — Monitoring-Driven Retraining
+# Step 10 — Retraining: Closing the Loop
 
-## Goal
+Kita sudah sampai final loop.
 
-Close the loop:
+Model sudah:
 
-~~~text
-monitor
-→ decide
-→ optional retrain
-→ challenger
-→ review
-→ promotion
-~~~
+- trained,
+- registered,
+- served,
+- monitored.
 
-## 1. Inspect summary
+Sekarang pertanyaan terakhir:
+
+> “Kalau performa memburuk, system ngapain?”
+
+---
+
+# 1. Inspect current summary
 
 Open:
 
@@ -21,7 +23,7 @@ Open:
 data/monitoring/performance_summary.json
 ~~~
 
-Important fields:
+Look at:
 
 ~~~text
 recent_mae
@@ -31,96 +33,276 @@ evaluation_count
 retrain_recommended
 ~~~
 
-## 2. Default decision
+---
+
+# 2. Understand decision before triggering DAG
+
+Default:
 
 ~~~text
-recent MAE > reference MAE × 1.25
-and
-evaluation_count >= 100
+threshold
+=
+reference MAE × 1.25
 ~~~
 
-If false, no retraining is the correct result.
-
-Automation should not manufacture work.
-
-## 3. Trigger monitoring DAG
-
-Open Airflow:
+dan:
 
 ~~~text
-http://localhost:8080
+minimum evaluation samples
+=
+100
 ~~~
 
-Trigger:
+Jadi condition:
+
+~~~text
+recent_mae > threshold_mae
+AND
+evaluation_count >= min_samples
+~~~
+
+---
+
+# 3. Healthy model is a valid outcome
+
+Kalau:
+
+~~~text
+retrain_recommended = false
+~~~
+
+jangan kecewa karena “demo retrain nggak jalan”.
+
+Justru itu correct decision.
+
+Automation shouldn’t create unnecessary work.
+
+---
+
+# 4. Open Airflow monitoring DAG
 
 ~~~text
 taxi_model_monitoring
 ~~~
 
-Default params:
+Graph:
 
 ~~~text
-degradation_multiplier = 1.25
-min_samples = 100
-recent_limit = 500
+evaluate_model
+      ↓
+maybe_retrain
 ~~~
 
-## 4. Healthy path
+Trigger.
+
+---
+
+# 5. Evaluate task
+
+Task akan:
+
+1. resolve champion from MLflow;
+2. get champion validation MAE;
+3. load prediction logs;
+4. join available actual demand;
+5. calculate recent metric;
+6. save summary.
+
+---
+
+# 6. maybe_retrain
+
+Kalau healthy:
 
 ~~~text
-evaluate
-   ↓
-within threshold
-   ↓
-not_needed
+status = not_needed
 ~~~
 
-That is a successful decision.
-
-## 5. Degraded path
+Kalau degraded:
 
 ~~~text
 latest evaluated date
-      ↓
+↓
 new training snapshot
-      ↓
-train
-      ↓
-latest five days validation
-      ↓
-MLflow
-      ↓
-beat baseline?
-      ↓
-challenger
+↓
+MLflow training
+↓
+latest 5-day validation
+↓
+candidate metric
+↓
+beat naive baseline?
+↓
+register challenger
 ~~~
 
-## 6. Inspect MLflow
+---
 
-If retraining ran, look for stage:
+# 7. Why latest five days?
+
+Retraining snapshot baru lebih panjang.
+
+Validation harus move.
+
+Misalnya snapshot sampai Feb 10.
+
+~~~text
+train:
+older history through Feb 5
+
+validation:
+Feb 6–10
+~~~
+
+Kalau validation tetap Jan 22–26 selamanya, kita nggak test recent behavior.
+
+---
+
+# 8. Inspect new MLflow run
+
+Kalau retrain terjadi, buka MLflow.
+
+Cari run dengan stage:
 
 ~~~text
 retraining-validation
 ~~~
 
-Compare dataset fingerprint and validation metrics with older runs.
+Compare dengan initial run.
 
-## 7. Inspect Registry
+Look at:
 
-The new candidate may become challenger.
+- dataset snapshot name,
+- dataset SHA,
+- MAE,
+- RMSE,
+- row count.
 
-Champion should not move automatically.
+---
 
-## 8. Review and promote
+# 9. Inspect Registry
 
-If the candidate is acceptable:
+Candidate baru bisa jadi:
 
-~~~bash
-uv run python scripts/promote_model.py --version <VERSION>
+~~~text
+challenger
 ~~~
 
-The serving layer asks for champion, so it can adopt the new approved version without hard-coding a number.
+Champion belum berubah.
 
-## Checkpoint
+---
 
-You should be able to explain why automatic retraining and automatic production promotion are separate governance decisions.
+# 10. Why no auto champion?
+
+Misalnya new model:
+
+~~~text
+beats naive baseline
+~~~
+
+tapi:
+
+~~~text
+still worse than current champion
+~~~
+
+Kalau auto-promote berdasarkan baseline saja, production could regress.
+
+Makanya promotion explicit.
+
+---
+
+# 11. Review before promotion
+
+Checklist:
+
+- candidate MAE?
+- candidate RMSE?
+- current champion validation?
+- production-like recent MAE?
+- newer snapshot?
+- run metadata valid?
+
+Kalau approved:
+
+~~~bash
+uv run python scripts/promote_model.py   --version <VERSION>
+~~~
+
+---
+
+# 12. Serving picks it up
+
+FastAPI loader periodically refresh Registry metadata.
+
+Setelah alias champion pindah:
+
+~~~text
+old version
+→
+new version
+~~~
+
+next refresh/load akan use new champion.
+
+No API source edit.
+
+---
+
+# Full loop
+
+Sekarang complete:
+
+~~~text
+data
+↓
+features
+↓
+snapshot
+↓
+train
+↓
+track
+↓
+register
+↓
+champion
+↓
+serve
+↓
+log
+↓
+ground truth
+↓
+monitor
+↓
+retrain
+↓
+challenger
+↓
+review
+↓
+champion
+~~~
+
+Inilah end-to-end MLOps story workshop kita.
+
+---
+
+# Final reflection
+
+Coba jawab tiga pertanyaan:
+
+### 1
+
+Kenapa retraining otomatis tapi promotion manual?
+
+### 2
+
+Kenapa recent MAE compare ke champion validation MAE?
+
+### 3
+
+Kenapa application load alias champion bukan version number?
+
+Kalau kalian bisa jawab dengan bahasa sendiri, lifecycle sudah benar-benar masuk.

@@ -1,78 +1,179 @@
-# Step 6 — FastAPI Serving
+# Step 6 — FastAPI: Making Our Champion Model Usable
 
-## Goal
+Sampai sini kita punya model di Registry.
 
-Use the champion model through HTTP instead of calling the Python model object directly.
+Sekarang kita pindah perspective.
 
-## 1. Start shared local MLflow
+Bukan lagi:
+
+> “Gimana Data Scientist train model?”
+
+Tapi:
+
+> “Gimana application lain pakai model ini?”
+
+Ini transition penting dari ML experiment ke ML service.
+
+---
+
+# Target step
+
+Setelah selesai:
+
+- MLflow champion tersedia,
+- FastAPI running,
+- kalian bisa hit /health,
+- kalian bisa inspect /model-info,
+- kalian bisa POST /predict,
+- kalian ngerti apa yang terjadi di belakang satu request.
+
+---
+
+# 1. Pastikan MLflow hidup
+
+Kalau Airflow masih jalan, itu okay.
+
+Start local MLflow kalau belum:
 
 ~~~bash
 uv run python scripts/start_mlflow.py
 ~~~
 
-The helper uses the local .mlflow directory, the same state directory later mounted by Docker Compose.
-
-## 2. Check champion
-
-Open MLflow at:
+Open:
 
 ~~~text
 http://127.0.0.1:5000
 ~~~
 
-The registered model should have a champion alias. If not:
+---
 
-~~~bash
-uv run python scripts/promote_model.py --version <VERSION>
+# 2. Check champion
+
+Open Model Registry.
+
+Cari:
+
+~~~text
+taxi-demand-forecasting-model
 ~~~
 
-## 3. Make sure historical demand exists
+Pastikan ada alias:
 
-For a Jan 28 target, processed history must cover the required 168-hour lookback before the target hour.
+~~~text
+champion
+~~~
 
-If you followed the Airflow section, replay Jan 27 and Jan 28 first.
+Kalau belum:
 
-## 4. Start FastAPI
+~~~bash
+uv run python scripts/promote_model.py   --version <VERSION>
+~~~
+
+Kenapa ini wajib?
+
+Karena API sengaja tidak hard-code version.
+
+Tanpa champion, API tidak tahu model mana yang approved.
+
+---
+
+# 3. Pastikan history cukup
+
+Prediction target Jan 28 18:00 butuh history hingga 168h ke belakang.
+
+Kalau kalian sudah replay Jan 27 dan Jan 28 via Airflow, harusnya history ada.
+
+Kalau belum, prediction bisa return 422.
+
+Ini bukan API bug.
+
+Itu data readiness problem.
+
+---
+
+# 4. Start FastAPI
+
+Open terminal baru:
 
 ~~~bash
 uv run uvicorn api.main:app --reload
 ~~~
 
-Swagger:
+Output biasanya menunjukkan:
+
+~~~text
+Uvicorn running on http://127.0.0.1:8000
+~~~
+
+---
+
+# 5. Open Swagger
 
 ~~~text
 http://127.0.0.1:8000/docs
 ~~~
 
-## 5. Health check
+Ini salah satu bagian seru buat demo karena peserta bisa interact langsung.
 
-~~~bash
-curl http://127.0.0.1:8000/health
+Kalian akan lihat endpoint utama.
+
+---
+
+# 6. Test /health
+
+Klik:
+
+~~~text
+GET /health
 ~~~
+
+Execute.
 
 Expected:
 
 ~~~json
-{"status": "ok"}
+{
+  "status": "ok"
+}
 ~~~
 
-Health only answers whether the API process is alive. It does not prove the model registry is ready.
+Sekarang pertanyaan penting:
 
-## 6. Model info
+> Apakah berarti model champion pasti ready?
 
-~~~bash
-curl http://127.0.0.1:8000/model-info
+No.
+
+Health endpoint hanya verify API process.
+
+---
+
+# 7. Test /model-info
+
+~~~text
+GET /model-info
 ~~~
 
-Look for model name, version, alias, run ID, and model URI.
+Execute.
 
-This endpoint answers:
+Expected ada:
 
-> Which model is the API actually using?
+~~~text
+model_name
+model_version
+model_alias
+run_id
+model_uri
+~~~
 
-## 7. Prediction
+Coba compare model_version ini dengan MLflow Registry UI.
 
-POST in Swagger:
+Harus match champion.
+
+---
+
+# 8. Test /predict
+
+Request:
 
 ~~~json
 {
@@ -81,42 +182,170 @@ POST in Swagger:
 }
 ~~~
 
-Internal flow:
+Execute.
+
+Response roughly:
+
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:00:00",
+  "predicted_trip_count": 147.8,
+  "model_name": "...",
+  "model_version": "1",
+  "model_alias": "champion",
+  "run_id": "..."
+}
+~~~
+
+Actual prediction value bisa berbeda. Jangan terpaku ke contoh angka.
+
+---
+
+# 9. Pause: what just happened?
+
+Client cuma kasih:
 
 ~~~text
-request
-   ↓
-validation
-   ↓
-load past demand
-   ↓
-online features
-   ↓
-resolve champion
-   ↓
-predict
-   ↓
-prediction log
-   ↓
+zone_id
+target_datetime
+~~~
+
+Tapi model butuh 12 features.
+
+Berarti siapa yang build?
+
+Serving backend.
+
+Flow:
+
+~~~text
+HTTP request
+↓
+schema validation
+↓
+history lookup
+↓
+online feature engineering
+↓
+champion model loading
+↓
+prediction
+↓
+prediction logging
+↓
 response
 ~~~
 
-## 8. Read more than the prediction
+Satu endpoint sebenarnya menggabungkan banyak layer.
 
-The response also contains model_version, model_alias, and run_id.
+---
 
-Those fields give us prediction lineage.
+# 10. Coba request invalid time
 
-## Common errors
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:30:00"
+}
+~~~
 
-### 503
+Apa yang terjadi?
 
-API is alive, but champion cannot be resolved. Check MLflow and the registry alias.
+Harus rejected.
 
-### 422
+Kenapa?
 
-The request cannot be turned into a valid prediction. Common causes are incomplete history or a target time that is not exactly on the hour.
+Karena model contract hourly.
 
-## Checkpoint
+Ini good API design:
 
-You should be able to explain why the client sends zone and target time instead of internal lag features.
+> Reject invalid semantic input early.
+
+---
+
+# 11. Coba bayangin champion berubah
+
+Saat API jalan, promotion bisa pindah:
+
+~~~text
+champion v1
+→
+champion v2
+~~~
+
+Serving loader punya refresh interval.
+
+Setelah re-check, model baru bisa diload tanpa edit API source.
+
+Itulah benefit alias.
+
+---
+
+# 12. Inspect prediction log
+
+Setelah successful prediction, check:
+
+~~~text
+data/monitoring/predictions.jsonl
+~~~
+
+Kalian akan lihat one JSON object per line.
+
+Kenapa prediction disimpan?
+
+Karena nanti ground truth datang setelah target hour.
+
+---
+
+# Mini challenge
+
+Pertanyaan:
+
+> Kenapa response include model_version dan run_id?
+
+Jawaban:
+
+> Biar prediction traceable ke model lineage.
+
+Kalau nanti ada complaint:
+
+> “Prediction jam 18:00 kok aneh?”
+
+kita bisa cari model mana yang menghasilkan.
+
+---
+
+# Common issues
+
+## /health okay, /model-info 503
+
+FastAPI alive.
+
+MLflow/champion unavailable.
+
+## /predict 422
+
+Check:
+
+- target time exact hour?
+- 168h history complete?
+- processed date available?
+
+## connection refused
+
+Uvicorn belum running atau wrong port.
+
+---
+
+# Checkpoint
+
+Kalian harus bisa answer:
+
+> Serving itu apa bedanya dengan training?
+
+Training menghasilkan model.
+
+Serving membuat model usable oleh application.
+
+Next kita package semua service pakai Docker.

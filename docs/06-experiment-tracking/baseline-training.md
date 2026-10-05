@@ -1,94 +1,190 @@
-# Baseline Training
+# Baseline Training — Sebelum Experiment Tracking
 
-## Why train manually before MLflow?
+## Kenapa kita sengaja mulai manual?
 
-If we install MLflow before we have an experiment, the tool feels abstract.
+Kalau dari awal semua experiment sudah otomatis tercatat, kita nggak pernah merasakan kenapa tracking dibutuhkan.
 
-So first we run a plain ML workflow.
-
-## Models
-
-### Naive 24-hour baseline
+Jadi first model run kita sederhana.
 
 ~~~text
-prediction(t) = demand(t - 24h)
+load snapshot
+↓
+split by time
+↓
+baseline
+↓
+train model
+↓
+evaluate
+↓
+save artifact locally
 ~~~
 
-No fitting required.
+---
 
-### HistGradientBoostingRegressor
+# Input: training snapshot
 
-Uses:
+File:
 
-- zone category,
-- calendar features,
-- lag features,
-- rolling features.
+~~~text
+data/snapshots/training/
+taxi_demand_2025-01-26.parquet
+~~~
 
-## Run
+Kenapa snapshot, bukan live feature file?
 
-After data and features:
+Karena snapshot frozen.
+
+Live features terus berubah seiring replay.
+
+Training input harus traceable.
+
+---
+
+# Chronological split
+
+Initial:
+
+~~~text
+Jan 8–21
+train
+
+Jan 22–26
+validation
+~~~
+
+Kenapa time split?
+
+Model production akan menghadapi future.
+
+Validation seharusnya mimic itu.
+
+Random split bisa mix older/future pattern dengan cara yang kurang realistic.
+
+---
+
+# Naive baseline
+
+Rule:
+
+~~~text
+prediction
+=
+lag_24h
+~~~
+
+Jadi target Jan 25 18:00 diprediksi dengan Jan 24 18:00 demand.
+
+No model.fit().
+
+Simple domain heuristic.
+
+---
+
+# Main model
+
+~~~text
+HistGradientBoostingRegressor
+~~~
+
+Kenapa ini cocok?
+
+- strong tabular model,
+- train cepat,
+- no GPU,
+- serving ringan.
+
+Hyperparameter seperti:
+
+~~~text
+learning_rate
+max_iter
+max_leaf_nodes
+l2_regularization
+~~~
+
+---
+
+# Run
 
 ~~~bash
 uv run python scripts/train_model.py
 ~~~
 
-The script:
+Output console akan compare baseline vs model.
 
-1. loads the training snapshot;
-2. creates chronological train/validation split;
-3. evaluates naive baseline;
-4. trains gradient boosting;
-5. evaluates the model;
-6. saves local artifacts.
+---
 
-## Why compare against a naive rule?
+# Metrics
 
-Because sophistication is not automatically value.
-
-If:
+Primary:
 
 ~~~text
-ML model MAE = 15
-baseline MAE = 10
+MAE
 ~~~
 
-then the simple baseline is currently better.
+Secondary:
 
-That is valuable information.
+~~~text
+RMSE
+~~~
 
-## Time split
+Yang kita lihat:
 
-The validation data happens after training data.
+> Model beat baseline nggak?
 
-This better resembles how the model will encounter future observations.
+Bukan hanya:
 
-Random row splitting is often a bad default for time-dependent forecasting problems.
+> Model berhasil train nggak?
 
-## Local artifacts
+---
 
-Manual training can create:
+# Local artifacts
+
+Script manual bisa save:
 
 ~~~text
 models/taxi_demand_model.joblib
 models/initial_metrics.json
 ~~~
 
-They are local generated artifacts and are ignored by Git.
+Folder ini runtime-generated dan ignored.
 
-Later, MLflow becomes the system of record for experiment artifacts.
+Ini cukup untuk first experiment.
 
-## What should you inspect?
+Tapi setelah run makin banyak, file naming manual mulai messy.
 
-After the run:
+---
 
-- training row count,
-- validation row count,
-- baseline MAE,
-- model MAE,
-- RMSE,
-- whether the model beats baseline.
+# Think like a reviewer
 
-Do not only ask “did the script finish?”
+Kalau metric tiba-tiba extremely bagus, jangan langsung senang.
 
-Ask whether the result makes sense.
+Ask:
+
+- leakage?
+- split benar?
+- target accidentally masuk feature?
+- row count masuk akal?
+
+Good MLOps tidak hanya automate success.
+
+Good MLOps juga make suspicious result easier to investigate.
+
+---
+
+# Pain point yang kita bawa ke MLflow
+
+Setelah beberapa run, kita butuh jawab:
+
+~~~text
+Which params?
+Which snapshot?
+Which metric?
+Which model artifact?
+Which run?
+~~~
+
+Dan jawaban itu tidak seharusnya bergantung ke ingatan presenter.
+
+Next: MLflow Tracking.

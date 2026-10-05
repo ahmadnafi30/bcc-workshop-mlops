@@ -1,143 +1,334 @@
-# uv
+# uv — Managing Our Python Environment
 
-## What is uv?
+## Kenapa kita perlu bahas environment dulu?
 
-uv is the Python project and dependency manager used in this repository.
+Sebelum masuk MLflow, Airflow, atau Docker, ada problem yang jauh lebih basic:
 
-If you have used pip + venv before, uv roughly covers the same daily workflow, but with one project-oriented command flow.
+> “Project ini sebenarnya jalan pakai Python versi berapa dan dependency apa saja?”
 
-Think of it as the person who prepares everyone's workshop laptop with the same recipe.
-
-Without a project manager, setup often becomes:
+Kalau tiap peserta setup seperti ini:
 
 ~~~text
-create venv
-activate venv
-install package A
-install package B
-forget package C
-different laptop gets different result
+pip install pandas
+pip install sklearn
+pip install mlflow
+pip install airflow
+...
 ~~~
 
-With this project:
+kemungkinan besar beberapa laptop akan punya versi package berbeda.
 
-~~~bash
-uv sync
+Terus muncul classic problem:
+
+> “Di laptop saya bisa kak.”
+
+😄
+
+Makanya kita pakai **uv** buat manage project environment.
+
+---
+
+# uv itu apa?
+
+Secara practical, uv membantu kita:
+
+- manage Python environment,
+- install dependencies,
+- run command dalam project environment,
+- manage dependency groups.
+
+Kalau sebelumnya kalian familiar dengan:
+
+~~~text
+python -m venv
+pip install
+requirements.txt
 ~~~
 
-is the main setup command.
+uv meng-cover banyak workflow itu dalam satu project-oriented tool.
 
-## What does uv read?
+---
 
-The dependency definition lives in:
+# File utama: pyproject.toml
+
+Dependency project kita ditulis di:
 
 ~~~text
 pyproject.toml
 ~~~
 
-That file says:
+Di situ ada beberapa category.
 
-- project name,
-- supported Python version,
-- runtime dependencies,
-- dev dependencies,
-- Airflow dependency group,
-- docs dependency group,
-- pytest config,
-- Ruff config.
+## Runtime dependencies
 
-## Why Python 3.11?
+Ini package yang memang dibutuhkan application.
 
-The repository has:
+Contoh:
 
 ~~~text
-.python-version
+pandas
+scikit-learn
+mlflow
+fastapi
+dvc
+prometheus-client
 ~~~
 
-with Python 3.11.
+## Development dependencies
 
-We intentionally keep one workshop Python line because Airflow and the ML stack are easier to support when everyone uses the same runtime family.
+Contoh:
 
-## Core environment
-
-~~~bash
-uv sync
+~~~text
+pytest
+ruff
+jupyterlab
+httpx
 ~~~
 
-This installs the project plus the default dev group.
+Ini mostly buat development dan testing.
 
-Then run commands through uv:
+## Airflow group
 
-~~~bash
-uv run pytest
-uv run python scripts/bootstrap_data.py
-~~~
+Airflow sengaja dipisah.
 
-You do not have to activate the virtual environment manually.
+Kenapa?
 
-## Extra groups
+Karena Airflow dependency cukup berat.
 
-Airflow is heavy, so it is separated:
+Kita nggak mau setiap participant yang cuma mau run basic model harus install seluruh Airflow stack dari awal.
+
+Jadi:
 
 ~~~bash
 uv sync --group airflow
 ~~~
 
-Docs are also separate:
+baru install extra Airflow dependencies.
+
+## Docs group
+
+Docs juga punya group:
 
 ~~~bash
 uv sync --group docs
 ~~~
 
-Why groups?
+yang install MkDocs Material.
 
-Because a participant who only wants to run the model does not need every documentation and orchestration package immediately.
+---
 
-## Add a dependency
+# Command paling penting: uv sync
 
-Runtime dependency:
+~~~bash
+uv sync
+~~~
+
+Mental model:
+
+~~~text
+pyproject.toml
+      ↓
+resolve dependency
+      ↓
+create/update .venv
+      ↓
+install project
+~~~
+
+Kalau environment belum ada, dibuat.
+
+Kalau dependency berubah, disinkronkan.
+
+---
+
+# uv run
+
+Setelah environment siap, kita run command:
+
+~~~bash
+uv run python scripts/bootstrap_data.py
+~~~
+
+Apa bedanya dengan:
+
+~~~bash
+python scripts/bootstrap_data.py
+~~~
+
+Dengan uv run, kita explicitly run command di project environment yang sudah di-manage uv.
+
+Jadi kita nggak terlalu bergantung ke shell activation state.
+
+---
+
+# Apakah masih perlu activate .venv?
+
+Nggak wajib.
+
+Kalian tetap bisa activate kalau nyaman.
+
+Tapi docs workshop pakai:
+
+~~~bash
+uv run ...
+~~~
+
+supaya command lebih consistent di banyak environment.
+
+---
+
+# Kenapa Python 3.11?
+
+Repo punya:
+
+~~~text
+.python-version
+~~~
+
+yang menunjuk Python 3.11.
+
+Kenapa kita pin major/minor?
+
+Karena ecosystem project kita cukup banyak:
+
+- MLflow,
+- Airflow,
+- sklearn,
+- FastAPI.
+
+Semakin random Python version peserta, semakin besar kemungkinan compatibility issue.
+
+Workshop bukan tempat ideal buat debug:
+
+> “Package ini belum support Python X.Y terbaru.”
+
+Jadi kita pilih environment yang controlled.
+
+---
+
+# Dependency group analogy
+
+Coba bayangin kalian punya backpack.
+
+Core dependency adalah barang yang selalu dibawa.
+
+~~~text
+wallet
+phone
+water
+~~~
+
+Airflow group seperti:
+
+~~~text
+camera equipment
+~~~
+
+Berat, dan cuma dibutuhkan kalau masuk sesi tertentu.
+
+Docs group seperti:
+
+~~~text
+presentation equipment
+~~~
+
+Juga nggak dibutuhkan setiap saat.
+
+Jadi group bikin environment lebih modular.
+
+---
+
+# Add dependency
+
+Kalau nanti kalian develop project:
 
 ~~~bash
 uv add package-name
 ~~~
 
-Dev-only dependency:
+Untuk dev-only:
 
 ~~~bash
 uv add --dev package-name
 ~~~
 
-For this repository, dependency changes should be intentional and reviewed. Do not install a package locally and forget to record it in pyproject.toml.
+Yang penting:
 
-## Common beginner confusion
+> Jangan install package lokal lalu lupa menambahkannya ke project definition.
 
-### uv sync vs uv run
+Karena nanti hanya laptop kalian yang tahu dependency itu.
+
+---
+
+# Doctor script
+
+Workshop punya helper:
+
+~~~bash
+uv run python scripts/doctor.py
+~~~
+
+Dia cek beberapa hal basic:
+
+- Python version,
+- essential imports,
+- repo structure,
+- Docker CLI availability.
+
+Docker belum wajib untuk early stage.
+
+Jadi kalau Docker missing, basic ML flow masih bisa dipelajari dulu.
+
+---
+
+# Common confusion
+
+## uv sync vs uv run
 
 ~~~text
 uv sync
 → prepare environment
 
-uv run ...
-→ execute something inside that environment
+uv run
+→ execute command inside environment
 ~~~
 
-### Do I need source .venv/bin/activate?
+## pyproject.toml vs uv environment
 
-No.
+~~~text
+pyproject.toml
+→ desired project definition
 
-You can, but the workshop commands use uv run so the instructions are consistent across machines.
+.venv
+→ installed environment state
+~~~
 
-### Why not pip install everything?
+## uv vs Docker
 
-You can build a project that way, but the goal here is reproducible project setup, not a list of personal terminal history.
+Mereka solve problem berbeda.
 
-## Checkpoint
+~~~text
+uv
+→ Python project environment
 
-If these work, your base environment is healthy:
+Docker
+→ containerized runtime environment
+~~~
+
+Docker image kita bahkan pakai uv saat build.
+
+---
+
+# Quick checkpoint
+
+Run:
 
 ~~~bash
 uv run python --version
+uv run python scripts/doctor.py
 uv run pytest
 ~~~
 
-Python should be 3.11.x.
+Kalau semua core check aman, environment kalian siap.
+
+Baru setelah itu kita masuk data pipeline.

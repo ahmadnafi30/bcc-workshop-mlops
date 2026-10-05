@@ -1,67 +1,131 @@
-# DVC — Data Version Control
+# DVC — Data Versioning Without Dumping Everything Into Git
 
-## The problem before DVC
+## Sebelum DVC, kita sebenarnya sudah bisa train model
 
-Imagine this folder:
+Misalnya kita punya:
+
+~~~text
+data/features/taxi_demand_features.parquet
+~~~
+
+Hari ini kita train model.
+
+Besok data berubah.
+
+Minggu depan kita retrain.
+
+Lalu ada pertanyaan:
+
+> “Model yang MAE-nya 10.2 itu pakai dataset yang mana?”
+
+Kalian lihat folder.
+
+Filename-nya masih:
 
 ~~~text
 taxi_demand_features.parquet
 ~~~
 
-You train model version 1.
+Nah.
 
-A week later, new rows are added to the same file and you train model version 2.
+Di sinilah problem data lineage mulai muncul.
 
-Then someone asks:
+---
 
-> Which exact dataset produced model version 1?
+# Kenapa Git saja belum cukup?
 
-The filename is the same.
+Git sangat bagus buat:
 
-Git commit history alone does not tell us the content of a large generated Parquet file.
+- source code,
+- text config,
+- docs,
+- YAML.
 
-That is the problem DVC helps us organize.
+Tapi large binary data file bukan use case ideal Git.
 
-## Analogy: Git for a recipe, DVC for the ingredient batch
+Kalau setiap perubahan Parquet besar masuk Git history:
 
-Git is great for:
+- repo cepat membengkak,
+- diff tidak meaningful,
+- cloning makin berat.
 
-- code,
-- configuration,
-- documentation.
+Jadi kita butuh cara lain buat manage data artifacts.
 
-DVC is useful for describing and reproducing data pipeline outputs.
+---
 
-Think about a bakery:
+# DVC secara sederhana
+
+DVC = Data Version Control.
+
+Tapi jangan terlalu literal menganggap:
+
+> “DVC adalah Git khusus data.”
+
+Lebih useful kalau dipahami sebagai:
+
+> **tool untuk mendefinisikan dependency data pipeline, track output artifact, dan reproduce state berdasarkan input yang berubah.**
+
+DVC memang bekerja closely dengan Git, tapi responsibility-nya beda.
+
+---
+
+# Analogi bakery
+
+Bayangin bakery.
+
+Git menjawab:
+
+> Recipe version mana yang dipakai?
+
+DVC menjawab:
+
+> Ingredient batch / prepared dough snapshot yang dipakai yang mana?
+
+MLflow menjawab:
+
+> Dari proses baking ini hasil quality score-nya berapa?
+
+Jadi:
 
 ~~~text
 Git
-→ which recipe version?
+→ code history
 
 DVC
-→ which flour batch / prepared ingredient snapshot?
+→ data artifact state
 
 MLflow
-→ what result did the baking experiment produce?
+→ experiment history
 ~~~
 
-Those tools answer different questions.
+---
 
-## What do we version in this workshop?
+# Apa yang kita version di workshop?
 
-We focus on the data closest to model training:
+Kita nggak DVC-track semua raw TLC data.
+
+Kita fokus ke **training snapshot**.
+
+Contoh:
 
 ~~~text
-data/snapshots/training/taxi_demand_2025-01-26.parquet
+data/snapshots/training/
+taxi_demand_2025-01-26.parquet
 ~~~
 
-Why not every raw TLC file?
+Kenapa snapshot ini penting?
 
-The official raw data can be downloaded again. For model reproducibility, the most important teaching artifact is the **exact model-ready snapshot** used by training.
+Karena ini input model yang sudah:
 
-A larger production project may also version raw and intermediate datasets.
+- processed,
+- feature-engineered,
+- frozen sampai cutoff date.
 
-## dvc.yaml
+Jadi kalau model lahir dari snapshot Jan 26, kita punya referensi yang jelas.
+
+---
+
+# dvc.yaml
 
 Open:
 
@@ -69,97 +133,198 @@ Open:
 dvc.yaml
 ~~~
 
-You will see a stage called:
+Di sana ada stage:
 
 ~~~text
 create_training_snapshot
 ~~~
 
-A DVC stage has three ideas:
+Sebuah DVC stage biasanya punya tiga bagian penting.
+
+## cmd
+
+Command yang dijalankan.
+
+## deps
+
+Hal-hal yang affect output.
+
+Misalnya:
 
 ~~~text
-cmd
-→ what command creates the result?
-
-deps
-→ what inputs affect the result?
-
-outs
-→ what output is produced?
-~~~
-
-Our dependency graph is conceptually:
-
-~~~text
-feature parquet
-      +
-snapshot code
-      +
+feature dataset
 snapshot script
-      ↓
-create_training_snapshot
-      ↓
-training snapshot parquet
+snapshot source code
 ~~~
 
-## Run the stage
+## outs
+
+Output stage.
+
+Contoh:
+
+~~~text
+taxi_demand_2025-01-26.parquet
+~~~
+
+---
+
+# Ini sebenarnya mirip build system
+
+Coba lihat:
+
+~~~text
+input A
+input B
+script
+  ↓
+command
+  ↓
+output
+~~~
+
+DVC bisa decide:
+
+> “Input berubah nggak?”
+
+Kalau nggak:
+
+> “No need to reproduce.”
+
+Kalau berubah:
+
+> “Stage perlu dijalankan lagi.”
+
+Makanya DVC bukan sekadar file storage.
+
+Dia punya pipeline dependency awareness.
+
+---
+
+# Run DVC stage
 
 ~~~bash
 uv run dvc repro create_training_snapshot
 ~~~
 
-DVC checks dependencies and decides whether the stage needs to run again.
+Yang terjadi:
 
-Analogy:
+1. DVC baca stage definition.
+2. Check dependencies.
+3. Kalau perlu, run command.
+4. Track output state.
+5. Update lock metadata.
 
-> If the ingredients and recipe have not changed, do we really need to cook the same intermediate result again?
+---
 
-That is why DVC feels similar to a build system.
+# dvc.lock
 
-## dvc.lock
-
-After reproduction, DVC can create a lock file containing checksums that describe the resolved pipeline state.
-
-Do not confuse:
-
-~~~text
-uv dependency lock
-vs
-DVC pipeline lock
-~~~
-
-They solve different reproducibility problems.
-
-## DVC cache
-
-DVC stores data content in a local cache.
+Setelah repro, kalian bisa lihat:
 
 ~~~text
-.dvc/cache
+dvc.lock
 ~~~
 
-That cache is ignored by Git.
+Lock file capture resolved state dari pipeline.
 
-Git stores the lightweight metadata; the heavy data stays outside normal Git history.
+Jangan confuse dengan package lock.
 
-## Why no DVC remote yet?
+~~~text
+dependency lock
+→ package environment
 
-A team normally wants shared storage such as S3 or another supported remote.
+dvc.lock
+→ data pipeline resolved state
+~~~
 
-For the workshop, a local cache is enough to understand:
+Dua-duanya ngomong soal reproducibility, tapi domain berbeda.
 
-- dependency tracking,
-- output tracking,
-- reproducibility,
-- relationship between Git and data state.
+---
 
-Adding cloud credentials would distract from the core concept.
+# DVC cache
 
-## Relationship with MLflow
+DVC menyimpan content artifact ke:
 
-During training we also calculate a SHA256 fingerprint for the snapshot.
+~~~text
+.dvc/cache/
+~~~
 
-MLflow stores metadata such as:
+Cache ini nggak masuk Git.
+
+Git hanya simpan lightweight metadata.
+
+Jadi pattern-nya:
+
+~~~text
+Git
+small metadata
+
+DVC cache / remote
+large data content
+~~~
+
+---
+
+# Kenapa belum pakai DVC remote?
+
+Dalam team beneran, local cache doang belum cukup.
+
+Kalian butuh shared remote, misalnya:
+
+~~~text
+S3
+GCS
+Azure Blob
+SSH storage
+~~~
+
+Tapi workshop sengaja belum pakai cloud credential.
+
+Kenapa?
+
+Karena kita mau understand:
+
+- stage,
+- dependency,
+- output,
+- cache,
+- reproducibility.
+
+Cloud remote adalah next infrastructure concern.
+
+---
+
+# Snapshot vs live features
+
+Ini distinction penting.
+
+~~~text
+data/features/taxi_demand_features.parquet
+~~~
+
+bisa berubah saat daily data baru masuk.
+
+Kalau training langsung terus pakai file live itu, experiment lama makin susah direproduce.
+
+Makanya sebelum training:
+
+~~~text
+live features
+↓
+cutoff
+↓
+training snapshot
+~~~
+
+Snapshot harus dianggap immutable input untuk run tersebut.
+
+---
+
+# DVC + MLflow relation
+
+Training snapshot juga kita fingerprint dengan SHA256.
+
+MLflow log metadata:
 
 ~~~text
 dataset_snapshot
@@ -168,39 +333,108 @@ dataset_rows
 dataset_zones
 ~~~
 
-So a model run can point back to the dataset identity.
-
-Mental model:
+Jadi nanti chain-nya:
 
 ~~~text
-DVC
-→ reproduce the data artifact
-
-MLflow
-→ explain what training run used it
+MLflow run
+↓
+dataset SHA
+↓
+training snapshot identity
+↓
+DVC pipeline
 ~~~
 
-## Common mistakes
+DVC dan MLflow saling melengkapi.
 
-### Tracking huge data directly with Git
+---
 
-Git repositories become unnecessarily heavy.
+# Apa yang DVC tidak lakukan?
 
-### Thinking DVC replaces Git
+DVC bukan:
 
-It does not. DVC is designed to work with source control, not eliminate it.
+- experiment UI,
+- model registry,
+- API serving,
+- scheduler,
+- monitoring dashboard.
 
-### Editing a snapshot after training
+Kalau kalian mulai pakai DVC buat solve semua masalah, berarti responsibility-nya sudah campur.
 
-A training snapshot should behave like a frozen input. Make a new snapshot for a new training cycle.
+---
 
-## Checkpoint
+# Workshop checkpoint
 
-After running the DVC stage, verify:
+Setelah:
+
+~~~bash
+uv run dvc repro create_training_snapshot
+~~~
+
+kalian harus bisa answer:
+
+> “Model nanti train dari dataset apa?”
+
+Bukan:
+
+> “Pokoknya dari features latest.”
+
+Tapi:
 
 ~~~text
-data/snapshots/training/
-└── taxi_demand_2025-01-26.parquet
+taxi_demand_2025-01-26.parquet
+with a known fingerprint
 ~~~
 
-Then continue to model training and MLflow.
+Itulah value utamanya.
+
+
+---
+
+# Implementation Deep Dive — dvc.yaml Kita
+
+Actual stage project kita:
+
+~~~yaml
+stages:
+  create_training_snapshot:
+    cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+    deps:
+      - data/features/taxi_demand_features.parquet
+      - scripts/create_training_snapshot.py
+      - src/data_versioning/snapshot.py
+    outs:
+      - data/snapshots/training/taxi_demand_2025-01-26.parquet
+~~~
+
+Sekarang baca bukan sebagai YAML, tapi sebagai kalimat:
+
+> “Untuk menghasilkan snapshot Jan 26, jalankan create_training_snapshot.py. Output ini bergantung pada feature data, script entry point, dan snapshot business logic.”
+
+Kalau kalian bisa translate config menjadi kalimat seperti itu, YAML jadi jauh less scary.
+
+## Kenapa source Python masuk deps?
+
+Misalnya data tidak berubah, tapi logic snapshot berubah.
+
+Kalau code dependency tidak dicantumkan, pipeline metadata bisa gagal mencerminkan bahwa output potentially stale.
+
+Jadi dependency bukan cuma data. Code yang affect artifact juga dependency.
+
+## Kalau stage dibuat dari nol
+
+Conceptually:
+
+~~~bash
+uv run dvc stage add   -n create_training_snapshot   -d data/features/taxi_demand_features.parquet   -d scripts/create_training_snapshot.py   -d src/data_versioning/snapshot.py   -o data/snapshots/training/taxi_demand_2025-01-26.parquet   python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+~~~
+
+Saat design stage, jangan mulai dari syntax. Tanyakan:
+
+~~~text
+What creates this artifact?
+What can change this artifact?
+What artifact should exist afterward?
+~~~
+
+Itu inti DVC stage design.

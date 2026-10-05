@@ -1,25 +1,32 @@
-# Step 2 — Features and Baseline Model
+# Step 2 — Feature Engineering and Baseline Model
 
-## Goal
+Sekarang kita punya hourly demand.
 
-Build a model-ready dataset, then train a baseline and the first ML model before adding MLOps tooling.
+Next question:
 
-## Why model first?
+> “Gimana caranya model memanfaatkan history buat predict satu jam ke depan?”
 
-MLOps without an ML workflow is abstract.
+Di step ini kita build features dan train model pertama **tanpa MLflow dulu**.
 
-We want to feel the pain first:
+Kenapa tanpa MLflow?
 
-~~~text
-which model?
-which metric?
-which data?
-which artifact?
-~~~
+Supaya kita tahu normal ML workflow-nya dulu.
 
-Then DVC and MLflow have a clear purpose.
+---
 
-## 1. Build features
+# Target step
+
+Setelah selesai:
+
+- feature dataset ada,
+- training snapshot ada,
+- naive baseline dievaluasi,
+- HistGradientBoosting ditrain,
+- kalian ngerti leakage protection.
+
+---
+
+# 1. Build features
 
 ~~~bash
 uv run python scripts/build_features.py
@@ -31,107 +38,232 @@ Output:
 data/features/taxi_demand_features.parquet
 ~~~
 
-The dataset contains:
+---
+
+# 2. Inspect feature columns
+
+~~~bash
+uv run python -c "import pandas as pd; df=pd.read_parquet('data/features/taxi_demand_features.parquet'); print(df.columns.tolist()); print(df.head())"
+~~~
+
+Kalian akan lihat feature seperti:
 
 ~~~text
-calendar features
-lag features
-rolling features
+hour
+day_of_week
+is_weekend
+lag_1h
+lag_24h
+lag_168h
+rolling_mean_3h
+...
 target_trip_count
 ~~~
 
-## 2. Think about leakage
+---
 
-For a target hour, ask:
+# 3. Coba verify satu row secara manual
 
-> Could I have known this value before the target hour started?
+Ambil satu zone dan timestamp.
 
-Allowed:
+Tanya:
 
-~~~text
-lag_1h
-lag_24h
-calendar hour
-~~~
+> Kalau target jam 18:00, lag_1h berasal dari jam berapa?
 
-Not allowed:
+Expected:
 
 ~~~text
-actual target demand
-future demand
-rolling window containing target demand
+17:00
 ~~~
 
-## 3. Build the initial training snapshot manually
+lag_24h?
 
-Before DVC orchestration, you can create it directly:
+~~~text
+yesterday 18:00
+~~~
+
+lag_168h?
+
+~~~text
+same hour one week earlier
+~~~
+
+---
+
+# 4. Leakage check
+
+Ini jangan dilewati.
+
+Rolling feature kita dibuat dari:
+
+~~~text
+shift(1)
+then
+rolling()
+~~~
+
+Kenapa?
+
+Karena target hour actual tidak boleh masuk feature.
+
+Coba bayangin kalau current target ikut.
+
+Metric bisa dramatically bagus.
+
+Tapi production impossible.
+
+---
+
+# 5. Build training snapshot manual
 
 ~~~bash
-uv run python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+uv run python scripts/create_training_snapshot.py   --cutoff-date 2025-01-26
 ~~~
 
 Output:
 
 ~~~text
-data/snapshots/training/taxi_demand_2025-01-26.parquet
+data/snapshots/training/
+taxi_demand_2025-01-26.parquet
 ~~~
 
-## 4. Train
+Kenapa snapshot?
+
+Karena live feature file terus berubah saat Jan 27, Jan 28 masuk.
+
+Training input harus frozen.
+
+---
+
+# 6. Train model
 
 ~~~bash
 uv run python scripts/train_model.py
 ~~~
 
-The script compares:
+Kalian akan lihat result baseline dan main model.
+
+Jangan langsung tutup terminal setelah selesai.
+
+Read numbers.
+
+---
+
+# 7. Compare baseline
+
+Naive prediction:
 
 ~~~text
-naive 24h
+prediction(t)
+=
+lag_24h
+~~~
+
+Kalau model utama:
+
+~~~text
+MAE lower than baseline
+~~~
+
+bagus.
+
+Kalau lebih tinggi:
+
+> ML model belum justify complexity.
+
+Dan itu valid outcome.
+
+---
+
+# 8. Jangan invent metric
+
+Metric actual tergantung run/data.
+
+Docs tidak kasih fake expected MAE.
+
+Kenapa?
+
+Karena kita mau peserta percaya output real, bukan mencari angka yang “harus cocok”.
+
+Yang penting relation:
+
+~~~text
+baseline
 vs
-HistGradientBoostingRegressor
+model
 ~~~
 
-## 5. Read the result
+---
 
-You should see MAE and RMSE.
+# 9. Inspect local artifacts
 
-Do not immediately celebrate the ML model.
-
-Ask:
+Setelah training:
 
 ~~~text
-Did it beat the naive baseline?
-By how much?
-Is the result plausible?
+models/
+taxi_demand_model.joblib
+initial_metrics.json
 ~~~
 
-## 6. Why naive 24h is useful
+Ini temporary manual artifact path.
 
-Taxi demand often has daily repetition.
+Nanti MLflow replace manual bookkeeping.
 
-A simple yesterday-same-hour rule can be surprisingly competitive.
+---
 
-That makes it a meaningful baseline instead of a deliberately terrible one.
+# 10. Think like reviewer
 
-## 7. Local output
+Coba jawab:
 
-Manual training may write:
+### Model metric jauh terlalu bagus, first suspicion apa?
 
 ~~~text
-models/taxi_demand_model.joblib
-models/initial_metrics.json
+data leakage
 ~~~
 
-The folder is created at runtime and ignored by Git.
+### Kenapa random split kurang ideal?
 
-Later MLflow becomes the better place to manage model artifacts.
+~~~text
+time order bisa bocor / tidak mimic future
+~~~
 
-## Checkpoint
+### Kenapa zone_id categorical?
 
-You should be able to explain:
+~~~text
+ID bukan numeric magnitude
+~~~
 
-- what target_trip_count means,
-- why lag_168h needs one-week history,
-- why the split is chronological,
-- whether the ML model beat the baseline.
+---
 
-Next: make the dataset input reproducible with DVC.
+# Mini challenge
+
+Kalau:
+
+~~~text
+baseline MAE = 9
+model MAE = 11
+~~~
+
+Apakah kita register model sebagai challenger?
+
+Dalam project logic:
+
+~~~text
+no
+~~~
+
+Karena main model gagal beat simple baseline.
+
+---
+
+# Checkpoint
+
+Kalian siap lanjut kalau bisa explain:
+
+- feature lag,
+- rolling,
+- leakage,
+- time split,
+- baseline.
+
+Next kita masuk DVC dan mulai membahas reproducibility.

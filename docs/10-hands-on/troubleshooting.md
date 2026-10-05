@@ -1,14 +1,26 @@
-# Troubleshooting
+# Troubleshooting — Jangan Debug “Seluruh MLOps” Sekaligus
 
-Debug the smallest failing boundary first.
+Kalau whole system fail, reaction pertama sering:
 
-## TLC base URL shows AccessDenied
+> “Waduh semuanya rusak.”
 
-That is expected for directory listing. Use the bootstrap script or an exact monthly file object.
+Padahal biasanya satu boundary saja.
 
-~~~bash
-uv run python scripts/bootstrap_data.py
+Mindset debugging kita:
+
+~~~text
+Find the smallest failing layer.
 ~~~
+
+---
+
+# 1. Setup / Python
+
+## uv not found
+
+uv belum installed / PATH belum update.
+
+Restart terminal setelah install kalau perlu.
 
 ## Wrong Python
 
@@ -16,11 +28,9 @@ uv run python scripts/bootstrap_data.py
 uv run python --version
 ~~~
 
-Expected: Python 3.11.x.
+Expected 3.11.x.
 
-## ModuleNotFoundError
-
-Core:
+## Module missing
 
 ~~~bash
 uv sync
@@ -38,67 +48,182 @@ Docs:
 uv sync --group docs
 ~~~
 
+---
+
+# 2. Data
+
+## TLC URL AccessDenied
+
+Kalau yang dibuka directory base URL, expected.
+
+Gunakan bootstrap script.
+
+## Bootstrap download slow
+
+Monthly source besar.
+
+Presenter sebaiknya pre-download.
+
+## Processed daily file missing
+
+Check:
+
+~~~text
+raw daily released?
+date correct?
+prepare daily demand run?
+~~~
+
+---
+
+# 3. Features
+
+## Feature rows empty
+
+Possible:
+
+- insufficient history,
+- wrong date range,
+- lag_168h warm-up not complete.
+
+## Metric suspiciously amazing
+
+Check leakage.
+
+Particularly rolling calculation and target inclusion.
+
+---
+
+# 4. DVC
+
 ## Snapshot missing
 
 ~~~bash
 uv run dvc repro create_training_snapshot
 ~~~
 
-Make sure the feature dataset exists first.
+Check feature dependency exists.
 
-## FastAPI 503
+## DVC says changed
 
-Meaning: API process is alive but champion cannot be resolved.
+Inspect which dependency changed.
 
-Check MLflow, registered model, champion alias, and MLFLOW_TRACKING_URI.
+Jangan langsung delete cache.
 
-## Switched to Docker and model disappeared
+---
 
-Use the shared helper:
+# 5. MLflow
+
+## UI empty
+
+Check tracking server yang sama.
+
+Use:
 
 ~~~bash
 uv run python scripts/start_mlflow.py
 ~~~
 
-Local and Docker modes then share .mlflow state.
+## Model disappeared after Docker
 
-Stop the local server before Compose to avoid port 5000 conflict.
+Local and Compose should share .mlflow.
 
-## FastAPI 422
+Pastikan earlier run juga use helper/state path itu.
 
-Usually incomplete 168-hour demand history or an invalid target time.
+## Register fails
 
-## Port already in use
+Run ID valid?
 
-Common ports:
+Model artifact exists?
 
-~~~text
-3000 Grafana
-5000 MLflow
-8000 FastAPI
-8080 Airflow
-9090 Prometheus
-~~~
+---
 
-Stop the process/container currently using the port.
+# 6. Airflow
 
-## Airflow DAG missing
-
-Check:
+## DAG missing
 
 ~~~bash
 uv run --group airflow airflow dags list
 ~~~
 
-A missing DAG is usually a parse/import problem.
+Check parse/import error.
 
-## Airflow task failed
+## One task fail
 
-Open the failed task log and ask which input/dependency failed.
+Open exact task log.
 
-Avoid debugging the entire stack at once.
+Do not restart everything first.
 
-## Prometheus target down
+Ask:
+
+- input file?
+- param?
+- dependency service?
+- exception?
+
+## Airflow port conflict
+
+Local process / Docker Airflow mungkin sama-sama start.
+
+Stop salah satu.
+
+---
+
+# 7. FastAPI
+
+## connection refused
+
+Uvicorn/API container not running.
+
+## /health 200 but /model-info 503
+
+API okay.
+
+MLflow/champion problem.
+
+## /predict 422
+
+Check:
+
+- exact hour?
+- zone valid?
+- history complete?
+- processed daily files exist?
+
+---
+
+# 8. Docker
+
+## port already in use
+
+Check services yang sedang pakai:
+
+~~~text
+3000
+5000
+8000
+8080
+9090
+~~~
+
+Stop local process.
+
+## container unhealthy
+
+~~~bash
+docker compose ps
+docker compose logs <service>
+~~~
+
+## build slow
+
+First build Airflow especially memang heavy.
+
+---
+
+# 9. Prometheus
+
+## target DOWN
 
 Open:
 
@@ -106,27 +231,109 @@ Open:
 http://localhost:9090/targets
 ~~~
 
-The API target should be reachable as api:8000 from inside Compose.
-
-## Grafana empty
-
-Check in order:
-
-1. API traffic succeeded;
-2. /metrics has taxi metrics;
-3. Prometheus target is UP;
-4. Prometheus query returns data;
-5. Grafana datasource is healthy.
-
-## CI branch policy fails
-
-Allowed:
+Prometheus internal target harus:
 
 ~~~text
-feat/*, fix/*, docs/*, chore/* → develop
-develop → main
+api:8000
 ~~~
 
-## Windows issues
+not localhost.
 
-WSL2 is usually smoother for the Docker + Airflow portion. Avoid mixing multiple Python environments without knowing which one owns the files and commands.
+## metric missing
+
+Check /metrics first.
+
+Kalau source endpoint belum punya metric, Grafana obviously nggak bisa show.
+
+---
+
+# 10. Grafana
+
+## dashboard empty
+
+Debug chain:
+
+~~~text
+API traffic generated?
+↓
+/metrics contains values?
+↓
+Prometheus target UP?
+↓
+PromQL returns data?
+↓
+Grafana datasource healthy?
+↓
+panel query?
+~~~
+
+Jangan edit dashboard dulu kalau Prometheus query kosong.
+
+---
+
+# 11. CI
+
+## Ruff fail
+
+Read exact file + line.
+
+Usually simple style/import issue.
+
+## pytest fail
+
+Open traceback.
+
+Identify test domain.
+
+## docs strict fail
+
+Likely nav/reference/warning.
+
+## branch policy fail
+
+Correct flow:
+
+~~~text
+feat/fix/docs/chore
+→ develop
+
+develop
+→ main
+~~~
+
+---
+
+# 12. Monitoring / retraining
+
+## evaluation_count = 0
+
+Ground truth for logged predictions belum available / target date processed data missing.
+
+## retrain false
+
+Could be healthy model.
+
+Not a bug.
+
+## retrain expected but not happening
+
+Check:
+
+- sample count >= min?
+- recent MAE > threshold?
+- champion reference MAE available?
+- logs use champion model version?
+
+---
+
+# Golden debugging rule
+
+Jangan tanya:
+
+> “Kenapa MLOps saya error?”
+
+Tanya:
+
+> “Kenapa task aggregate_demand untuk Jan 28 tidak menemukan expected input file?”
+
+Semakin specific pertanyaannya, semakin cepat fix-nya.

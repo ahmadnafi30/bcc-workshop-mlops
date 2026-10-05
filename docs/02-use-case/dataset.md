@@ -1,17 +1,21 @@
-# Dataset
+# Dataset — NYC Yellow Taxi Trip Records
 
-## Main source
+## Data source utama
 
-We use official **NYC TLC Yellow Taxi Trip Records**.
+Core dataset workshop ini adalah **NYC Taxi & Limousine Commission Yellow Taxi Trip Records**.
 
-Raw fields we care about:
+Kita pakai data trip yang memang berasal dari operasi taxi di New York City.
+
+Raw file-nya punya banyak kolom, tapi buat use case demand forecasting kita sebenarnya hanya butuh sebagian kecil.
+
+Field paling penting:
 
 ~~~text
 tpep_pickup_datetime
 PULocationID
 ~~~
 
-Taxi zone lookup fields:
+Dan dari Taxi Zone Lookup:
 
 ~~~text
 LocationID
@@ -19,106 +23,387 @@ Borough
 Zone
 ~~~
 
-## Why does the base URL show AccessDenied?
+---
 
-If you open the CloudFront directory URL directly, you may see an XML AccessDenied response.
+# Apa arti field-field itu?
 
-That does not mean the data files are blocked.
+## tpep_pickup_datetime
 
-The storage endpoint simply does not provide public directory listing.
+Waktu pickup taxi terjadi.
 
-Known object paths work, for example:
+Contoh:
 
 ~~~text
-https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet
+2025-01-14 08:37:21
 ~~~
 
-Our bootstrap code builds the exact monthly object path automatically.
+## PULocationID
 
-Mental model:
+Pickup Location ID.
+
+Ini integer yang menunjuk taxi zone.
+
+Contoh:
 
 ~~~text
-browse folder
+161
+~~~
+
+Tapi angka 161 sendiri kurang meaningful buat manusia.
+
+Makanya kita punya zone lookup.
+
+## Taxi Zone Lookup
+
+Lookup mengubah:
+
+~~~text
+LocationID = 161
+~~~
+
+menjadi informasi seperti borough dan zone name.
+
+Kita pakai lookup terutama buat filter:
+
+~~~text
+Borough == Manhattan
+~~~
+
+---
+
+# Kenapa tidak pakai semua kolom?
+
+Raw Yellow Taxi data punya banyak informasi lain.
+
+Misalnya fare, payment, passenger count, dropoff location, dsb.
+
+Tapi target kita adalah **pickup demand**.
+
+Kalau tujuan kita cuma count pickup per zone-hour, cukup:
+
+~~~text
+pickup time
+pickup zone
+~~~
+
+Lebih sedikit column berarti:
+
+- read lebih cepat,
+- memory lebih kecil,
+- logic lebih gampang dijelaskan.
+
+Ini juga lesson penting:
+
+> More columns tidak selalu berarti better pipeline.
+
+Ambil yang memang relevant.
+
+---
+
+# Kenapa Parquet?
+
+Monthly TLC data disimpan dalam Parquet.
+
+Parquet adalah columnar format.
+
+Secara simplified, kalau kita cuma butuh dua column:
+
+~~~text
+pickup datetime
+pickup location
+~~~
+
+reader bisa fokus ke column itu tanpa harus parse seluruh row structure seperti format text biasa.
+
+Keuntungan:
+
+- lebih efficient buat analytical data,
+- type information lebih baik,
+- cocok dengan Pandas/PyArrow.
+
+---
+
+# Base URL kok AccessDenied?
+
+Ini sempat membingungkan juga kalau baru pertama lihat.
+
+Kalau buka:
+
+~~~text
+https://d37ci6vzurychx.cloudfront.net/trip-data
+~~~
+
+bisa keluar XML:
+
+~~~text
+AccessDenied
+~~~
+
+Apakah dataset-nya unavailable?
+
+No.
+
+Yang tidak diizinkan adalah **directory listing**.
+
+CloudFront/S3-like object storage tidak harus menyediakan halaman “isi folder”.
+
+Tapi kalau kita tahu exact object key:
+
+~~~text
+yellow_tripdata_2025-01.parquet
+~~~
+
+file-nya bisa diakses.
+
+Mental model-nya:
+
+~~~text
+"Lihat isi folder?"
 ❌
 
-request exact known file
+"Ambil file exact ini?"
 ✅
 ~~~
 
-## Bootstrap flow
+Code kita build URL object exact berdasarkan month.
+
+---
+
+# Bootstrap stage
+
+Command:
 
 ~~~bash
 uv run python scripts/bootstrap_data.py
 ~~~
 
-The script:
-
-1. downloads taxi zone metadata;
-2. downloads monthly Yellow Taxi Parquet;
-3. keeps the useful columns;
-4. filters Manhattan pickup zones;
-5. removes rows outside the expected month;
-6. creates a smaller replay source.
-
-Folders:
+Secara high-level:
 
 ~~~text
-data/source/tlc
-data/source/replay
-data/metadata
+download zone lookup
+        ↓
+download monthly Yellow Taxi parquet
+        ↓
+select relevant columns
+        ↓
+filter Manhattan zones
+        ↓
+validate timestamps
+        ↓
+save compact replay source
 ~~~
 
-## Why Parquet?
+---
 
-Parquet is columnar.
+# Folder data kita
 
-We can read only the columns we need instead of loading the entire source schema.
-
-That saves I/O and memory.
-
-## Why source and replay are separate
+Setelah bootstrap:
 
 ~~~text
-official file
-    ↓
-select useful columns
-    ↓
-filter Manhattan
-    ↓
-compact replay file
+data/
+├── metadata/
+│   └── taxi_zone_lookup.csv
+│
+└── source/
+    ├── tlc/
+    │   └── original monthly parquet
+    │
+    └── replay/
+        └── compact filtered parquet
 ~~~
 
-The source is the original package. Replay is the workshop-ready version.
+Kenapa source dan replay dipisah?
 
-## Optional weather
+Karena purpose-nya beda.
 
-The full workshop works with TLC data alone.
+## source/tlc
 
-Later, weather can enrich features such as:
+Closer to official downloaded artifact.
 
-- temperature,
-- rainfall,
-- snowfall,
-- wind speed.
+## source/replay
+
+Workshop-optimized version.
+
+Kita sudah:
+
+- reduce columns,
+- filter Manhattan,
+- validate month.
+
+Jadi subsequent simulation lebih ringan.
+
+---
+
+# Kenapa kita pakai historical replay?
+
+Karena MLOps pipeline production biasanya menerima data over time.
+
+Tapi workshop cuma beberapa jam.
+
+Kita nggak mungkin bilang:
+
+> “Oke peers, sekarang tunggu besok dulu ya buat dapat batch baru.”
+
+😄
+
+Jadi historical data kita perlakukan seolah-olah datang gradually.
+
+Misalnya:
 
 ~~~text
-Taxi Data ─────┐
-               ├── Feature Engineering
-Weather Data ──┘
+initial history
+Jan 1–26
+
+then replay
+Jan 27
+Jan 28
+Jan 29
+...
 ~~~
 
-Weather is an extension, not a requirement.
+Kita percepat waktu, bukan mengubah dependency.
 
-## Git and generated data
+---
 
-Generated data is ignored by Git.
+# Data granularity berubah
 
-Git should track the code that creates the data, while DVC later helps track training snapshots.
+Ini penting banget.
 
-## Timezone simplification
+Raw:
 
-The workshop treats pickup timestamps as naive NYC local wall-clock time.
+~~~text
+1 row = 1 trip
+~~~
 
-For the main hands-on period around January and February, this keeps the explanation simple.
+Processed:
 
-A production design should explicitly handle timezone and daylight-saving transitions.
+~~~text
+1 row = 1 taxi zone × 1 hour
+~~~
+
+Contoh raw:
+
+| pickup datetime | zone |
+| --- | ---: |
+| 17:02 | 161 |
+| 17:14 | 161 |
+| 17:58 | 161 |
+
+Processed:
+
+| hour | zone | trip_count |
+| --- | ---: | ---: |
+| 17:00 | 161 | 3 |
+
+---
+
+# Bagaimana kalau suatu zone nggak punya trip?
+
+Ini tricky.
+
+Kalau groupby hanya berdasarkan trip yang ada, combination:
+
+~~~text
+zone 161
+03:00
+0 trips
+~~~
+
+tidak muncul sama sekali.
+
+Padahal:
+
+~~~text
+missing row
+≠
+zero demand
+~~~
+
+Untuk time series, zero demand adalah valid observation.
+
+Jadi kita bikin complete grid:
+
+~~~text
+all Manhattan zones
+×
+24 hours
+~~~
+
+Lalu missing counts kita fill:
+
+~~~text
+trip_count = 0
+~~~
+
+Sekarang tiap zone punya continuous hourly history.
+
+---
+
+# Optional weather enrichment
+
+Kalau nanti mau bikin modeling lebih interesting, taxi demand bisa dikombinasikan dengan weather.
+
+Contoh:
+
+~~~text
+temperature
+rainfall
+snowfall
+wind_speed
+~~~
+
+Kenapa weather potentially useful?
+
+Karena weather bisa affect transportation behavior.
+
+Tapi di workshop:
+
+> Weather bukan core dependency.
+
+Core pipeline harus tetap bisa jalan hanya dengan TLC.
+
+Kenapa kita pilih begitu?
+
+Supaya fokus workshop tetap MLOps, bukan habis waktu di external weather API integration.
+
+---
+
+# Timezone note
+
+Untuk workshop, timestamp TLC diperlakukan sebagai naive NYC local wall-clock time.
+
+Artinya kita tidak memasang timezone-aware transformation di setiap stage.
+
+Ini simplification.
+
+Kenapa masih acceptable buat core walkthrough?
+
+Karena main training/replay awal ada sekitar January–February, sebelum DST transition March.
+
+Kalau project mau dibawa lebih jauh sampai March dan seterusnya, DST handling harus didesign lebih explicit.
+
+Ini contoh penting:
+
+> Workshop simplification harus diketahui, bukan disembunyikan.
+
+---
+
+# Data tidak di-commit ke Git
+
+Generated data di-ignore.
+
+Kenapa?
+
+Monthly taxi parquet besar.
+
+Git bukan tool ideal untuk menyimpan history binary dataset besar.
+
+Git tetap track:
+
+- code,
+- pipeline definitions,
+- docs.
+
+DVC bantu training snapshot reproducibility.
+
+Jadi responsibility-nya clean.

@@ -1,123 +1,325 @@
-# Welcome, peers 👋
+# Hi peers, welcome to BCC Workshop — MLOps 👋
 
-Welcome to **BCC Workshop — MLOps**.
+Welcome peers! Di workshop ini kita bakal belajar **MLOps dari awal sampai punya satu lifecycle yang utuh**, tapi tenang aja, kita nggak akan mulai dari definisi yang terlalu textbook atau langsung dilempar ke banyak tools.
 
-Presenters:
+Workshop ini dibawakan oleh:
 
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
-If this is your first time hearing words such as DVC, DAG, Model Registry, container, CI/CD, Prometheus, or retraining trigger, that is completely okay.
+Kalau sekarang kalian masih bingung bedanya **MLflow, Airflow, DVC, Docker, CI/CD, Prometheus, Grafana**, itu sangat normal. Bahkan salah satu tujuan utama workshop ini justru supaya setelah selesai kalian nggak cuma tahu nama tools-nya, tapi ngerti:
 
-These docs assume you know basic Python and basic machine learning, but **do not assume prior MLOps experience**.
+> “Oh, tool ini masuk karena sebelumnya kita punya problem ini.”
 
-## The story
+Itu penting banget, karena MLOps gampang sekali kelihatan seperti kumpulan tools random kalau kita belajar dari sisi tools dulu.
 
-Imagine you trained a model in a notebook and got a good MAE.
+---
 
-Then someone asks:
+## Sebelum mulai, coba bayangin skenario ini
 
-> “Okay, how do we use this every day?”
+Kalian seorang Data Scientist. Kalian punya notebook, data sudah bersih, model sudah ditrain, dan hasilnya lumayan bagus.
 
-Suddenly the questions become bigger:
-
-- Which dataset produced the model?
-- Which hyperparameters were used?
-- Can another teammate reproduce it?
-- Where is the approved model?
-- How does an application request a prediction?
-- What happens when the API becomes slow?
-- What happens when the model becomes inaccurate?
-- Who decides when to retrain?
-- Which model version is serving right now?
-- What happens after someone pushes new code?
-
-That is where MLOps starts becoming useful.
-
-## Our use case
-
-We predict:
-
-> **the number of NYC Yellow Taxi pickups for each Manhattan taxi zone one hour ahead.**
-
-Raw source:
+Misalnya:
 
 ~~~text
-one row = one taxi trip
+Validation MAE = 10.3
 ~~~
 
-Model dataset:
+Kalian senang. Model disimpan:
 
 ~~~text
-one row = one taxi zone × one hour
+model.pkl
 ~~~
 
-Features include recent demand, yesterday's demand, weekly demand, rolling averages, hour, and weekday.
+Lalu kalian bilang:
 
-## Full lifecycle
+> “Done nih, modelnya sudah jadi.”
+
+Untuk tugas kuliah atau eksperimen pribadi, mungkin memang sudah cukup.
+
+Tapi beberapa hari kemudian ada pertanyaan:
+
+> “Model ini pakai dataset yang mana?”
+
+Kalian jawab:
+
+> “Kayaknya dataset final_v2.csv.”
+
+Terus ditanya lagi:
+
+> “Hyperparameter yang dipakai apa?”
+
+Mulai bingung.
+
+Terus ada pertanyaan berikutnya:
+
+> “Model ini bisa dipakai application lain nggak?”
+
+> “Kalau besok ada data baru siapa yang jalanin training lagi?”
+
+> “Kalau model yang baru malah lebih jelek gimana?”
+
+> “Kalau API-nya hidup tapi modelnya makin ngawur, kita tahu dari mana?”
+
+Nah... mulai dari sini problem-nya sudah bukan cuma **Machine Learning**.
+
+Kita mulai masuk ke:
 
 ~~~text
-Official TLC data
-       ↓
-prepare history
-       ↓
-hourly zone demand
-       ↓
-feature engineering
-       ↓
-training snapshot
-       ↓
-baseline + ML model
-       ↓
-experiment tracking
-       ↓
-model registry
-       ↓
-orchestration
-       ↓
-prediction API
-       ↓
-containers
-       ↓
+How do we operate machine learning systems?
+~~~
+
+Dan kurang lebih itulah area yang kita bahas sebagai **MLOps**.
+
+---
+
+# Use case kita
+
+Biar semua tools yang kita pelajari punya cerita yang nyambung, workshop ini pakai satu use case dari awal sampai akhir:
+
+> **Predicting NYC Yellow Taxi demand one hour ahead for each Manhattan taxi zone.**
+
+Secara sederhana, kita mau menjawab:
+
+> “Untuk jam berikutnya, di area ini kira-kira bakal ada berapa pickup taxi?”
+
+Contohnya:
+
+~~~text
+Sekarang: 17:00
+
+Target:
+Zone 161
+18:00
+
+Prediction:
+147.8 pickups
+~~~
+
+Kenapa use case ini menarik?
+
+Karena kita punya beberapa hal yang memang cocok banget buat MLOps:
+
+- data datang berdasarkan waktu,
+- model pakai historical behavior,
+- ground truth baru tersedia setelah target time lewat,
+- model bisa memburuk seiring waktu,
+- prediction bisa diserve lewat API,
+- retraining bisa dilakukan saat performa turun.
+
+Jadi kita nggak perlu mengarang-ngarang alasan kenapa monitoring atau retraining dibutuhkan.
+
+---
+
+# Dari satu file model sampai full lifecycle
+
+Awalnya mungkin project kita cuma begini:
+
+~~~text
+dataset
+   ↓
+train.py
+   ↓
+model.joblib
+~~~
+
+Tapi selama workshop, lifecycle-nya berkembang jadi:
+
+~~~text
+NYC TLC Data
+     ↓
+Data Preparation
+     ↓
+Feature Engineering
+     ↓
+Training Snapshot
+     ↓
+DVC
+     ↓
+Model Training
+     ↓
+MLflow Tracking
+     ↓
+Model Registry
+     ↓
+Airflow Orchestration
+     ↓
+FastAPI Serving
+     ↓
+Docker
+     ↓
 CI/CD
-       ↓
-monitoring
-       ↓
-retraining decision
-       ↓
-challenger model
+     ↓
+Prometheus
+     ↓
+Grafana
+     ↓
+Model Performance Monitoring
+     ↓
+Retraining
+     ↓
+Challenger Model
+     ↓
+Review / Promotion
+     ↓
+Champion
 ~~~
 
-Do not memorize the diagram.
+Kelihatannya panjang? Iya.
 
-Keep asking:
+Tapi jangan coba dihafal dari sekarang.
 
-> **What problem does this component solve?**
+Kita bakal build satu per satu dan setiap step selalu dimulai dari pertanyaan:
 
-That question is the main learning method in this workshop.
+> **“Sekarang problem kita apa?”**
 
-## Recommended order
+Kalau problem-nya sudah terasa, biasanya tool berikutnya jadi jauh lebih gampang dipahami.
+
+---
+
+# Satu analogi yang bakal sering kita pakai
+
+Coba anggap **model Machine Learning itu recipe**.
+
+Recipe bisa bagus banget. Tapi recipe doang belum jadi restoran.
+
+Restoran masih butuh:
+
+- ingredients,
+- supplier,
+- kitchen,
+- cooking process,
+- quality control,
+- waiter,
+- monitoring,
+- inventory,
+- dan cara update menu.
+
+Kurang lebih:
+
+| Restaurant | ML System |
+| --- | --- |
+| Recipe | Model |
+| Ingredients | Data |
+| Batch ingredients | Dataset version |
+| Cooking process | Training pipeline |
+| Experiment notes | MLflow Tracking |
+| Approved menu | Model Registry |
+| Waiter | FastAPI |
+| Kitchen environment | Docker |
+| Daily schedule | Airflow |
+| Control room | Prometheus + Grafana |
+| Update recipe | Retraining |
+
+Jadi kalau nanti kalian merasa:
+
+> “Kok tool-nya banyak?”
+
+Coba balik ke analogi itu.
+
+Karena yang kita bangun bukan hanya model. Kita bangun **system around the model**.
+
+---
+
+# Apa yang perlu kalian kuasai sebelum workshop?
+
+Kalian nggak harus sudah pernah pakai tools MLOps.
+
+Yang penting cukup nyaman dengan:
+
+- Python dasar,
+- Pandas basic,
+- konsep training dan validation,
+- regression secara umum,
+- sedikit Git.
+
+Kalau istilah seperti DAG, container, model registry, artifact, XCom, metrics scraping masih asing, justru docs ini dibuat untuk itu.
+
+---
+
+# Cara pakai dokumentasi ini
+
+Docs ini sengaja dibuat agak panjang.
+
+Bukan karena semuanya harus dihafal, tapi supaya setelah workshop kalian bisa balik lagi dan baca sebagai reference.
+
+Ada dua cara pakai:
+
+### Kalau lagi ikut live workshop
+
+Ikutin bagian **Hands-on Workshop** secara urut.
+
+~~~text
+Step 0
+Setup
+
+Step 1
+Data
+
+Step 2
+Baseline Model
+
+Step 3
+DVC
+
+Step 4
+MLflow
+
+Step 5
+Airflow
+
+Step 6
+FastAPI
+
+Step 7
+Docker
+
+Step 8
+CI/CD
+
+Step 9
+Monitoring
+
+Step 10
+Retraining
+~~~
+
+### Kalau lagi belajar sendiri
+
+Mulai dari:
 
 1. Workshop Overview
 2. MLOps from Zero
 3. Architecture
-4. Git Workflow
-5. Use Case
-6. Tools and lifecycle sections
-7. Hands-on Workshop
+4. Use Case
+5. Baru masuk tools satu per satu
 
-## One analogy we will reuse
+---
 
-Think of a machine learning model as a **recipe**.
+# Mindset utama workshop ini
 
-A recipe alone is not a restaurant.
+Ada satu kalimat yang menurut kami paling penting:
 
-A restaurant still needs ingredients, inventory, a kitchen process, quality control, order handling, monitoring, and a way to improve the menu.
+> **Jangan mulai dari tool. Mulai dari problem.**
 
-Same idea:
+Kita nggak pakai Airflow karena “MLOps biasanya pakai Airflow”.
 
-~~~text
-model.py alone ≠ ML system
-~~~
+Kita pakai Airflow karena:
 
-MLOps is the engineering around the model that makes the lifecycle repeatable and observable.
+> “Manual pipeline kita mulai susah dikoordinasikan.”
+
+Kita nggak pakai MLflow karena kelihatan keren.
+
+Kita pakai MLflow karena:
+
+> “Eksperimen kita mulai susah dilacak.”
+
+Kita nggak pakai Prometheus karena architecture diagram terasa kurang penuh.
+
+Kita pakai Prometheus karena:
+
+> “Setelah model diserve, kita perlu tahu system-nya masih sehat atau nggak.”
+
+Kalau mindset ini kebawa setelah workshop, kalian sebenarnya sudah dapat bagian paling pentingnya.
+
+Next, kita mulai dari **MLOps from Zero**: sebenarnya MLOps itu apa sih, dan kenapa Machine Learning project punya problem yang sedikit berbeda dari software biasa?

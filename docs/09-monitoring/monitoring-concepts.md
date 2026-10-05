@@ -1,158 +1,345 @@
-# Monitoring Concepts
+# Monitoring — API Sehat Belum Tentu Model Sehat
 
-## Two health questions
+## Ini salah satu bagian paling penting di MLOps
 
-An ML system has at least two different health dimensions.
+Kita sudah:
 
-### System health
+- train,
+- register,
+- serve,
+- containerize.
+
+Apakah selesai?
+
+Belum.
+
+Karena setelah model hidup di luar validation set, kita masuk environment yang terus berubah.
+
+Kita perlu feedback.
+
+---
+
+# Dua jenis health
+
+## System health
+
+Pertanyaan:
 
 ~~~text
-Is the API alive?
-Is it slow?
-Are requests failing?
-How much traffic is arriving?
+API hidup?
+latency berapa?
+error rate?
+berapa request?
 ~~~
 
-### Model health
+Ini operational monitoring.
+
+## Model health
+
+Pertanyaan:
 
 ~~~text
-Are predictions still accurate?
-Which model version is serving?
-Is recent MAE getting worse?
-Should we retrain?
+prediction masih akurat?
+recent MAE naik?
+model version mana?
+perlu retrain?
 ~~~
 
-A fast API can serve a bad model.
+Ini model performance monitoring.
 
-A good model can sit behind a broken API.
+---
 
-We need both views.
+# Kenapa harus dipisah?
 
-## Analogy: delivery restaurant
-
-Operational monitoring asks:
-
-> Is the kitchen open? Are orders delayed?
-
-Model monitoring asks:
-
-> Does the food still taste good?
-
-Both matter, but they measure different things.
-
-## Delayed ground truth
-
-For target 18:00:
+Bayangin case:
 
 ~~~text
-before 18:00
+HTTP 200
+latency 40 ms
+zero server errors
+~~~
+
+Operationally perfect.
+
+Tapi model predict:
+
+~~~text
+actual 200
+prediction 80
+~~~
+
+berulang-ulang.
+
+API cepat.
+
+Model jelek.
+
+Jadi dashboard “all green” server belum cukup.
+
+---
+
+# Case sebaliknya
+
+Model secara statistik masih bagus.
+
+Tapi API latency 20 detik.
+
+Client timeout.
+
+Model good.
+
+Service bad.
+
+Itu juga problem.
+
+---
+
+# Restaurant analogy
+
+Operational monitoring:
+
+> “Restorannya buka? Pesanan datang cepat?”
+
+Model monitoring:
+
+> “Makanannya masih enak?”
+
+Restaurant bisa cepat serve makanan nggak enak.
+
+Bisa juga makanan enak tapi pelanggan tunggu satu jam.
+
+Dua kualitas berbeda.
+
+---
+
+# Delayed ground truth
+
+ML monitoring punya challenge unik.
+
+Saat predict 18:00 di 17:00:
+
+~~~text
 prediction exists
-
-after 18:00
-actual demand becomes available
+actual does not exist yet
 ~~~
 
-We cannot know prediction error before the actual outcome exists.
+Ground truth baru complete setelah target hour selesai.
 
-So we log predictions first, evaluate them later.
+Jadi performance monitoring naturally delayed.
 
-## Prediction log
+Flow:
 
-Stored as JSONL:
+~~~text
+predict now
+↓
+log prediction
+↓
+wait until actual available
+↓
+join prediction + actual
+↓
+calculate error
+~~~
+
+---
+
+# Prediction log
+
+Kita simpan:
 
 ~~~text
 data/monitoring/predictions.jsonl
 ~~~
 
-Important fields:
+Fields:
 
-- zone,
-- target time,
-- prediction,
-- model version,
-- run ID.
+~~~text
+logged_at
+zone_id
+target_datetime
+predicted_trip_count
+model_name
+model_version
+run_id
+~~~
 
-## Evaluation table
+Tanpa log ini kita kehilangan historical prediction.
 
-When ground truth becomes available:
+---
+
+# Evaluation table
+
+Saat actual processed demand tersedia:
 
 ~~~text
 prediction
 +
-processed actual demand
+actual
 ↓
-absolute error
-squared error
+absolute_error
+squared_error
 ~~~
 
-Output:
+Save:
 
 ~~~text
 data/monitoring/evaluations.parquet
 ~~~
 
-## Performance summary
+---
 
-The project writes:
+# Performance summary
+
+Output:
 
 ~~~text
 data/monitoring/performance_summary.json
 ~~~
 
-It contains values such as:
+Isi:
 
 - recent MAE,
 - recent RMSE,
 - reference MAE,
-- threshold MAE,
-- number of evaluated predictions,
-- retraining recommendation.
+- threshold,
+- sample count,
+- latest target,
+- retrain recommendation.
 
-## Reference performance
+---
 
-We do not choose an arbitrary fixed number such as:
+# Reference MAE
+
+Kita nggak pakai arbitrary:
 
 ~~~text
-if MAE > 20
+if MAE > 20:
+  retrain
 ~~~
 
-Instead we compare against the champion's validation MAE from MLflow.
+Kita ambil champion validation MAE dari MLflow.
 
-Example:
+Misalnya:
 
 ~~~text
-champion validation MAE = 10
+reference MAE = 10
 multiplier = 1.25
 
 threshold = 12.5
 ~~~
 
-This makes the threshold relative to known model quality.
+Kalau recent MAE > 12.5 dan sample cukup, recommend retrain.
 
-## Minimum sample
+---
 
-We also require enough evaluated predictions.
+# Why relative threshold?
 
-Why?
+Karena scale problem beda-beda.
 
-A single weird hour should not immediately cause retraining.
+MAE 20 bisa terrible di satu task, normal di task lain.
 
-Monitoring decisions should look for a pattern, not panic over one outlier.
+Relative threshold anchor ke known champion quality.
 
-## Drift vs performance degradation
+---
 
-This workshop directly monitors performance degradation using ground truth.
+# Minimum sample
 
-Data drift is related but different.
+Suppose satu prediction punya error besar.
+
+Haruskah langsung retrain?
+
+Probably no.
+
+Could be outlier.
+
+Makanya:
 
 ~~~text
-data drift
-→ input distribution changed
-
-performance degradation
-→ prediction error got worse
+min_samples = 100
 ~~~
 
-Drift can happen without accuracy loss, and accuracy can degrade for reasons beyond simple feature distribution drift.
+Decision hanya valid setelah enough evidence.
 
-A future extension could add Evidently or custom drift metrics.
+---
+
+# Window
+
+Kita pakai recent latest predictions dengan limit.
+
+Kenapa nggak all history?
+
+Karena kita interested in **recent behavior**.
+
+All-time MAE bisa hide recent degradation.
+
+---
+
+# Drift vs degradation
+
+Ini juga sering ketuker.
+
+## Data drift
+
+Input distribution berubah.
+
+Contoh:
+
+~~~text
+hour distribution
+zone traffic distribution
+~~~
+
+## Performance degradation
+
+Prediction error memburuk.
+
+Drift bisa terjadi tanpa performance drop.
+
+Performance drop bisa terjadi tanpa obvious feature drift.
+
+Workshop directly monitor performance karena ground truth tersedia.
+
+---
+
+# Kenapa belum Evidently?
+
+Bisa banget jadi extension.
+
+Tapi core workshop cukup dengan:
+
+- prediction logging,
+- actual matching,
+- MAE/RMSE,
+- threshold.
+
+Kita ingin understand principle sebelum add dedicated drift tool.
+
+---
+
+# Monitoring should lead to action
+
+Dashboard cantik tanpa action logic kurang useful.
+
+Kita connect monitoring ke:
+
+~~~text
+retrain_recommended
+~~~
+
+Lalu Airflow monitoring DAG consume decision.
+
+Ini menutup feedback loop.
+
+---
+
+# Takeaway
+
+Operational monitoring menjawab:
+
+> “Can the system serve?”
+
+Model monitoring menjawab:
+
+> “Should we still trust the predictions?”
+
+Keduanya harus ada.

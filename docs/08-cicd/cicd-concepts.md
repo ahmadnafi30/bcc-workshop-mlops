@@ -1,112 +1,248 @@
-# CI/CD Concepts
+# CI/CD — What Happens After We Push Code?
 
-## Why automation after Git push?
+## MLOps project tetap software project
 
-Without CI, code quality depends on someone remembering:
+Walaupun ada model, data, dan MLflow, source code tetap berubah.
+
+Misalnya kita update:
+
+- feature logic,
+- API,
+- DAG,
+- Dockerfile,
+- docs.
+
+Pertanyaan:
+
+> “Sebelum perubahan ini masuk stable branch, siapa yang memastikan project masih sehat?”
+
+Kalau jawabannya:
+
+> “Semoga contributor ingat run semua tests.”
+
+kurang kuat.
+
+Kita butuh automated quality gate.
+
+---
+
+# CI — Continuous Integration
+
+Dalam workshop, CI menjawab:
+
+> **“Is this repository change safe enough to integrate?”**
+
+Saat push/PR:
 
 ~~~text
-run tests
-run lint
-build docs
-build Docker
-~~~
-
-Humans forget.
-
-CI makes the verification step consistent.
-
-## CI — Continuous Integration
-
-Question:
-
-> Is this change safe enough to integrate?
-
-Our CI checks:
-
-~~~text
-branch policy
-      ↓
-dependency setup
-      ↓
+code change
+   ↓
 Ruff
-      ↓
+   ↓
 pytest
-      ↓
+   ↓
 MkDocs build
-      ↓
-Docker Compose validation
-      ↓
-Docker image build
+   ↓
+Docker Compose config
+   ↓
+Docker image builds
 ~~~
 
-CI does not automatically mean deployment.
+Kalau fail:
 
-It is primarily a quality gate.
+~~~text
+❌
+do not treat as healthy integration
+~~~
 
-## CD has two common meanings
+---
 
-### Continuous Delivery
+# Kenapa lint masuk CI?
+
+Lint seperti Ruff catch:
+
+- unused import,
+- syntax-ish issue,
+- import ordering,
+- code quality rules.
+
+Apakah lint prove code correct?
+
+No.
+
+Tapi dia enforce basic consistency.
+
+---
+
+# Kenapa tests?
+
+Tests verify behavior.
+
+Feature engineering test misalnya ensure lag/rolling semantics benar.
+
+API test ensure endpoint contract.
+
+Monitoring test ensure retraining threshold behavior.
+
+---
+
+# Kenapa docs juga dibuild?
+
+Karena docs adalah deliverable utama workshop.
+
+Broken nav atau invalid config harus ketahuan sebelum presenter buka docs saat event.
+
+Jadi docs bukan second-class citizen.
+
+---
+
+# Kenapa Docker build di CI?
+
+Python tests bisa pass tapi Dockerfile broken.
+
+Contoh:
+
+~~~text
+COPY path wrong
+dependency missing in image
+build stage fail
+~~~
+
+Docker build validation catch packaging issue.
+
+---
+
+# CD punya dua arti
+
+CD sering berarti salah satu:
+
+## Continuous Delivery
 
 ~~~text
 verified code
-   ↓
+↓
 build artifact
-   ↓
+↓
 publish artifact
-   ↓
+↓
 ready to deploy
 ~~~
 
-### Continuous Deployment
+## Continuous Deployment
 
 ~~~text
 verified code
-   ↓
+↓
+build
+↓
 publish
-   ↓
+↓
 automatically deploy to production
 ~~~
 
-Our workshop uses **Continuous Delivery**.
+Workshop kita pakai **Continuous Delivery**.
 
-We publish container images to GHCR but do not pretend we have a real cloud production target.
+Kita publish image ke GHCR.
 
-## Analogy: factory quality control
+Belum auto deploy ke server/cloud.
 
-Code is a product moving through a factory.
+---
 
-CI is the inspection station.
+# Kenapa nggak pura-pura deploy?
 
-CD is packaging the approved product and putting it in the warehouse.
+Karena kita belum punya actual production destination.
 
-Continuous Deployment would add:
-
-> automatically ship it to the customer.
-
-## Why Docker image is an artifact
-
-An artifact is a built output of the software process.
-
-Examples:
-
-- Python wheel,
-- binary,
-- Docker image.
-
-For this project, the deployable delivery artifact is the service container image.
-
-## Why code and model lifecycle are separate
-
-There are two kinds of change:
+Daripada menambah:
 
 ~~~text
-code changed
-→ CI/CD
-
-model performance changed
-→ monitoring/retraining
+ssh example.com
+docker pull
+restart
 ~~~
 
-They can interact, but they are not the same trigger.
+yang nggak benar-benar dipakai, kita stop di boundary yang honest:
 
-That distinction is important in MLOps.
+~~~text
+deployable container artifact
+available in registry
+~~~
+
+Nanti target infrastructure bisa ditambah.
+
+---
+
+# Software artifact vs model artifact
+
+Ini subtle tapi penting.
+
+## Application artifact
+
+~~~text
+Docker image
+~~~
+
+Versioned by Git commit / image tag.
+
+## Model artifact
+
+~~~text
+MLflow model version
+~~~
+
+Versioned by Model Registry.
+
+Jadi production-like system punya dua independent version axis:
+
+~~~text
+application version
+and
+model version
+~~~
+
+API code bisa sama tapi champion berubah.
+
+Champion sama tapi API code bisa update.
+
+---
+
+# Analogi factory
+
+CI = quality inspection.
+
+CD = packaging approved product into warehouse.
+
+Continuous Deployment = automatically shipping from warehouse to customer.
+
+Simple mental model.
+
+---
+
+# Airflow vs CI/CD
+
+Again:
+
+~~~text
+Airflow
+→ operational ML/data workflow
+
+GitHub Actions
+→ repository delivery workflow
+~~~
+
+Dua-duanya automation, trigger-nya beda.
+
+---
+
+# Checkpoint
+
+Kalau ditanya:
+
+> “CI/CD di project ini ngapain?”
+
+jawaban nggak harus panjang.
+
+Cukup:
+
+> CI automatically verifies code/docs/container changes. CD publishes tested container images to GHCR after main passes CI.
+
+Clear.

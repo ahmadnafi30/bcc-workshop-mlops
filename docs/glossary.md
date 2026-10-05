@@ -1,132 +1,374 @@
-# Glossary
+# Glossary — Istilah yang Sering Muncul
+
+Halaman ini buat quick reference.
+
+Kalau di tengah workshop ada istilah yang lupa, nggak perlu malu. MLOps memang banyak terminology.
+
+---
 
 ## Artifact
 
-A produced output stored for later use, such as a model or Docker image.
+Output yang disimpan untuk dipakai atau diaudit nanti.
+
+Contoh:
+
+- trained model,
+- metrics JSON,
+- Docker image,
+- evaluation Parquet.
+
+---
 
 ## Baseline
 
-A simple reference method used to judge whether a more complex model helps.
+Metode sederhana yang jadi pembanding.
+
+Project kita:
+
+~~~text
+prediction(t)
+=
+demand(t - 24h)
+~~~
+
+Model ML harus justify complexity dengan beat baseline.
+
+---
 
 ## Champion
 
-Registered model alias selected for serving.
-
-## Challenger
-
-Candidate registered model that may replace champion after review.
-
-## CI
-
-Continuous Integration: automated verification of repository changes.
-
-## CD
-
-Continuous Delivery or Continuous Deployment. This workshop uses delivery to GHCR.
-
-## Container
-
-A running instance of a container image.
-
-## DAG
-
-Directed Acyclic Graph: Airflow's dependency graph of tasks.
-
-## Data leakage
-
-Using information in a feature that would not have been available at prediction time.
-
-## DVC
-
-Data Version Control. Used here to define/reproduce training snapshot state.
-
-## Feature
-
-A model input, such as lag_24h or hour.
-
-## Ground truth
-
-The actual observed outcome used to evaluate an earlier prediction.
-
-## Histogram
-
-Prometheus metric type that collects observations in buckets, useful for latency distributions.
-
-## Idempotency
-
-A property where rerunning the same logical operation does not create unintended duplicate/corrupt results.
-
-## Image
-
-A built container template from which containers run.
-
-## Inference
-
-Using a trained model to generate a prediction.
-
-## Lag feature
-
-A previous time-series value used as model input.
-
-## Lineage
-
-Trace connecting an output to its origins.
+Alias di Model Registry untuk model yang sekarang approved buat serving.
 
 ~~~text
 champion
-→ model version
-→ MLflow run
-→ dataset fingerprint
+→ version 3
 ~~~
+
+---
+
+## Challenger
+
+Candidate model yang sedang dipertimbangkan untuk replace champion.
+
+Belum automatically production.
+
+---
+
+## CI
+
+Continuous Integration.
+
+Automated checks saat source changes.
+
+Project kita check:
+
+- lint,
+- tests,
+- docs,
+- Docker builds.
+
+---
+
+## CD
+
+Bisa berarti Continuous Delivery atau Continuous Deployment.
+
+Project kita pakai **Continuous Delivery**:
+
+~~~text
+main CI success
+↓
+publish container to GHCR
+~~~
+
+Belum auto-deploy ke cloud/server.
+
+---
+
+## Container
+
+Running instance dari Docker image.
+
+~~~text
+image
+→ template
+
+container
+→ running instance
+~~~
+
+---
+
+## DAG
+
+Directed Acyclic Graph.
+
+Airflow workflow representation.
+
+~~~text
+task A
+↓
+task B
+↓
+task C
+~~~
+
+Directed = dependency punya arah.
+
+Acyclic = tidak ada circular dependency.
+
+---
+
+## Data leakage
+
+Feature memakai information yang belum seharusnya available saat prediction.
+
+Contoh buruk:
+
+~~~text
+predict 18:00
+but feature includes actual 18:00 demand
+~~~
+
+Metric bisa terlihat bagus tapi fake.
+
+---
+
+## DVC
+
+Data Version Control.
+
+Di project ini dipakai untuk training snapshot pipeline reproducibility.
+
+Bukan replacement Git dan bukan experiment tracker.
+
+---
+
+## Feature
+
+Input untuk model.
+
+Contoh:
+
+~~~text
+hour
+lag_24h
+rolling_mean_3h
+~~~
+
+---
+
+## Ground truth
+
+Actual outcome yang dipakai buat evaluate previous prediction.
+
+Prediction 18:00 dibanding actual 18:00 setelah hour selesai.
+
+---
+
+## Histogram
+
+Prometheus metric type untuk distribution observation.
+
+Kita pakai buat API latency.
+
+---
+
+## Idempotency
+
+Rerun logical operation yang sama tidak menghasilkan unintended duplicate/corruption.
+
+Useful untuk pipeline retry/backfill.
+
+---
+
+## Image
+
+Built Docker artifact/template.
+
+Container dibuat dari image.
+
+---
+
+## Inference
+
+Proses menggunakan trained model untuk menghasilkan prediction.
+
+---
+
+## Lag feature
+
+Historical value pada offset tertentu.
+
+~~~text
+lag_1h
+→ 1 hour before
+
+lag_24h
+→ same hour yesterday
+~~~
+
+---
+
+## Lineage
+
+Trace dari output ke origin.
+
+Contoh:
+
+~~~text
+prediction
+↓
+model version
+↓
+MLflow run
+↓
+dataset SHA
+~~~
+
+---
 
 ## MAE
 
-Mean Absolute Error: average absolute prediction error.
+Mean Absolute Error.
 
-## MLflow run
+Average absolute prediction error.
 
-One recorded experiment execution containing parameters, metrics, tags, and artifacts.
+Kalau MAE 10:
+
+> Rata-rata prediction meleset sekitar 10 target units.
+
+---
+
+## MLflow Run
+
+Satu execution experiment yang punya:
+
+- params,
+- metrics,
+- tags,
+- artifacts,
+- unique run ID.
+
+---
 
 ## Model Registry
 
-Versioned catalog used to manage models after experiments.
+Versioned catalog untuk model artifacts setelah experiment.
+
+Kita punya version + aliases.
+
+---
 
 ## Orchestration
 
-Coordinating workflow steps, dependencies, schedule, and execution state.
+Mengatur:
 
-## Prometheus scrape
+- step,
+- dependency,
+- schedule,
+- execution state.
 
-A request Prometheus makes to a metrics endpoint to collect current metric values.
+Airflow adalah orchestrator kita.
+
+---
+
+## Prometheus Scrape
+
+Prometheus melakukan HTTP request ke metrics endpoint untuk collect current values.
+
+~~~text
+Prometheus
+→ GET /metrics
+~~~
+
+---
 
 ## RMSE
 
-Root Mean Squared Error: regression error metric that penalizes large errors more strongly.
+Root Mean Squared Error.
 
-## Rolling feature
+Regression metric yang memberi penalty lebih besar ke large errors.
 
-Statistic calculated over a recent historical window.
+---
+
+## Rolling Feature
+
+Statistic dari recent historical window.
+
+Contoh:
+
+~~~text
+rolling_mean_3h
+~~~
+
+average demand 3 completed hours sebelumnya.
+
+---
 
 ## Serving
 
-Exposing inference through a stable interface such as HTTP.
+Membuat inference available melalui stable interface.
+
+Project kita pakai FastAPI HTTP.
+
+---
 
 ## Snapshot
 
-Frozen dataset state used for one training cycle.
+Frozen dataset state untuk satu training cycle.
+
+~~~text
+taxi_demand_2025-01-26.parquet
+~~~
+
+---
 
 ## Task
 
-One unit of work in an Airflow DAG.
+Unit of work dalam Airflow DAG.
+
+Contoh:
+
+~~~text
+validate_batch
+~~~
+
+---
 
 ## Training-serving consistency
 
-Keeping feature meaning consistent between offline training and online prediction.
+Feature meaning saat training harus sama dengan saat serving.
+
+Kalau lag_24h semantics beda antara offline dan API, model quality bisa rusak.
+
+---
 
 ## Volume
 
-Persistent or mounted storage used by containers.
+Storage yang dipakai container dan punya lifecycle terpisah dari container process.
+
+Bisa Docker named volume atau bind mount depending context.
+
+---
 
 ## XCom
 
-Airflow mechanism for small task outputs/metadata. Not intended as a large DataFrame transport layer.
+Airflow mechanism untuk passing small task metadata/result.
+
+Good:
+
+~~~text
+date
+path
+row count
+run ID
+~~~
+
+Bad:
+
+~~~text
+huge DataFrame
+~~~
+
+Large data lebih baik lewat file/object storage.

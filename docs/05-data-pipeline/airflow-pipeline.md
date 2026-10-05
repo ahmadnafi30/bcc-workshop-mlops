@@ -1,12 +1,23 @@
-# Airflow Pipeline in This Project
+# Data Pipeline Part 3 — Airflow in Our Project
 
-## Manual first, orchestration second
+## Dari manual scripts menjadi orchestrated workflow
 
-Before this page, you should understand the manual scripts.
+Sampai titik ini, kita sudah bisa:
 
-Airflow then coordinates those same logical steps.
+~~~text
+release date
+validate
+aggregate
+build features
+~~~
 
-## Daily replay DAG
+semua manual.
+
+Sekarang Airflow masuk bukan untuk mengganti logic, tapi untuk mengatur lifecycle execution.
+
+---
+
+# Daily replay DAG
 
 File:
 
@@ -28,54 +39,79 @@ aggregate_demand
 rebuild_features
 ~~~
 
-### get_replay_date
+Mari kita mapping ke business meaning.
 
-Reads the date parameter supplied when triggering the DAG.
+---
 
-Why make it a parameter?
+# get_replay_date
 
-Because the workshop can replay different historical dates without changing Python source code.
-
-### release_batch
-
-Calls reusable logic that materializes one day into:
+Resolve runtime param:
 
 ~~~text
-data/raw/trips/YYYY-MM-DD.parquet
+2025-01-27
 ~~~
 
-### validate_batch
+Ini membuat satu run punya explicit logical input.
 
-Checks the daily input before transformation.
+Kenapa nggak hard-code date?
 
-Examples:
+Karena workflow definition harus reusable.
 
-- not empty,
-- timestamps valid,
-- correct date,
-- pickup zone present.
+---
 
-This illustrates an important pattern:
+# release_batch
+
+Memanggil historical replay logic.
+
+Hasil actual data ditulis ke file.
+
+Return value kecil seperti:
 
 ~~~text
-ingest
-↓
-validate
-↓
-transform
+date
+rows
+path
 ~~~
 
-Do not let bad input quietly travel deeper into the pipeline.
+bisa lewat XCom.
 
-### aggregate_demand
+---
 
-Converts individual trips into zone-hour counts.
+# validate_batch
 
-### rebuild_features
+Check batch contract.
 
-Rebuilds the feature dataset using history through the latest replay date.
+Kalau fail:
 
-## Initial training DAG
+~~~text
+downstream tidak lanjut
+~~~
+
+Ini exactly why task separation berguna.
+
+Failure boundary terlihat jelas di UI.
+
+---
+
+# aggregate_demand
+
+Trip-level data menjadi hourly zone demand.
+
+Ini reuse function dari src.
+
+DAG tidak implement ulang groupby logic.
+
+---
+
+# rebuild_features
+
+Setelah processed date baru available, feature dataset update.
+
+Sekarang historical features include latest date.
+
+---
+
+# Initial training DAG
 
 File:
 
@@ -93,11 +129,15 @@ train_model
 register_candidate
 ~~~
 
-The training task logs experiments to MLflow.
+Kenapa dipisah dari daily replay?
 
-The registration task only registers the candidate if it beats the naive baseline.
+Karena arrival data tidak selalu berarti harus retrain.
 
-## Monitoring DAG
+Kalau tiap daily batch auto-train tanpa condition, system boros dan governance-nya jelek.
+
+---
+
+# Monitoring DAG
 
 File:
 
@@ -105,7 +145,7 @@ File:
 dags/taxi_model_monitoring.py
 ~~~
 
-Flow:
+Flow sederhana:
 
 ~~~text
 evaluate_model
@@ -113,71 +153,146 @@ evaluate_model
 maybe_retrain
 ~~~
 
-The second task can become a no-op when the model is healthy.
-
-That is a useful pattern: a task may decide there is no work to perform after evaluating state.
-
-## Why not one giant DAG?
-
-Because the lifecycles have different reasons to run.
+Di dalam maybe_retrain ada branching logic conceptual:
 
 ~~~text
-daily data flow
-→ new data arrived
+performance okay
+→ no-op
 
-initial training
-→ establish first model
-
-monitoring
-→ evaluate production behavior
+performance degraded
+→ create snapshot
+→ train
+→ register challenger
 ~~~
 
-If we placed everything in one DAG, we might accidentally teach that every daily batch must retrain the model.
+---
 
-That is not the behavior we want.
+# Why no automatic champion promotion?
 
-## How to inspect DAGs
+Karena retraining adalah technical action.
 
-Start Airflow:
+Promotion adalah governance decision.
 
-~~~bash
-uv sync --group airflow
-uv run --group airflow python scripts/start_airflow.py
-~~~
+Mereka related tapi nggak identik.
 
-Open:
+System boleh otomatis create candidate baru.
+
+Tapi approval production tetap explicit.
+
+---
+
+# Runtime retraining snapshot
+
+Initial DVC snapshot punya versioned workflow.
+
+Saat runtime Airflow retraining, kita tidak menjalankan DVC add yang mengubah repo state.
+
+Instead:
+
+- create deterministic snapshot file,
+- calculate SHA256,
+- log fingerprint ke MLflow.
+
+Ini membuat runtime automation tidak mutate Git repository.
+
+---
+
+# XCom design
+
+Yang lewat XCom:
 
 ~~~text
-http://localhost:8080
-~~~
-
-Look at:
-
-- Graph view,
-- task state,
-- task logs,
-- run parameters.
-
-The graph is one of the best ways to connect the code with the mental model.
-
-## What belongs in XCom?
-
-Small metadata:
-
-~~~text
-rows
 path
 date
-run_id
-MAE
+row count
+metric summary
+run ID
 ~~~
 
-What stays outside:
+Yang tidak:
 
 ~~~text
-full DataFrame
-large parquet
-model artifact
+DataFrame besar
+Parquet content
+model binary
 ~~~
 
-Airflow coordinates references; storage systems hold large data.
+File storage tetap tempat large artifacts.
+
+---
+
+# Why this architecture matters
+
+Kalau DAG terlalu banyak logic:
+
+- sulit test,
+- sulit reuse,
+- parse heavy,
+- Airflow jadi dependency untuk semua.
+
+Kalau DAG tipis:
+
+~~~text
+src function
+↓
+test directly
+↓
+wrap in task
+~~~
+
+much cleaner.
+
+---
+
+# What should participants inspect in UI?
+
+## Graph View
+
+Lihat dependency.
+
+## Task Logs
+
+Lihat actual command/function outcome.
+
+## Params
+
+Pastikan replay date sesuai.
+
+## Run History
+
+Bandingkan Jan 27 dan Jan 28.
+
+## Failure State
+
+Kalau ada task gagal, lihat downstream behavior.
+
+---
+
+# Airflow is not the data store
+
+Airflow coordinate.
+
+Data ada di:
+
+~~~text
+data/raw
+data/processed
+data/features
+data/snapshots
+~~~
+
+MLflow punya model artifacts.
+
+Prometheus punya metrics.
+
+Airflow sendiri bukan central place untuk menyimpan semua data.
+
+---
+
+# Takeaway
+
+Kalau kalian lihat DAG file dan bisa bilang:
+
+> “Oh ini cuma orchestration wrapper dari reusable functions.”
+
+itu exactly design yang kita mau.

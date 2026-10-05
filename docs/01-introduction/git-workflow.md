@@ -1,56 +1,153 @@
-# Git Workflow
+# Git Workflow — Kenapa Nggak Langsung Commit ke Main?
 
-## Why more than main?
+## Personal project vs collaborative project
 
-For a personal experiment, direct commits to main are convenient.
+Kalau project masih eksperimen pribadi, direct commit ke main kadang masih okay.
 
-For collaborative work, we want a small safety boundary.
+Tapi repo ini dipakai untuk:
 
-~~~text
-feat/* or fix/*
-        ↓
-      develop
-        ↓
-       main
-~~~
+- workshop,
+- collaboration,
+- future improvement,
+- stable demo.
 
-## Branch roles
+Kita butuh sedikit boundary supaya work-in-progress nggak langsung masuk stable version.
 
-### feat/* — workbench
-
-This is where a feature is built and changed freely.
-
-Example:
+Flow kita:
 
 ~~~text
-feat/add-drift-dashboard
+feat/* / fix/* / docs/* / chore/*
+              ↓
+           develop
+              ↓
+            main
 ~~~
 
-### develop — integration
+---
 
-Completed features meet here.
+# main — stable workshop release
 
-A PR into develop should pass tests, linting, docs build, and Docker validation.
+Anggap main sebagai:
 
-### main — stable workshop release
+> “Version yang cukup aman buat dipakai presenter dan participant.”
 
-Main is the version we are comfortable showing to participants.
+Main seharusnya:
 
-A PR into main should come from develop.
+- CI green,
+- docs build,
+- Docker build,
+- sudah lewat integration branch.
 
-## Normal workflow
+Kita nggak develop feature langsung di main.
+
+---
+
+# develop — integration area
+
+Develop adalah tempat completed feature bertemu.
+
+Bayangin ada dua branch:
+
+~~~text
+feat/new-dashboard
+feat/new-api
+~~~
+
+Individually mungkin dua-duanya works.
+
+Tapi begitu digabung, bisa conflict behavior.
+
+Develop memberi kita ruang:
+
+~~~text
+feature A
+       → develop → integration checks
+   /
+feature B
+~~~
+
+baru setelah stable release ke main.
+
+---
+
+# feat/* — workbench
+
+Feature branch tempat kita bebas iterate.
+
+Contoh:
+
+~~~text
+feat/add-data-drift
+feat/add-model-comparison
+~~~
+
+Di sini boleh punya beberapa commits sementara.
+
+Nanti saat PR merge, squash bisa bikin history integration tetap clean.
+
+---
+
+# fix/*
+
+Bug fix.
+
+~~~text
+fix/rolling-window-leakage
+~~~
+
+---
+
+# docs/*
+
+Documentation-only change.
+
+~~~text
+docs/rewrite-airflow-guide
+~~~
+
+Branch yang sedang kalian baca sekarang juga logically cocok ke category ini.
+
+---
+
+# chore/*
+
+Maintenance.
+
+Contoh:
+
+~~~text
+chore/update-lint-config
+~~~
+
+---
+
+# Typical workflow
+
+Start dari develop:
 
 ~~~bash
 git switch develop
 git pull
+~~~
+
+Create feature:
+
+~~~bash
 git switch -c feat/my-feature
 ~~~
 
-After coding:
+Work.
+
+Commit:
 
 ~~~bash
 git add .
 git commit -m "feat: add my feature"
+~~~
+
+Push:
+
+~~~bash
 git push -u origin feat/my-feature
 ~~~
 
@@ -58,65 +155,200 @@ PR:
 
 ~~~text
 feat/my-feature
-      ↓
-   develop
+→
+develop
 ~~~
 
-Release:
+Setelah develop stable:
 
 ~~~text
 develop
-   ↓
- main
+→
+main
 ~~~
 
-## Why not feat → main?
+---
 
-Because individually-correct changes can conflict when combined.
+# Kenapa nggak feat → main?
 
-Develop gives us an integration point before stable release.
+Karena main bukan integration sandbox.
 
-## CI policy
+Kita ingin stable release punya satu predictable promotion path.
+
+Ini juga membantu presenter:
+
+> “Kalau main green, itu workshop release.”
+
+---
+
+# Branch policy di CI
+
+Workflow check PR direction.
 
 Allowed:
 
 ~~~text
-feat/*  → develop
-fix/*   → develop
-docs/*  → develop
+feat/* → develop
+fix/* → develop
+docs/* → develop
 chore/* → develop
 
 develop → main
 ~~~
 
-The CI workflow checks PR direction.
+Kalau feature langsung ke main, check fail.
 
-Repository branch protection can be enabled in GitHub Settings for an even stricter setup.
+---
 
-## Commit messages
+# Branch protection vs CI policy
 
-We use simple Conventional Commit-style prefixes:
+CI branch policy membantu enforce convention.
 
-| Prefix | Purpose |
+Tapi GitHub Ruleset / Branch Protection lebih strict karena bisa benar-benar prevent direct push.
+
+Workshop repo bisa menambah ruleset di repository settings.
+
+Konsepnya beda:
+
+~~~text
+CI policy
+→ check
+
+branch protection
+→ enforce repository permission/rule
+~~~
+
+---
+
+# Commit message style
+
+Kita pakai simple Conventional Commit style.
+
+| Prefix | Meaning |
 | --- | --- |
-| feat | functionality |
-| fix | bug |
-| docs | documentation |
-| refactor | structure without behavior change |
-| test | tests |
-| ci | automation |
+| feat | fitur |
+| fix | bug fix |
+| docs | dokumentasi |
+| refactor | restructure tanpa behavior baru |
+| test | test |
+| ci | CI/CD |
 | chore | maintenance |
 
-Prefer:
+Good:
 
 ~~~text
-feat: add model performance monitoring
+feat: add prediction monitoring
+fix: prevent rolling leakage
+docs: explain Airflow XCom
 ~~~
 
-over:
+Less helpful:
 
 ~~~text
-update stuff
+update
+fix again
+change stuff
 ~~~
 
-Readable history is part of maintainability.
+---
+
+# Kenapa history matters?
+
+Enam bulan kemudian kita ingin lihat:
+
+~~~text
+feat: add Airflow orchestration
+feat: add FastAPI serving
+feat: add monitoring lifecycle
+~~~
+
+Itu readable.
+
+Dibanding:
+
+~~~text
+fix
+fix2
+final
+final bener
+hehe
+~~~
+
+History adalah documentation juga.
+
+---
+
+# Squash merge
+
+Feature branch mungkin punya:
+
+~~~text
+WIP docs
+fix typo
+rewrite
+fix formatting
+~~~
+
+Saat merge ke develop, squash bisa turn menjadi:
+
+~~~text
+docs: rewrite workshop material for beginners
+~~~
+
+Cleaner.
+
+---
+
+# Release merge
+
+develop → main biasanya kita preserve sebagai release event.
+
+Jadi history main bisa menunjukkan:
+
+~~~text
+feature milestones
+↓
+release commit
+~~~
+
+---
+
+# Mini challenge
+
+Coba jawab:
+
+> Kalian sedang menambah satu Grafana panel baru. Branch start dari mana dan PR ke mana?
+
+Answer:
+
+~~~text
+start from develop
+↓
+feat/add-grafana-panel
+↓
+PR to develop
+~~~
+
+Kalau develop stable:
+
+~~~text
+develop
+↓
+PR to main
+~~~
+
+---
+
+# Takeaway
+
+Branching strategy bukan karena “professional repo harus banyak branch”.
+
+Kita pakai branch karena ada lifecycle:
+
+~~~text
+work
+→ integrate
+→ release
+~~~
+
+Tooling kita hanya membuat lifecycle itu lebih explicit.
