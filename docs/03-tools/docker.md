@@ -1,85 +1,118 @@
-# Docker
+# Docker — Making Runtime More Predictable
 
-## The problem
+## “Di laptopku jalan.”
 
-A project works on one laptop.
+Kalimat paling classic di software development 😄
 
-Another person runs it and gets:
+Project Python bisa jalan di laptop A tapi fail di laptop B karena Python version, package version, environment variable, atau system dependency berbeda.
 
-~~~text
-different Python
-missing system package
-different dependency
-different command
-~~~
+uv sudah membantu Python environment.
 
-Docker reduces that environmental variation by packaging an application runtime into an image.
+Tapi saat application mulai terdiri dari beberapa service, kita butuh runtime packaging yang lebih consistent.
 
-## Analogy: shipping container
+Masuk Docker.
 
-Before standard shipping containers, every type of cargo required different handling.
+---
 
-A container gives a standard outer shape.
+# Docker secara sederhana
 
-Docker does something similar for applications:
+Docker memungkinkan kita build **image** yang mendefinisikan environment application.
+
+Image kemudian bisa dijalankan menjadi **container**.
 
 ~~~text
-application
-dependencies
-runtime setup
-start command
-↓
-image
+Dockerfile
+   ↓ build
+Image
+   ↓ run
+Container
 ~~~
 
-The host still matters, but the application environment becomes much more predictable.
+---
 
-## Image vs container
+# Image vs Container
 
-This is one of the most common beginner questions.
+## Image
+
+Template / packaged artifact.
+
+Belum running.
+
+## Container
+
+Running instance dari image.
+
+Analogi sederhana:
 
 ~~~text
-image
-→ blueprint / template
+Class
+→ Image
 
-container
-→ running instance of that image
+Object instance
+→ Container
 ~~~
 
-Analogy:
+Nggak 100% exact, tapi cukup buat mental model.
 
-~~~text
-class
-→ image
+---
 
-object
-→ container
-~~~
+# Dockerfile
 
-Not technically identical, but useful.
-
-## Dockerfile
-
-Our file:
+Project punya:
 
 ~~~text
 docker/Dockerfile
 ~~~
 
-describes how an image is built.
+Instruction penting:
 
-Important instructions include:
+## FROM
 
-- FROM: base image,
-- RUN: execute build command,
-- COPY: copy files,
-- ENV: set environment variable,
-- WORKDIR: set working directory,
-- CMD: default start command.
+Base image.
 
-## Multi-stage build
+## WORKDIR
 
-We use one Dockerfile with multiple targets:
+Working directory di image.
+
+## COPY
+
+Copy project file.
+
+## RUN
+
+Command saat image build.
+
+## ENV
+
+Environment variable.
+
+## CMD
+
+Default command saat container start.
+
+---
+
+# Build-time vs run-time
+
+## Build-time
+
+Saat docker build.
+
+Docker execute Dockerfile dan menghasilkan image.
+
+## Run-time
+
+Saat container start.
+
+CMD dijalankan.
+
+Kalau source berubah tapi image belum rebuild, container masih bisa pakai code lama.
+
+---
+
+# Multi-target design
+
+Satu Dockerfile punya target:
 
 ~~~text
 base
@@ -88,116 +121,169 @@ base
 └── airflow
 ~~~
 
-Why?
+Shared setup ada di base.
 
-All services share the same core project, but they do not need identical runtime behavior.
+Masing-masing service punya startup behavior berbeda.
 
-### base
+---
 
-Contains:
+# Kenapa service dipisah?
 
-- Python 3.11,
-- uv,
-- project package,
-- core dependencies.
-
-### api
-
-Starts Uvicorn + FastAPI.
-
-### mlflow
-
-Starts MLflow tracking server.
-
-### airflow
-
-Adds the Airflow dependency group and starts Airflow.
-
-## Why not one giant container?
-
-You could run every process in one container, but service boundaries become harder to understand and manage.
-
-Separate containers make the architecture clearer:
+Karena responsibility beda.
 
 ~~~text
-API lifecycle
-≠
-MLflow lifecycle
-≠
-Airflow lifecycle
+API
+→ serving
+
+MLflow
+→ tracking + registry
+
+Airflow
+→ orchestration
 ~~~
 
-## Build manually
+Kalau semua satu container, lifecycle jadi coupled.
+
+Separate container membuat boundary lebih jelas.
+
+---
+
+# Bind mount vs named volume
+
+## Bind mount
+
+Host folder langsung mounted.
+
+Contoh:
+
+~~~text
+./data
+→ /app/data
+~~~
+
+Useful karena hasil Airflow langsung terlihat di host dan API membaca data yang sama.
+
+## Named volume
+
+Docker-managed storage.
+
+Contoh:
+
+~~~text
+airflow-home
+prometheus-data
+grafana-data
+~~~
+
+Useful buat service state.
+
+---
+
+# Shared MLflow state
+
+Workshop punya:
+
+~~~text
+./.mlflow
+~~~
+
+yang mounted ke MLflow container.
+
+Tujuannya:
+
+~~~text
+train locally
+↓
+register champion
+↓
+switch to Compose
+↓
+champion still exists
+~~~
+
+Jadi flow workshop nggak putus.
+
+---
+
+# Networking
+
+localhost di dalam container berarti container itu sendiri.
+
+Untuk reach service lain, Compose menyediakan service name.
+
+~~~text
+API
+→ http://mlflow:5000
+
+Prometheus
+→ http://api:8000/metrics
+
+Grafana
+→ http://prometheus:9090
+~~~
+
+Ini salah satu confusion paling common.
+
+---
+
+# Port publishing
+
+Misalnya:
+
+~~~text
+5000:5000
+~~~
+
+Artinya host port 5000 diteruskan ke container port 5000.
+
+Makanya browser host bisa buka localhost:5000.
+
+---
+
+# Non-root user
+
+Application image jalan sebagai user non-root.
+
+Ini good default karena kita tidak perlu memberi privilege root ke process application.
+
+Bukan full hardening, tapi lebih proper.
+
+---
+
+# .dockerignore
+
+Docker build context bisa besar kalau semua file dikirim.
+
+.dockerignore exclude hal seperti:
+
+- .git,
+- .venv,
+- data,
+- caches,
+- local MLflow state.
+
+Build context jadi lebih kecil dan lebih aman.
+
+---
+
+# Docker bukan magic
+
+Docker tidak solve:
+
+- code bug,
+- data leakage,
+- bad model,
+- drift,
+- insecure credential.
+
+Docker mainly membantu packaging dan environment consistency.
+
+---
+
+# Manual build
 
 ~~~bash
-docker build -f docker/Dockerfile --target api -t bcc-mlops-api .
+docker build   -f docker/Dockerfile   --target api   -t bcc-mlops-api .
 ~~~
 
-You normally use Docker Compose later, but manual build helps explain what Compose is automating.
-
-## Bind mount vs volume
-
-Two storage ideas appear in the project.
-
-### Bind mount
-
-Example:
-
-~~~text
-./data → /app/data
-~~~
-
-The host folder is directly visible inside the container.
-
-Useful for workshop-generated files that we want to inspect from the host.
-
-### Named volume
-
-Example:
-
-~~~text
-mlflow-data
-~~~
-
-Docker manages the storage location.
-
-Useful for service state.
-
-## Non-root user
-
-Our application image uses a non-root app user.
-
-That is a healthier default than running every process as root.
-
-It is not complete production hardening, but it introduces the idea that container security still matters.
-
-## Common mistakes
-
-### localhost confusion
-
-Inside a container:
-
-~~~text
-localhost
-→ this container
-~~~
-
-To reach another Compose service, use its service name.
-
-### Rebuilding after code changes
-
-A Docker image is a built artifact.
-
-If source copied into the image changes, rebuild it.
-
-### Assuming Docker solves everything
-
-Docker helps runtime reproducibility.
-
-It does not automatically solve:
-
-- bad code,
-- data leakage,
-- model drift,
-- insecure credentials,
-- poor architecture.
+Tapi workshop sehari-hari pakai Compose karena service kita saling terhubung.
