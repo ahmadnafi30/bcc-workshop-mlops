@@ -304,3 +304,76 @@ Prometheus di project kita:
 > collect + store + query time-series signals.
 
 Visualization utama nanti Grafana.
+
+
+---
+
+# Implementation Deep Dive — prometheus.yml Kita
+
+Config project:
+
+~~~yaml
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: taxi-api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:8000
+~~~
+
+Baca seperti kalimat:
+
+> “Setiap sekitar lima detik, scrape metrics dari service api port 8000 pada path /metrics.”
+
+Kenapa api:8000?
+
+Karena Prometheus dan API ada di Compose network yang sama.
+
+## Defining metric di Python
+
+Concept project:
+
+~~~python
+API_REQUESTS = Counter(
+    "taxi_api_requests_total",
+    "total request yang diterima FastAPI",
+    ["method", "path", "status"],
+)
+~~~
+
+Saat request selesai:
+
+~~~python
+API_REQUESTS.labels(
+    method=request.method,
+    path=path,
+    status=str(status_code),
+).inc()
+~~~
+
+Untuk latency kita pakai Histogram dan observe duration.
+
+---
+
+# Kalau design metric baru
+
+Tanya:
+
+1. Operational question-nya apa?
+2. Counter, gauge, atau histogram?
+3. Labels apa yang benar-benar useful?
+4. Cardinality label bounded nggak?
+
+Bad example:
+
+~~~text
+request_id sebagai label
+~~~
+
+karena hampir setiap request unique.
+
+Prometheus metric design starts from question, bukan dari desire untuk expose every field.

@@ -382,3 +382,83 @@ Dia application interface.
 Itu justru bagus.
 
 MLOps banyak menggunakan normal software engineering practice untuk membuat ML usable.
+
+
+---
+
+# Implementation Deep Dive — Endpoint Kita
+
+Health endpoint actual-nya sangat kecil:
+
+~~~python
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok")
+~~~
+
+Endpoint kecil tetap useful karena health probe harus cheap dan predictable.
+
+## Prediction endpoint
+
+Simplified:
+
+~~~python
+@app.post(
+    "/predict",
+    response_model=PredictionResponse,
+)
+def predict(
+    request: PredictionRequest,
+    predictor: TaxiDemandPredictor = Depends(
+        get_predictor
+    ),
+) -> PredictionResponse:
+
+    result = predictor.predict(
+        zone_id=request.zone_id,
+        target_datetime=request.target_datetime,
+    )
+
+    observe_prediction(result)
+
+    return PredictionResponse(**result)
+~~~
+
+Baca flow:
+
+~~~text
+typed request
+↓
+dependency-injected predictor
+↓
+domain prediction
+↓
+metric observation
+↓
+typed response
+~~~
+
+HTTP layer tetap tipis.
+
+Actual history/model logic ada di src/serving.
+
+## Kalau bikin endpoint baru
+
+Misalnya batch prediction.
+
+Jangan duplicate semua model loading ke endpoint.
+
+Design:
+
+~~~text
+schema
+↓
+reusable serving function
+↓
+HTTP wrapper
+~~~
+
+Framework layer tipis, domain logic reusable. Pattern ini sama seperti DAG tipis di Airflow.

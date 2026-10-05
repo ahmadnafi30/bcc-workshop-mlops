@@ -387,3 +387,54 @@ with a known fingerprint
 ~~~
 
 Itulah value utamanya.
+
+
+---
+
+# Implementation Deep Dive — dvc.yaml Kita
+
+Actual stage project kita:
+
+~~~yaml
+stages:
+  create_training_snapshot:
+    cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+    deps:
+      - data/features/taxi_demand_features.parquet
+      - scripts/create_training_snapshot.py
+      - src/data_versioning/snapshot.py
+    outs:
+      - data/snapshots/training/taxi_demand_2025-01-26.parquet
+~~~
+
+Sekarang baca bukan sebagai YAML, tapi sebagai kalimat:
+
+> “Untuk menghasilkan snapshot Jan 26, jalankan create_training_snapshot.py. Output ini bergantung pada feature data, script entry point, dan snapshot business logic.”
+
+Kalau kalian bisa translate config menjadi kalimat seperti itu, YAML jadi jauh less scary.
+
+## Kenapa source Python masuk deps?
+
+Misalnya data tidak berubah, tapi logic snapshot berubah.
+
+Kalau code dependency tidak dicantumkan, pipeline metadata bisa gagal mencerminkan bahwa output potentially stale.
+
+Jadi dependency bukan cuma data. Code yang affect artifact juga dependency.
+
+## Kalau stage dibuat dari nol
+
+Conceptually:
+
+~~~bash
+uv run dvc stage add   -n create_training_snapshot   -d data/features/taxi_demand_features.parquet   -d scripts/create_training_snapshot.py   -d src/data_versioning/snapshot.py   -o data/snapshots/training/taxi_demand_2025-01-26.parquet   python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+~~~
+
+Saat design stage, jangan mulai dari syntax. Tanyakan:
+
+~~~text
+What creates this artifact?
+What can change this artifact?
+What artifact should exist afterward?
+~~~
+
+Itu inti DVC stage design.

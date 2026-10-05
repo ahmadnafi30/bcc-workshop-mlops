@@ -371,3 +371,88 @@ Setelah MLflow:
 > “Run abc memakai snapshot SHA xyz, learning_rate 0.05, validation MAE 10.2, dan artifact model ini.”
 
 Much better.
+
+
+---
+
+# Implementation Deep Dive — Logging One MLflow Run
+
+Project kita secara concept melakukan:
+
+~~~python
+with mlflow.start_run(
+    run_name="hist-gradient-boosting"
+) as run:
+
+    mlflow.log_params(
+        {
+            "model_type": "hist_gradient_boosting",
+            "learning_rate": 0.05,
+            "dataset_snapshot": "...",
+            "dataset_sha256": "...",
+        }
+    )
+
+    mlflow.log_metrics(
+        {
+            "mae": ...,
+            "rmse": ...,
+        }
+    )
+
+    mlflow.set_tags(
+        {
+            "task": "taxi-demand-forecasting",
+            "stage": "validation",
+        }
+    )
+
+    mlflow.sklearn.log_model(
+        sk_model=model,
+        name="model",
+        input_example=example,
+    )
+~~~
+
+## start_run
+
+Membuka context satu run.
+
+## log_params
+
+Configuration/input.
+
+## log_metrics
+
+Measured numeric result.
+
+## set_tags
+
+Searchable/descriptive context.
+
+## log_model
+
+Store model artifact dalam MLflow model format.
+
+## Kenapa input_example?
+
+MLflow bisa menyimpan contoh input dan infer signature.
+
+Model artifact jadi lebih inspectable daripada binary opaque saja.
+
+---
+
+# Kalau design tracking sendiri
+
+Jangan log everything random.
+
+Tanya:
+
+~~~text
+Apa yang dibutuhkan buat compare run?
+Apa yang dibutuhkan buat trace data?
+Apa artifact yang perlu disimpan?
+Apa context yang useful buat filter?
+~~~
+
+Logging yang purposeful lebih valuable daripada metadata banyak tapi nggak jelas gunanya.

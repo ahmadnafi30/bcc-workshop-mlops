@@ -517,3 +517,94 @@ Kalau hanya ingat satu kalimat:
 Dan kalau ingat dua:
 
 > **DAG sebaiknya tipis, reusable logic sebaiknya hidup di src/.**
+
+
+---
+
+# Implementation Deep Dive — Actual Daily DAG Kita
+
+Simplified shape dari project:
+
+~~~python
+@dag(
+    dag_id="taxi_daily_replay",
+    schedule=None,
+    params={
+        "replay_date": Param(
+            "2025-01-27",
+            type="string",
+            format="date",
+        )
+    },
+)
+def taxi_daily_replay():
+
+    @task
+    def get_replay_date() -> str:
+        ...
+
+    @task
+    def release_batch(replay_date: str) -> dict:
+        ...
+
+    @task
+    def validate_batch(
+        replay_date: str,
+        release_info: dict,
+    ) -> dict:
+        ...
+
+    replay_date = get_replay_date()
+    release_info = release_batch(replay_date)
+    validation_info = validate_batch(
+        replay_date,
+        release_info,
+    )
+~~~
+
+## @dag
+
+Decorator ini bilang function di bawah mendeskripsikan sebuah DAG.
+
+dag_id adalah identity di UI.
+
+schedule=None berarti manual trigger.
+
+## Param
+
+Runtime configuration.
+
+Presenter bisa ganti replay date tanpa edit source.
+
+## @task
+
+Python function dibungkus sebagai Airflow task.
+
+Business body tetap Python, tapi lifecycle execution dikelola Airflow.
+
+## Function call membentuk dependency
+
+validation menerima output release.
+
+Airflow tahu validation depends on release.
+
+Dari relationship ini Graph View terbentuk.
+
+---
+
+# Designing DAG dengan pertanyaan
+
+Kalau bikin DAG baru, jangan mulai:
+
+> “Decorator syntax-nya apa?”
+
+Mulai:
+
+1. Apa trigger workflow?
+2. Apa unit of work yang independently observable?
+3. Apa dependency antar unit?
+4. Data besar disimpan di mana?
+5. Metadata kecil apa yang perlu lewat?
+6. Kalau rerun aman nggak?
+
+Baru setelah itu tulis decorator.

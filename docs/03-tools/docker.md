@@ -287,3 +287,81 @@ docker build   -f docker/Dockerfile   --target api   -t bcc-mlops-api .
 ~~~
 
 Tapi workshop sehari-hari pakai Compose karena service kita saling terhubung.
+
+
+---
+
+# Implementation Deep Dive — Reading Our Dockerfile
+
+Awal Dockerfile:
+
+~~~dockerfile
+FROM python:3.11-slim AS base
+
+ENV PYTHONUNBUFFERED=1
+ENV UV_LINK_MODE=copy
+
+WORKDIR /app
+~~~
+
+Baca seperti cerita:
+
+> “Mulai dari Python 3.11 slim, set environment behavior, lalu jadikan /app working directory.”
+
+Kemudian source dicopy:
+
+~~~dockerfile
+COPY pyproject.toml .python-version README.md ./
+COPY src ./src
+COPY api ./api
+COPY scripts ./scripts
+~~~
+
+Lalu:
+
+~~~dockerfile
+RUN uv sync --no-dev
+~~~
+
+Runtime image tidak butuh seluruh dev tooling.
+
+## API target
+
+~~~dockerfile
+FROM base AS api
+
+EXPOSE 8000
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+~~~
+
+Kenapa 0.0.0.0?
+
+Supaya Uvicorn listen pada container interfaces dan bisa diakses melalui published port/network.
+
+## Airflow target
+
+~~~dockerfile
+RUN uv sync --no-dev --group airflow
+~~~
+
+Heavy Airflow dependency hanya masuk target Airflow, bukan API.
+
+Ini example:
+
+> Different service, different runtime requirement.
+
+## Cara baca Dockerfile
+
+Tanya:
+
+~~~text
+What is the base?
+What files enter?
+What gets installed?
+Which user runs it?
+Which port matters?
+What command starts the service?
+~~~
+
+Kalau enam pertanyaan terjawab, kalian sudah bisa review Dockerfile basic dengan cukup nyaman.

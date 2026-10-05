@@ -312,3 +312,77 @@ Urutan:
 Pelan-pelan.
 
 YAML CI terlihat scary mostly karena nested structure, bukan karena concept-nya selalu rumit.
+
+
+---
+
+# Implementation Deep Dive — Reading Our CI Workflow
+
+Simplified trigger:
+
+~~~yaml
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feat/**"
+      - "fix/**"
+      - "docs/**"
+
+  pull_request:
+    branches:
+      - main
+      - develop
+~~~
+
+Artinya CI aktif di branch development dan PR ke integration/release branch.
+
+## Quality steps
+
+~~~yaml
+- name: Sync project
+  run: uv sync --group docs
+
+- name: Run Ruff
+  run: uv run ruff check src api scripts tests
+
+- name: Run tests
+  run: uv run pytest -q
+
+- name: Build workshop docs
+  run: uv run --group docs mkdocs build --strict
+~~~
+
+Notice command CI mostly sama dengan command local.
+
+Itu bagus karena failure lebih gampang direproduce.
+
+## Docker matrix
+
+Concept:
+
+~~~yaml
+strategy:
+  matrix:
+    target:
+      - api
+      - mlflow
+      - airflow
+~~~
+
+Satu job template dijalankan untuk setiap target.
+
+Jadi kita avoid copy-paste tiga full jobs.
+
+## Kalau mau nambah check baru
+
+Misalnya type checker:
+
+1. pastikan command works local;
+2. add dependency;
+3. add CI step;
+4. decide blocking policy;
+5. document expectation.
+
+CI harus represent quality policy, bukan random pile of commands.
