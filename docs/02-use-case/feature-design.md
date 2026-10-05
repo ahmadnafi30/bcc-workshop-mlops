@@ -1,29 +1,25 @@
-# Feature Engineering — How Do We Turn History Into Predictive Signals?
+# Feature Engineering — Model Time Series Nggak Bisa Dikasih Timestamp Mentah Doang
 
-## Model nggak bisa makan “timestamp” mentah lalu magically ngerti semuanya
+Sekarang kita sudah punya hourly demand.
 
-Setelah aggregation, data kita bentuknya kira-kira:
+Contoh:
 
 | timestamp | zone_id | trip_count |
 | --- | ---: | ---: |
-| 2025-01-10 17:00 | 161 | 142 |
-| 2025-01-10 18:00 | 161 | 165 |
+| 17:00 | 161 | 142 |
+| 18:00 | 161 | 165 |
 
-Target kita untuk row 18:00:
+Target row 18:00:
 
 ~~~text
 target_trip_count = 165
 ~~~
 
-Sekarang pertanyaannya:
-
-> “Informasi apa yang tersedia sebelum 18:00 dan likely useful buat predict 18:00?”
-
-Itulah feature engineering.
+Model butuh features yang menggambarkan context sebelum 18:00.
 
 ---
 
-# Calendar Features
+## Calendar Features
 
 Kita extract:
 
@@ -35,55 +31,19 @@ is_weekend
 
 Kenapa?
 
-Karena behavior demand sangat time-dependent.
+Karena timestamp raw tidak otomatis memberi model semantic pattern.
 
-Coba bayangin:
+Taxi demand jam 08:00 Monday mungkin beda dengan 23:00 Saturday.
 
-~~~text
-Monday 08:00
-vs
-Sunday 03:00
-~~~
-
-Walaupun zone sama, expectation demand bisa sangat beda.
-
-Raw timestamp sendiri punya banyak component.
-
-Kita encode pattern yang lebih directly useful.
+Calendar feature expose pattern tersebut.
 
 ---
 
-# zone_id
+## Lag Features
+
+Lag = previous value.
 
 Kita pakai:
-
-~~~text
-zone_id
-~~~
-
-Tapi treat as categorical.
-
-Kenapa?
-
-Karena:
-
-~~~text
-zone 200
-~~~
-
-nggak berarti “dua kali zone 100”.
-
-Angka itu identifier, bukan meaningful magnitude.
-
-Kalau dianggap numeric ordinal biasa, model bisa infer relation yang nggak kita maksud.
-
----
-
-# Lag Features
-
-Lag adalah previous value.
-
-Features:
 
 ~~~text
 lag_1h
@@ -93,75 +53,50 @@ lag_24h
 lag_168h
 ~~~
 
-Untuk target:
-
-~~~text
-2025-01-10 18:00
-~~~
-
-maka:
+Untuk target 18:00:
 
 ~~~text
 lag_1h
-= Jan 10 17:00
+→ 17:00
 
 lag_2h
-= Jan 10 16:00
+→ 16:00
 
 lag_24h
-= Jan 9 18:00
+→ yesterday 18:00
 
 lag_168h
-= Jan 3 18:00
+→ same hour last week
 ~~~
 
----
+Kenapa lag_168h?
 
-# Kenapa lag 1, 24, 168?
+Karena weekly seasonality bisa exist.
 
-Mereka represent beberapa temporal pattern.
-
-## lag_1h
-
-Recent momentum.
-
-Kalau area lagi ramai satu jam sebelumnya, next hour mungkin masih ramai.
-
-## lag_24h
-
-Daily seasonality.
-
-Jam 18 hari ini sering related dengan jam 18 kemarin.
-
-## lag_168h
-
-Weekly seasonality.
-
-168 hours = 7 days.
-
-Jadi Friday 18:00 bisa dibandingkan dengan Friday sebelumnya.
+Monday 18:00 mungkin lebih similar dengan previous Monday 18:00 daripada Sunday 18:00.
 
 ---
 
-# Analogi gampang
+## Analogi cafe
 
-Kalian ditanya:
+Kalau ditanya:
 
-> “Besok jam makan siang kantin bakal ramai nggak?”
+> “Besok jam 8 pagi cafe ramai nggak?”
 
-Mungkin kalian mikir:
+Kalian mungkin lihat:
 
-- sekarang lagi ramai nggak?
-- kemarin jam segini ramai nggak?
-- minggu lalu hari yang sama ramai nggak?
+- sekarang seberapa ramai,
+- kemarin jam 8,
+- minggu lalu jam 8,
+- average beberapa jam terakhir.
 
-Lag features essentially formalize thought process itu.
+Lag feature formalize intuition itu.
 
 ---
 
-# Rolling Features
+## Rolling Features
 
-Kita juga punya:
+Kita pakai:
 
 ~~~text
 rolling_mean_3h
@@ -169,324 +104,250 @@ rolling_mean_6h
 rolling_mean_24h
 ~~~
 
-Rolling mean menjawab:
+Rolling mean capture local trend.
 
-> “Secara average, beberapa jam terakhir demand-nya bagaimana?”
-
-Contoh:
-
-~~~text
-15:00 = 100
-16:00 = 120
-17:00 = 140
-~~~
-
-rolling_mean_3h untuk target 18:00:
-
-~~~text
-(100 + 120 + 140) / 3
-= 120
-~~~
-
-Ini memberi smoother signal daripada hanya satu previous hour.
+Kalau demand recent sedang naik, average recent bisa informative.
 
 ---
 
-# Ini bagian leakage yang paling penting
+## Leakage trap di rolling feature
 
-Kalau kita careless, rolling mean bisa accidentally include current target.
+Ini super important.
 
-Misalnya target 18:00.
+Target 18:00.
 
-Bad logic:
+Kalau rolling window include:
 
 ~~~text
-rolling window:
 16:00
 17:00
-18:00 actual
+18:00
 ~~~
 
-Problem:
+berarti feature include actual target.
 
-18:00 actual adalah answer.
+Cheating.
 
-Model jadi melihat target-nya sendiri.
-
-Validation bisa terlihat sangat bagus tapi fake.
-
-Correct logic:
+Correct flow:
 
 ~~~text
-shift(1)
+shift by 1 hour
 ↓
-rolling()
+rolling
 ~~~
 
-Jadi window berakhir di 17:00.
+Jadi window end di 17:00.
+
+Rule:
+
+> Feature boleh melihat past, bukan target/future.
 
 ---
 
-# Warm-up period
+## Group by zone
 
-Feature terjauh:
+Lag harus dihitung **per zone**.
+
+Bad:
 
 ~~~text
-lag_168h
+sort all rows
+shift globally
 ~~~
 
-Artinya kita butuh minimum 168 hours history.
+Bisa bikin previous row zone 161 jadi lag untuk zone 162.
 
-Kalau data mulai Jan 1:
+Nonsense.
 
-~~~text
-Jan 1
-belum punya 7-day history
-
-...
-
-Jan 7
-masih warm-up
-
-Jan 8
-first complete rows begin
-~~~
-
-Makanya:
+Correct:
 
 ~~~text
-Jan 1–7
-historical context
-
-Jan 8 onward
-model-ready rows
-~~~
-
-Ini bukan data terbuang.
-
-Jan 1–7 dipakai sebagai context untuk lag.
-
----
-
-# Per-zone grouping itu wajib
-
-Coba bayangin table sorted wrong:
-
-~~~text
-zone 161
-zone 162
-zone 163
-~~~
-
-Kalau shift dilakukan tanpa groupby zone, lag zone 162 bisa accidentally mengambil previous row dari zone 161.
-
-Itu nonsense.
-
-Jadi pattern-nya:
-
-~~~text
-sort by:
-zone_id
-timestamp
-
-then:
-groupby(zone_id)
-
-then:
+group by zone_id
+↓
+sort by timestamp
+↓
 shift / rolling
 ~~~
 
-Time-series transformation harus respect entity boundary.
-
 ---
 
-# Target
+## Kenapa sorting penting?
 
-Kita copy:
+Shift dan rolling assume order.
+
+Kalau timestamp shuffled:
 
 ~~~text
-trip_count
-→ target_trip_count
+18:00
+14:00
+17:00
 ~~~
 
-untuk current row.
+shift jadi meaningless.
 
-Feature hanya historical.
+Jadi before time-series operation:
 
-Target current.
+~~~text
+sort zone
+sort time
+~~~
 
-Ini membuat schema jelas.
+Simple, tapi critical.
 
 ---
 
-# Main model
+## Warm-up Period
 
-Kita pakai:
+Longest lag:
+
+~~~text
+168 hours
+=
+7 days
+~~~
+
+Artinya row pertama belum punya lag_168h.
+
+Kita butuh one week history dulu.
+
+~~~text
+Jan 1–7
+→ warm-up
+
+Jan 8 onward
+→ complete model rows
+~~~
+
+Warm-up bukan waste.
+
+Dia menyediakan context.
+
+---
+
+## Complete Zone-Hour Grid
+
+Kalau di satu zone jam tertentu zero trip, groupby raw trips tidak produce row.
+
+Tapi zero demand itu valid information.
+
+Jadi kita build complete grid:
+
+~~~text
+all Manhattan zones
+×
+24 hours
+~~~
+
+Missing combination fill:
+
+~~~text
+trip_count = 0
+~~~
+
+Kenapa penting?
+
+Karena time series harus continuous.
+
+Kalau row zero-demand hilang, model bisa mengira time jump.
+
+---
+
+## zone_id categorical
+
+Zone ID adalah identifier.
+
+~~~text
+zone 200
+~~~
+
+bukan “dua kali lebih besar” daripada zone 100.
+
+Jadi treat zone sebagai categorical feature.
+
+Ini small modeling detail tapi conceptually correct.
+
+---
+
+## Model choice
+
+Main model:
 
 ~~~text
 HistGradientBoostingRegressor
 ~~~
 
-Kenapa bukan LSTM?
+Kenapa?
 
-Kenapa bukan Transformer?
-
-Kenapa bukan Chronos?
-
-Bukan karena model advanced jelek.
-
-Tapi workshop goal utama adalah MLOps.
-
-Kita butuh model yang:
-
-- cukup strong,
-- train cepat,
+- tabular-friendly,
 - CPU-friendly,
-- dependency ringan,
-- gampang diserve.
+- relatively fast,
+- no GPU,
+- supports categorical handling,
+- easy serving.
 
-HistGradientBoosting cocok.
+Workshop focus MLOps, bukan model architecture competition.
 
-Kalau model terlalu berat, workshop berubah jadi:
-
-> “nunggu training / download model.”
-
-Bukan belajar lifecycle.
+Kalau model terlalu heavy, peserta habis waktu nunggu training.
 
 ---
 
-# Baseline
+## Time-based split
 
-Model utama dibanding:
-
-~~~text
-prediction = lag_24h
-~~~
-
-Jadi naive baseline literally:
-
-> “Demand jam yang sama kemarin berapa?”
-
-Kenapa baseline ini bagus?
-
-Karena secara domain masuk akal.
-
-Kalau model ML tidak beat ini, berarti ML complexity belum justified.
-
----
-
-# Train / validation split
-
-Time-series harus hati-hati.
-
-Kita tidak random split.
+Jangan random split.
 
 Kenapa?
 
-Bayangin training melihat February tapi validation berisi January.
+Karena problem kita temporal.
 
-Secara chronological, model sudah melihat future relative ke validation.
+Random split bisa bikin future patterns masuk training sementara earlier period jadi validation.
 
-Itu tidak represent realistic deployment.
-
-Jadi:
+Lebih realistic:
 
 ~~~text
 past
 → train
 
-future
+later period
 → validation
 ~~~
 
 Initial:
 
 ~~~text
-Jan 8–21
-training
-
-Jan 22–26
-validation
+Jan 8–21 train
+Jan 22–26 validation
 ~~~
 
-Retraining nanti:
+Retraining:
 
 ~~~text
-all older data
-training
-
-latest 5 days
-validation
+latest snapshot
+↓
+last 5 days validation
 ~~~
 
-Validation window ikut maju.
+Validation ikut maju.
 
 ---
 
-# Training-serving consistency
+## Training-serving consistency
 
-Saat training, kita build:
+Training feature logic dan online serving feature logic harus punya same semantics.
 
-~~~text
-lag_1h
-lag_24h
-rolling_mean_3h
-...
-~~~
+Kalau training lag_24h benar, tapi serving lag_24h salah offset, production behavior rusak.
 
-Saat API serving, kita juga harus build feature dengan definition yang sama.
+Makanya kita test exact feature values.
 
-Kalau training:
-
-~~~text
-rolling_mean_3h
-=
-mean of last 3 completed hours
-~~~
-
-tapi serving:
-
-~~~text
-rolling_mean_3h
-=
-mean of another window
-~~~
-
-model menerima semantics berbeda.
-
-Itu disebut training-serving skew.
-
-Dalam production system besar bisa dipakai feature store untuk manage consistency.
-
-Di workshop kita implement explicit logic supaya concept-nya kelihatan.
+Ini alasan feature engineering bukan sekadar preprocessing detail. Ini production contract.
 
 ---
 
-# Feature checklist
+## Checkpoint
 
-Sebelum percaya dataset, selalu cek:
-
-### Apakah row sorted?
-
-~~~text
-zone_id
-timestamp
-~~~
-
-### Apakah lag dihitung per zone?
-
-Harus iya.
-
-### Apakah rolling exclude current target?
-
-Harus iya.
-
-### Apakah early incomplete row di-drop?
-
-Iya.
-
-### Apakah zone_id treated categorical?
-
-Iya.
-
-Kalau semua ini benar, barulah model metric lebih believable.
+1. Lag feature itu apa?
+2. Kenapa rolling harus shift dulu?
+3. Kenapa group by zone?
+4. Warm-up 7 hari muncul dari mana?
+5. Kenapa zero-demand row harus tetap ada?
+6. Kenapa random split kurang cocok?
+7. Training-serving consistency artinya apa?

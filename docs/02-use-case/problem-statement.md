@@ -1,245 +1,180 @@
-# Problem Statement — What Are We Predicting?
+# Problem Statement — Kita Sebenarnya Lagi Predict Apa?
 
-## Use case kita simple, tapi cukup realistic
+Sebelum ngomong MLOps, kita harus jelas dulu ML problem-nya.
 
-Kita mau memprediksi:
+Karena MLOps yang bagus nggak bisa menyelamatkan problem formulation yang kabur.
 
-> **berapa banyak Yellow Taxi pickup yang akan terjadi di setiap Manhattan taxi zone satu jam ke depan.**
+Use case kita:
 
-Misalnya sekarang kita sedang punya historical information sampai:
+> **Predict jumlah Yellow Taxi pickups di setiap Manhattan taxi zone untuk satu jam ke depan.**
+
+Simple kalimatnya, tapi ada beberapa detail penting.
+
+---
+
+## Unit prediction kita
+
+Model tidak predict “NYC demand” secara global.
+
+Model predict per:
 
 ~~~text
-2025-01-28 17:00
+zone
+×
+target hour
 ~~~
 
-Kita ingin predict:
+Contoh:
 
 ~~~text
 Zone 161
-2025-01-28 18:00
+Target hour: 2025-01-28 18:00
+Prediction: 147 pickups
 ~~~
 
-Output kira-kira:
+Jadi setiap row model merepresentasikan satu combination:
 
 ~~~text
-predicted_trip_count = 147.8
-~~~
-
-Karena model regression, output bisa float. Secara business kalau nanti perlu count bulat bisa ada post-processing, tapi core model tetap regression.
-
----
-
-# Kenapa one hour ahead?
-
-Kita sengaja pilih horizon satu jam karena cukup gampang dijelaskan dan cukup meaningful.
-
-Kalau terlalu pendek, misalnya satu menit, data pipeline dan behavior demand berbeda.
-
-Kalau terlalu jauh, misalnya satu minggu, historical short-term pattern jadi kurang powerful dan problem forecasting-nya lebih kompleks.
-
-Satu jam memberi kita balance:
-
-~~~text
-recent demand
-still useful
-
-daily pattern
-still useful
-
-weekly pattern
-still useful
+one zone × one hour
 ~~~
 
 ---
 
-# Raw data-nya seperti apa?
+## Kenapa satu jam ahead?
 
-NYC Yellow Taxi Trip Records punya satu row per trip.
+Kenapa nggak next 5 minutes? Kenapa nggak besok?
 
-Secara simplified:
+Karena satu jam cukup reasonable buat workshop:
 
-| pickup datetime | PULocationID |
+- historical lag masih relevant,
+- pattern harian masih strong,
+- use case mudah dipahami,
+- ground truth datang relatif cepat,
+- monitoring/replay enak didemokan.
+
+Satu jam juga bikin konsep online feature cukup jelas.
+
+Untuk target 18:00, history terbaru yang boleh dipakai adalah sampai 17:00.
+
+---
+
+## Raw data granularity vs model granularity
+
+NYC TLC raw data:
+
+~~~text
+one row
+=
+one taxi trip
+~~~
+
+Contoh:
+
+| pickup time | zone |
 | --- | ---: |
-| 2025-01-10 17:03 | 161 |
-| 2025-01-10 17:10 | 161 |
-| 2025-01-10 17:44 | 162 |
+| 17:03 | 161 |
+| 17:10 | 161 |
+| 17:44 | 162 |
 
-Model kita nggak langsung predict individual trip.
+Model kita nggak butuh detail individual trip.
 
-Kita aggregate.
-
-Hasilnya:
+Kita aggregate:
 
 | timestamp | zone_id | trip_count |
 | --- | ---: | ---: |
-| 2025-01-10 17:00 | 161 | 2 |
-| 2025-01-10 17:00 | 162 | 1 |
+| 17:00 | 161 | 2 |
+| 17:00 | 162 | 1 |
 
-Jadi setelah preprocessing:
+Jadi transform utama pertama:
 
 ~~~text
-1 row
-=
-1 zone × 1 hour
+trip events
+↓
+hourly demand time series
 ~~~
+
+Ini penting karena model kita sebenarnya learning temporal demand pattern, bukan characteristic individual passenger.
 
 ---
 
-# Target variable
+## Input apa yang boleh dipakai?
 
-Target kita:
-
-~~~text
-target_trip_count
-~~~
-
-Untuk row:
-
-~~~text
-zone 161
-18:00
-~~~
-
-target adalah jumlah actual pickup yang terjadi antara:
+Target:
 
 ~~~text
 18:00
-sampai sebelum
-19:00
 ~~~
 
----
-
-# Model boleh lihat apa?
-
-Ini bagian penting karena langsung berhubungan ke leakage.
-
-Untuk predict 18:00, model boleh melihat:
+Boleh:
 
 ~~~text
 17:00 demand
 16:00 demand
-15:00 demand
 yesterday 18:00
 last week 18:00
-hour of day
-day of week
-weekend flag
+recent rolling average
+hour=18
+day_of_week
 ~~~
 
-Model tidak boleh lihat:
+Tidak boleh:
 
 ~~~text
 actual 18:00 demand
 future 19:00 demand
-rolling average yang include 18:00 actual
+rolling window yang include 18:00 actual
 ~~~
 
-Karena itu information yang belum tersedia saat prediction dibuat.
+Kenapa?
+
+Karena waktu prediction dibuat, actual 18:00 belum diketahui.
+
+Kalau model train pakai informasi future, validation metric bisa terlihat keren tapi production prediction impossible.
+
+Itulah leakage.
 
 ---
 
-# Contoh leakage secara gampang
+## Business interpretation
 
-Misalnya kalian mau predict nilai ujian besok.
+Kalau model predict high demand di suatu zone, secara conceptual itu bisa bantu:
 
-Feature kalian:
+- fleet positioning,
+- dispatch planning,
+- capacity planning,
+- demand awareness.
 
-~~~text
-jam belajar hari ini
-jumlah latihan
-attendance
-~~~
+Workshop ini bukan claim bahwa model kita siap dipakai NYC operations.
 
-masih fair.
-
-Tapi kalau feature-nya:
-
-~~~text
-nilai ujian besok
-~~~
-
-ya jelas model terlihat hebat.
-
-Tapi bukan karena pintar.
-
-Karena jawabannya bocor.
-
-Time-series leakage sering lebih subtle.
-
-Misalnya:
-
-~~~text
-rolling_mean_3h
-~~~
-
-Kelihatannya valid.
-
-Tapi kalau rolling calculation include current target hour, sebenarnya ada sebagian answer di input.
-
-Makanya implementation detail seperti shift(1) sebelum rolling itu penting.
+Kita pakai scenario yang realistic enough buat lifecycle learning.
 
 ---
 
-# Scope workshop
+## Primary metric: MAE
 
-Biar project tetap manageable, kita scope ke:
+MAE = Mean Absolute Error.
 
-~~~text
-Taxi type:
-Yellow Taxi
-
-Area:
-Manhattan
-
-Prediction:
-Pickup count
-
-Horizon:
-1 hour ahead
-
-Main historical period:
-early 2025
-~~~
-
-Kenapa Manhattan?
-
-Karena:
-
-- zone cukup banyak,
-- demand tinggi,
-- dataset masih meaningful,
-- workshop tetap reasonable secara resource.
-
----
-
-# Metric utama: MAE
-
-Kita pakai:
+Formula intuition:
 
 ~~~text
-MAE
-Mean Absolute Error
+absolute prediction errors
+↓
+average
 ~~~
 
-Formula konsepnya:
+Contoh:
 
 ~~~text
-average(
-  absolute(prediction - actual)
-)
+prediction = 150
+actual = 160
+error = 10
+
+prediction = 80
+actual = 70
+error = 10
 ~~~
 
-Misalnya:
-
-~~~text
-actual     prediction    error
-100        110           10
-150        140           10
-80         95            15
-~~~
-
-MAE memberi average absolute error.
+MAE ignore direction, focus magnitude.
 
 Kalau:
 
@@ -247,36 +182,37 @@ Kalau:
 MAE = 10
 ~~~
 
-interpretasinya cukup natural:
+intuition-nya:
 
-> Model rata-rata meleset sekitar 10 pickups per zone-hour.
+> On average, prediction meleset sekitar 10 pickups per zone-hour.
 
-Itu enak buat explain ke non-ML people.
+Itu gampang dijelaskan ke non-ML audience.
 
 ---
 
-# Metric kedua: RMSE
+## Secondary metric: RMSE
 
-Kita juga simpan:
+RMSE lebih sensitif ke large error.
+
+Misalnya dua model punya MAE mirip, tapi salah satunya kadang miss ekstrem.
+
+RMSE bisa lebih tinggi.
+
+Makanya kita log both:
 
 ~~~text
+MAE
+→ easy average error interpretation
+
 RMSE
-Root Mean Squared Error
+→ more sensitive to big misses
 ~~~
-
-Kenapa perlu?
-
-RMSE memberi penalty lebih besar ke big errors.
-
-Jadi dua model bisa punya MAE mirip tapi salah satu punya beberapa catastrophic miss yang bikin RMSE lebih tinggi.
-
-Kita tidak menjadikan RMSE primary metric, tapi tetap useful sebagai secondary view.
 
 ---
 
-# Baseline: yesterday same hour
+## Kenapa baseline penting?
 
-Sebelum training ML model, kita punya simple rule:
+Baseline kita:
 
 ~~~text
 prediction(t)
@@ -284,89 +220,79 @@ prediction(t)
 demand(t - 24h)
 ~~~
 
-Artinya:
+Alias:
 
-> Prediksi demand jam 18:00 hari ini pakai demand jam 18:00 kemarin.
+> “Prediksi jam ini = demand jam yang sama kemarin.”
 
-Kenapa baseline seperti ini masuk akal?
+Kelihatannya sederhana.
 
-Taxi demand punya daily seasonality.
+Tapi taxi demand punya daily pattern, jadi baseline ini bisa cukup kuat.
 
-Morning rush hari ini sering punya relation dengan morning rush hari sebelumnya.
+Ini bagus.
 
-Baseline ini cukup simple, tapi nggak deliberately stupid.
+Karena main model harus **earn its complexity**.
 
-Itu penting.
+Kalau complex model kalah dari baseline simple, pertanyaan yang sehat adalah:
 
-Karena model ML harus earn complexity-nya.
+> “Kenapa kita pakai model lebih kompleks?”
 
----
+bukan:
 
-# Kenapa model harus beat baseline?
-
-Coba bayangin:
-
-~~~text
-Naive baseline MAE = 10
-
-Fancy ML model MAE = 13
-~~~
-
-Apakah fancy model worth it?
-
-Probably not.
-
-Kita menambah:
-
-- training,
-- model artifact,
-- serving,
-- monitoring,
-- maintenance.
-
-Tapi hasil lebih buruk.
-
-Jadi kita punya gate:
-
-> Kalau model utama tidak beat baseline, jangan langsung register sebagai challenger.
-
-Ini mengajarkan satu habit bagus:
-
-~~~text
-Complexity must justify itself.
-~~~
+> “Gimana caranya tetap deploy model kompleks ini?”
 
 ---
 
-# Kenapa use case ini enak buat MLOps?
+## Success criteria model
 
-Karena lifecycle-nya natural.
-
-Prediction sekarang:
+Main model considered useful kalau:
 
 ~~~text
-17:00
-predict 18:00
+model MAE
+<
+baseline MAE
 ~~~
 
-Ground truth belum ada.
+Tapi di MLOps context, success nggak berhenti di offline metric.
 
-Setelah 18:00 lewat:
+System juga harus:
+
+- reproducible,
+- servable,
+- observable,
+- maintainable.
+
+Jadi ML metric adalah satu dimension dari project quality.
+
+---
+
+## Scope limitation
+
+Kita fokus:
 
 ~~~text
-actual demand becomes known
+Yellow Taxi
+Manhattan
+early 2025
+one-hour horizon
+pickup count
 ~~~
 
-Sekarang kita bisa calculate error.
+Kenapa Manhattan saja?
 
-Kalau performa makin jelek:
+Supaya dataset lebih manageable tapi tetap punya banyak zones dan meaningful spatial variation.
 
-~~~text
-monitoring
-↓
-retraining
-↓
-new challenger
-~~~
+Workshop goal bukan maximize NYC coverage.
 
-Jadi seluruh MLOps loop bisa kita demonstrate tanpa memaksakan cerita.
+Goal-nya punya use case cukup realistic tanpa bikin participant laptop menangis. 😭
+
+---
+
+## Checkpoint
+
+Coba jawab:
+
+1. Model kita predict apa exactly?
+2. Satu row model represent apa?
+3. Kenapa actual target hour nggak boleh jadi feature?
+4. MAE 10 artinya apa secara intuitif?
+5. Kenapa baseline lag_24h bukan baseline asal-asalan?

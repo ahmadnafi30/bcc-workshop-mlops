@@ -1,32 +1,39 @@
-# Step 3 — DVC: Making the Training Input Reproducible
+# Step 3 — DVC: Bikin Training Data Punya Identity
 
-Di Step 2 kita sudah punya snapshot.
+Sekarang kita punya snapshot.
 
-Tapi sekarang kita mau naik level:
+Tapi kalau cuma file di folder, pertanyaan reproducibility masih ada.
 
-> “Bukan cuma punya file snapshot, tapi punya pipeline definition yang tahu input, command, dan output.”
+> “File ini state yang mana? Kalau dependency berubah, gimana kita tahu harus rebuild?”
 
-Masuk DVC.
+DVC masuk di sini.
 
 ---
 
-# 1. Open dvc.yaml
+## Goal
 
-Jangan run command dulu.
+Setelah step ini:
 
-Buka:
+- kalian ngerti stage dependency,
+- bisa reproduce training snapshot,
+- ngerti Git vs DVC,
+- ngerti kenapa snapshot + hash masuk model lineage.
 
-~~~text
-dvc.yaml
-~~~
+---
 
-Cari stage:
+## 1. Buka dvc.yaml dulu
+
+Jangan langsung run command.
+
+Open file.
+
+Cari:
 
 ~~~text
 create_training_snapshot
 ~~~
 
-Coba identify:
+Baca:
 
 ~~~text
 cmd
@@ -34,31 +41,28 @@ deps
 outs
 ~~~
 
----
-
-# 2. Tebak dulu artinya
-
-## cmd
-
-Menurut kalian?
-
-Jawab:
-
-> Command yang produce stage output.
-
-## deps
-
-> Input / source / code yang affect output.
-
-## outs
-
-> Artifact yang dihasilkan.
-
-Kalau tiga concept ini clear, DVC stage sudah nggak terlalu misterius.
+Coba tebak meaning sebelum lanjut.
 
 ---
 
-# 3. Reproduce
+## 2. Translate ke bahasa manusia
+
+~~~text
+cmd
+→ cara bikin output
+
+deps
+→ hal yang kalau berubah bisa mempengaruhi output
+
+outs
+→ artifact hasil stage
+~~~
+
+Ini seperti build recipe.
+
+---
+
+## 3. Run repro
 
 ~~~bash
 uv run dvc repro create_training_snapshot
@@ -66,15 +70,25 @@ uv run dvc repro create_training_snapshot
 
 Observe output.
 
-Kalau dependencies unchanged, DVC bisa bilang stage up to date.
+Kalau stage up-to-date, DVC bisa bilang nggak perlu rerun.
 
-Kalau berubah, command rerun.
+Kalau dependency berubah, stage reproduce.
 
 ---
 
-# 4. Run twice
+## 4. Run status
 
-Coba run lagi.
+~~~bash
+uv run dvc status
+~~~
+
+Interpret result.
+
+Kalau no changes, pipeline state aligned.
+
+---
+
+## 5. Run repro lagi
 
 ~~~bash
 uv run dvc repro create_training_snapshot
@@ -82,142 +96,86 @@ uv run dvc repro create_training_snapshot
 
 Pertanyaan:
 
-> Apakah stage rerun full kalau nothing changed?
+> “Kenapa tool reproducibility justru kadang tidak menjalankan command?”
 
-Ini bagus buat lihat dependency-aware behavior.
-
----
-
-# 5. Check status
-
-~~~bash
-uv run dvc status
-~~~
-
-Tujuan:
-
-> Apakah pipeline output consistent dengan dependency state?
+Karena dia tahu output masih valid relatif terhadap dependencies.
 
 ---
 
-# 6. Inspect dvc.lock
+## 6. Inspect cache
 
-Open:
-
-~~~text
-dvc.lock
-~~~
-
-Kalian nggak harus hafal format.
-
-Cukup ngerti:
-
-> Lock file menyimpan resolved pipeline state/checksum information.
-
----
-
-# 7. Check cache
-
-Folder:
+Lihat:
 
 ~~~text
 .dvc/cache/
 ~~~
 
-Di-ignore Git.
+Jangan edit manual.
 
-Kenapa?
-
-Heavy data content bukan Git history.
+Itu internal data store.
 
 ---
 
-# 8. Coba ubah dependency secara mental
+## 7. Git thought experiment
 
-Misalnya feature data berubah karena Jan 27 masuk.
+Kalau snapshot Parquet 500 MB berubah 20 kali dan setiap version masuk Git normal, apa yang terjadi?
 
-Apa yang harus terjadi?
+Repository history bisa bengkak.
+
+DVC separate large content handling dari source history.
+
+---
+
+## 8. Hash connection
+
+Project juga calculate SHA256 snapshot dan log ke MLflow.
+
+Kenapa both DVC + SHA?
+
+DVC manage pipeline artifact state.
+
+SHA logged ke experiment memberi compact identity trace.
+
+---
+
+## 9. Mini challenge
+
+Bayangin model version 7 punya MAE aneh.
+
+Apa chain investigation?
 
 ~~~text
-feature dependency changes
+model v7
 ↓
-DVC stage considered changed
+MLflow run
 ↓
-snapshot may need reproduce
+dataset snapshot name + hash
+↓
+DVC/data state
+↓
+feature code Git revision
 ~~~
 
-Itulah dependency graph value.
+Ini lineage thinking.
 
 ---
 
-# 9. Git + DVC
+## Common mistake
 
-Coba bedakan:
+Jangan edit snapshot lama yang sudah dipakai model.
 
-~~~text
-Git commit
-→ dvc.yaml changed?
-→ code changed?
+Bikin snapshot baru.
 
-DVC
-→ data artifact changed?
-~~~
-
-Mereka pair.
+Kalau old snapshot mutable, historical lineage jadi bohong.
 
 ---
 
-# 10. DVC remote discussion
+## Checkpoint
 
-Workshop local only.
+Coba explain ke teman sebelah:
 
-Coba bayangin teammate clone repo di laptop lain.
+> “Kenapa DVC ada kalau kita sudah punya Git?”
 
-Mereka punya dvc.yaml tapi nggak punya cache data kalian.
+Kalau jawabannya lebih detail dari “buat file besar”, bagus.
 
-Untuk team real, butuh DVC remote.
-
-Contoh:
-
-~~~text
-S3
-GCS
-SSH
-~~~
-
-Kita intentionally belum configure credential.
-
----
-
-# Mini challenge
-
-Pertanyaan:
-
-> Kenapa tidak commit taxi_demand_2025-01-26.parquet langsung ke Git?
-
-Jawaban bukan:
-
-> Karena dilarang.
-
-Lebih tepat:
-
-> Karena large/generated binary data punya lifecycle berbeda dari source code dan membuat Git history berat serta diff tidak meaningful.
-
----
-
-# Checkpoint
-
-Kalian harus bisa explain:
-
-~~~text
-Git
-tracks source
-
-DVC
-tracks/reproduces data pipeline state
-
-MLflow
-tracks experiment
-~~~
-
-Next kita isi bagian ketiga: MLflow.
+Next kita track experiment.

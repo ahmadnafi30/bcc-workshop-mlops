@@ -1,47 +1,77 @@
-# Baseline Training — Sebelum Experiment Tracking
+# Baseline Training — Sebelum Tools MLOps, Kita Harus Punya ML Workflow yang Benar Dulu
 
-## Kenapa kita sengaja mulai manual?
+Ada temptation kalau workshop MLOps:
 
-Kalau dari awal semua experiment sudah otomatis tercatat, kita nggak pernah merasakan kenapa tracking dibutuhkan.
+> Langsung buka MLflow, Airflow, Docker.
 
-Jadi first model run kita sederhana.
+Padahal itu bikin tools jadi abstrak.
 
-~~~text
-load snapshot
-↓
-split by time
-↓
-baseline
-↓
-train model
-↓
-evaluate
-↓
-save artifact locally
-~~~
+Jadi kita sengaja build model secara manual dulu.
+
+Biar peserta punya pain point nyata sebelum tooling masuk.
 
 ---
 
-# Input: training snapshot
+## Dua model yang dibandingkan
 
-File:
+### Naive 24-hour baseline
+
+Rule:
 
 ~~~text
-data/snapshots/training/
-taxi_demand_2025-01-26.parquet
+prediction(t)
+=
+demand(t - 24h)
 ~~~
 
-Kenapa snapshot, bukan live feature file?
+No fitting.
 
-Karena snapshot frozen.
+No fancy hyperparameter.
 
-Live features terus berubah seiring replay.
+Cuma yesterday same hour.
 
-Training input harus traceable.
+### HistGradientBoostingRegressor
+
+Main model pakai:
+
+- calendar feature,
+- zone category,
+- lags,
+- rolling means.
 
 ---
 
-# Chronological split
+## Kenapa baseline bukan optional?
+
+Tanpa baseline, MAE 10.2 terlihat bagus atau jelek?
+
+Kita nggak punya context.
+
+Kalau baseline 8:
+
+~~~text
+main model = 10.2
+baseline = 8
+~~~
+
+Main model worse.
+
+Kalau baseline 15:
+
+~~~text
+main model = 10.2
+baseline = 15
+~~~
+
+Now improvement meaningful.
+
+Baseline bikin complexity accountable.
+
+---
+
+## Time split
+
+Kita nggak random split.
 
 Initial:
 
@@ -53,138 +83,136 @@ Jan 22–26
 validation
 ~~~
 
-Kenapa time split?
+Kenapa chronological?
 
-Model production akan menghadapi future.
+Karena production prediction selalu future relatif ke training history.
 
-Validation seharusnya mimic itu.
-
-Random split bisa mix older/future pattern dengan cara yang kurang realistic.
+Random split bisa blur temporal boundary.
 
 ---
 
-# Naive baseline
+## Kenapa Jan 1–7 nggak train?
 
-Rule:
+Because lag_168h.
 
-~~~text
-prediction
-=
-lag_24h
-~~~
+Row Jan 1 tidak punya data one week before.
 
-Jadi target Jan 25 18:00 diprediksi dengan Jan 24 18:00 demand.
+Jan 1–7 provide warm-up history.
 
-No model.fit().
-
-Simple domain heuristic.
+Feature complete mulai Jan 8.
 
 ---
 
-# Main model
+## Model training flow
 
 ~~~text
-HistGradientBoostingRegressor
+load snapshot
+↓
+time split
+↓
+evaluate naive baseline
+↓
+prepare model matrix
+↓
+train HGB
+↓
+predict validation
+↓
+MAE / RMSE
+↓
+compare
+↓
+save local artifact
 ~~~
 
-Kenapa ini cocok?
+Notice MLOps belum masuk.
 
-- strong tabular model,
-- train cepat,
-- no GPU,
-- serving ringan.
-
-Hyperparameter seperti:
-
-~~~text
-learning_rate
-max_iter
-max_leaf_nodes
-l2_regularization
-~~~
+Ini deliberate.
 
 ---
 
-# Run
+## Local artifact
 
-~~~bash
-uv run python scripts/train_model.py
-~~~
-
-Output console akan compare baseline vs model.
-
----
-
-# Metrics
-
-Primary:
-
-~~~text
-MAE
-~~~
-
-Secondary:
-
-~~~text
-RMSE
-~~~
-
-Yang kita lihat:
-
-> Model beat baseline nggak?
-
-Bukan hanya:
-
-> Model berhasil train nggak?
-
----
-
-# Local artifacts
-
-Script manual bisa save:
+Manual path bisa save:
 
 ~~~text
 models/taxi_demand_model.joblib
 models/initial_metrics.json
 ~~~
 
-Folder ini runtime-generated dan ignored.
+Kenapa folder models nggak committed?
 
-Ini cukup untuk first experiment.
+Generated model binary bukan source code.
 
-Tapi setelah run makin banyak, file naming manual mulai messy.
-
----
-
-# Think like a reviewer
-
-Kalau metric tiba-tiba extremely bagus, jangan langsung senang.
-
-Ask:
-
-- leakage?
-- split benar?
-- target accidentally masuk feature?
-- row count masuk akal?
-
-Good MLOps tidak hanya automate success.
-
-Good MLOps juga make suspicious result easier to investigate.
+Nanti MLflow artifact store jadi management layer yang lebih appropriate.
 
 ---
 
-# Pain point yang kita bawa ke MLflow
+## Metrics jangan invented
 
-Setelah beberapa run, kita butuh jawab:
+Salah satu rule docs/project:
 
-~~~text
-Which params?
-Which snapshot?
-Which metric?
-Which model artifact?
-Which run?
-~~~
+> Jangan tulis angka performance actual kalau belum benar-benar dijalankan.
 
-Dan jawaban itu tidak seharusnya bergantung ke ingatan presenter.
+Kenapa?
 
-Next: MLflow Tracking.
+Karena dataset, environment, code bisa berubah.
+
+Workshop presenter harus run pipeline dan use observed metrics.
+
+Ini juga scientific honesty.
+
+---
+
+## Model kalah baseline gimana?
+
+Ini interesting.
+
+Jangan “fix” metric cuma supaya demo kelihatan bagus.
+
+Kalau model kalah:
+
+1. inspect feature quality,
+2. check leakage or split,
+3. tune model reasonably,
+4. accept baseline if still better.
+
+MLOps bukan tentang memaksa fancy model menang.
+
+---
+
+## Why HGB?
+
+HistGradientBoosting dipilih karena:
+
+- fast enough,
+- tabular,
+- CPU friendly,
+- sklearn ecosystem,
+- easy serving.
+
+Kita deliberately tidak pilih deep learning supaya workshop focus ke lifecycle.
+
+---
+
+## Reproducibility seeds
+
+Model punya random_state.
+
+Kenapa?
+
+Supaya run lebih deterministic.
+
+Tapi full reproducibility tetap bisa dipengaruhi library version/hardware.
+
+Makanya environment tracking tetap penting.
+
+---
+
+## Checkpoint
+
+1. Kenapa baseline wajib?
+2. Kenapa time split?
+3. Warm-up period dari mana?
+4. Kalau main model kalah baseline, response yang sehat apa?
+5. Kenapa local model artifact bukan source code?

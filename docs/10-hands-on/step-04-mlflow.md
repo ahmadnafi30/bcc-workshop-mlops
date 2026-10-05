@@ -1,22 +1,39 @@
-# Step 4 — MLflow: Tracking Runs and Registering a Champion
+# Step 4 — MLflow: Dari “Kayaknya Run Kemarin Bagus” Jadi Experiment yang Bisa Ditelusuri
 
-Sekarang kita sudah punya reproducible snapshot.
+Sekarang kita punya reproducible snapshot.
 
-Masalah selanjutnya:
+Tapi experiment history masih manual.
 
-> “Kalau saya train berkali-kali, gimana cara tracking result-nya tanpa spreadsheet manual?”
+Kita butuh system yang record:
+
+~~~text
+input context
+parameter
+metric
+artifact
+~~~
 
 MLflow masuk di sini.
 
 ---
 
-# Part A — Start Tracking Server
+## Goal
+
+Setelah step ini:
+
+- local MLflow server jalan,
+- baseline dan main model logged,
+- kalian bisa inspect run,
+- model masuk Registry,
+- challenger dipromote ke champion secara explicit.
+
+---
+
+## 1. Start shared MLflow server
 
 ~~~bash
 uv run python scripts/start_mlflow.py
 ~~~
-
-Keep terminal ini running.
 
 Open:
 
@@ -24,226 +41,178 @@ Open:
 http://127.0.0.1:5000
 ~~~
 
-Kalau UI terbuka, server ready.
+Keep terminal running.
 
----
+### Kenapa bukan raw mlflow server command?
 
-# Kenapa helper, bukan mlflow server plain?
-
-Helper memastikan local state disimpan ke:
+Helper project ensure state tersimpan di:
 
 ~~~text
 .mlflow/
 ~~~
 
-Nanti Compose MLflow juga pakai folder sama.
+Folder yang sama nanti dipakai Docker mode.
 
-Jadi model/registry tidak hilang saat pindah stage.
+Jadi experiment continuity terjaga.
 
 ---
 
-# Part B — Run tracked training
+## 2. Run tracked training
 
-Open terminal baru.
+Terminal lain:
 
 ~~~bash
 uv run python scripts/train_with_mlflow.py
 ~~~
 
-Script log baseline + HGB run.
+Observe output.
+
+Biasanya ada run ID.
+
+Jangan cuma copy.
+
+Understand:
+
+~~~text
+one execution
+→ one MLflow run
+~~~
 
 ---
 
-# 1. Open MLflow UI
+## 3. Buka MLflow UI
 
-Cari experiment taxi demand forecasting.
+Cari experiment taxi demand.
 
-Kalian harus lihat multiple runs.
+Lihat run baseline dan HGB.
 
-Jangan cuma lihat MAE.
-
-Open model run.
-
----
-
-# 2. Inspect parameters
+Klik main model run.
 
 Cari:
 
-~~~text
-learning_rate
-max_iter
-dataset_snapshot
-train_rows
-validation_rows
-~~~
+- Parameters,
+- Metrics,
+- Tags,
+- Artifacts.
+
+---
+
+## 4. Interactive question
+
+Cari dataset_sha256.
 
 Pertanyaan:
 
-> Kalau saya rerun model dengan learning_rate berbeda, di mana bedanya terlihat?
+> “Kalau dua run pakai filename snapshot sama tapi SHA beda, apa artinya?”
 
-Di Parameters.
+Content berbeda.
+
+Filename alone bukan identity kuat.
 
 ---
 
-# 3. Inspect metrics
+## 5. Compare baseline vs model
+
+Gunakan compare UI.
+
+Jangan cuma lihat ranking.
+
+Coba cari:
 
 ~~~text
-mae
-rmse
+model_type
+MAE
+RMSE
+dataset snapshot
+stage
 ~~~
 
-Bandingkan baseline.
+MLflow UI harus membantu explain experiment, bukan cuma jadi tabel warna-warni.
 
 ---
 
-# 4. Inspect tags
+## 6. Register model
 
-Cari stage/model family.
-
-Tags membantu context.
-
----
-
-# 5. Inspect artifacts
-
-Lihat model artifact.
-
-Ini linked ke run.
-
----
-
-# 6. Copy model run ID
-
-Terminal atau UI punya run ID.
-
-Misalnya:
-
-~~~text
-abc123...
-~~~
-
-Kita akan register model dari source run ini.
-
----
-
-# Part C — Register candidate
+Ambil model run ID.
 
 ~~~bash
-uv run python scripts/register_model.py   --run-id <RUN_ID>
+uv run python scripts/register_model.py --run-id <RUN_ID>
 ~~~
 
 Open Model Registry.
 
-Cari:
+Sekarang main model bukan cuma artifact experiment.
 
-~~~text
-taxi-demand-forecasting-model
-~~~
-
-Harus ada model version.
-
-Alias:
-
-~~~text
-challenger
-~~~
+Dia punya registered version.
 
 ---
 
-# 7. Why challenger?
+## 7. Lihat challenger alias
 
-Kita sengaja belum champion.
+Candidate baru diberi challenger.
 
-New model = candidate.
+Pertanyaan:
 
-Butuh approval.
+> “Kenapa belum champion?”
+
+Karena registration bukan approval.
 
 ---
 
-# Part D — Promote champion
+## 8. Promote
 
 Setelah review:
 
 ~~~bash
-uv run python scripts/promote_model.py   --version <VERSION>
+uv run python scripts/promote_model.py --version <VERSION>
 ~~~
 
-Sekarang Registry alias:
-
-~~~text
-champion
-~~~
-
-point ke selected version.
+Sekarang champion alias point ke selected version.
 
 ---
 
-# 8. Trace lineage
+## 9. Trace lineage
 
-Klik champion version.
-
-Cari source run.
-
-Dari run, lihat:
-
-- metric,
-- params,
-- dataset SHA.
-
-Chain:
+Coba dari champion UI trace balik:
 
 ~~~text
 champion
 ↓
 version
 ↓
-run
+source run
 ↓
-dataset snapshot + metric
+metric
+parameter
+dataset hash
 ~~~
 
-Kalau kalian bisa navigate chain ini, model lineage concept sudah kebayang.
+Kalau chain ini jelas, Registry + Tracking sudah connect.
 
 ---
 
-# Mini challenge
+## Mini challenge
 
-Kenapa API nanti load:
+Kalau besok version 2 promoted, apakah FastAPI source harus di-edit dari version 1 ke version 2?
 
-~~~text
-@champion
-~~~
+Tidak.
 
-bukan version number?
-
-Karena model selection bisa berubah tanpa harus edit serving code.
+API load champion alias.
 
 ---
 
-# Common issue
+## Checkpoint
 
-## MLflow UI kosong
+Coba explain:
 
-Pastikan training code connect ke same tracking URI.
+- experiment,
+- run,
+- parameter,
+- metric,
+- artifact,
+- registered model,
+- version,
+- challenger,
+- champion.
 
-## Register fails
-
-Pastikan run ID valid dan model artifact exists.
-
-## Champion missing
-
-Promotion script belum dijalankan.
-
----
-
-# Checkpoint
-
-Sebelum Airflow, pastikan:
-
-- MLflow UI accessible,
-- tracked model run exists,
-- Registry punya challenger,
-- selected version punya champion alias.
-
-Next kita orchestrate workflow.
+Kalau sudah, kita masuk orchestration.

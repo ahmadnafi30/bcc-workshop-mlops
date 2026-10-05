@@ -1,39 +1,18 @@
-# MLOps from Zero
+# MLOps from Zero — Kenapa Machine Learning Butuh Lifecycle Sendiri?
 
-## Jadi... MLOps itu sebenarnya apa?
+Kalau kalian search “What is MLOps?” di internet, sering banget ketemu kalimat:
 
-Kalau cari definisi MLOps di internet, kalian bisa ketemu banyak versi.
+> MLOps is DevOps for Machine Learning.
 
-Ada yang bilang:
+Arah definisinya nggak salah. Tapi buat pemula, itu kadang belum membantu karena malah muncul pertanyaan baru: “DevOps aja belum terlalu ngerti, terus kenapa ML perlu versi khusus?”
 
-> MLOps = DevOps for Machine Learning.
-
-Ada yang bilang:
-
-> MLOps is a set of practices for deploying and maintaining ML models reliably.
-
-Keduanya nggak salah, tapi buat pemula kadang masih terasa abstrak.
-
-Jadi di workshop ini kita pakai definisi yang lebih praktis:
-
-> **MLOps adalah cara kita mengelola lifecycle Machine Learning supaya experiment-nya reproducible, model-nya bisa dipakai, system-nya bisa diamati, dan model-nya bisa dirawat setelah deployment.**
-
-Coba fokus ke empat kata:
-
-~~~text
-reproducible
-deployable
-observable
-maintainable
-~~~
-
-Kita bahas satu-satu.
+Jadi kita mulai dari problem, bukan definisi.
 
 ---
 
-# Mulai dari ML project biasa
+## Project ML paling sederhana
 
-Coba bayangin project ML yang mungkin pernah kalian buat:
+Misalnya kalian punya:
 
 ~~~text
 project/
@@ -42,31 +21,17 @@ project/
 └── model.pkl
 ~~~
 
-Di notebook:
+Di notebook, kalian load data, train, evaluate, lalu save model.
 
-~~~python
-df = pd.read_csv("data.csv")
-
-model.fit(X_train, y_train)
-
-pred = model.predict(X_test)
-
-print(mae)
-~~~
-
-Hasil bagus.
+Result:
 
 ~~~text
 MAE = 10.2
 ~~~
 
-Kalian save model.
+Untuk experimentation, itu fine.
 
-Selesai.
-
-Untuk experimentation, itu valid.
-
-Problem baru muncul kalau model ini berubah dari:
+Problem baru muncul ketika model berubah dari:
 
 > “Eksperimen saya.”
 
@@ -74,15 +39,13 @@ menjadi:
 
 > “Something other people depend on.”
 
-Begitu ada dependency ke orang lain atau system lain, pertanyaannya berubah.
+Begitu ada dependency ke orang atau system lain, requirement-nya ikut berubah.
 
 ---
 
-# Problem pertama: reproducibility
+## Problem pertama: reproducibility
 
-Misalnya tiga minggu kemudian kalian buka lagi project.
-
-Kalian menemukan:
+Tiga minggu kemudian kalian buka folder data.
 
 ~~~text
 data.csv
@@ -92,63 +55,63 @@ data_fix_bener.csv
 data_final_bener_2.csv
 ~~~
 
-Familiar? 😭
+Relatable? 😭
 
-Model yang bagus tadi pakai yang mana?
+Model yang MAE 10.2 tadi pakai yang mana?
 
-Terus environment berubah.
+Terus ternyata feature engineering pernah direvisi. Versi scikit-learn beda. Parameter pernah diganti. Random seed mungkin beda.
 
-Versi scikit-learn beda.
-
-Feature engineering pernah direvisi.
-
-Sekarang walaupun model file masih ada, kalian susah explain:
-
-> “Model ini lahir dari kondisi apa?”
-
-Reproducibility artinya kita ingin bisa reconstruct context dari experiment.
-
-Kurang lebih kita perlu tahu:
+Jadi training context itu bukan cuma code.
 
 ~~~text
-Code version
+Code
 +
-Data version
+Data
 +
 Parameters
 +
 Environment
-=
-Reproducible training context
++
+Randomness
 ~~~
 
-Git membantu code version.
+Kalau satu berubah, result bisa berubah.
 
-DVC membantu data snapshot.
+Makanya kita butuh beberapa layer:
 
-MLflow membantu experiment metadata.
+~~~text
+Git
+→ code history
 
-uv membantu environment consistency.
+DVC
+→ training data snapshot
 
-Mereka bukan saling menggantikan. Mereka saling melengkapi.
+MLflow
+→ experiment context
+
+uv
+→ environment consistency
+~~~
+
+Perhatikan bahwa tools ini saling melengkapi, bukan saling menggantikan.
 
 ---
 
-# Problem kedua: deployability
+## Problem kedua: deployability
 
-Model object di Python belum otomatis berguna untuk external application.
+Kalian punya file model. Backend developer tanya:
 
-Misalnya backend developer nanya:
+> “Cara aplikasi gue request prediction gimana?”
 
-> “Gimana cara aplikasi gue minta prediction?”
+Kalau jawabannya:
 
-Jawaban seperti:
+> “Import file Python saya, load model, terus bikin lag feature manual.”
 
-> “Import file train.py terus load joblib ya.”
+Technically bisa, tapi coupling-nya tinggi banget.
 
-kurang ideal.
+Backend jadi harus tahu model framework, feature order, lag logic, rolling window, model path, dan historical data.
 
-Lebih enak punya contract:
+Lebih clean kalau kita punya contract:
 
 ~~~http
 POST /predict
@@ -171,444 +134,311 @@ Response:
 }
 ~~~
 
-Sekarang external client nggak perlu tahu:
-
-- model pakai sklearn,
-- ada lag_168h,
-- rolling window dibuat seperti apa,
-- file model disimpan di mana.
-
-Semua internal detail ditangani serving layer.
+Client nggak perlu tahu internal model implementation. Itu abstraction boundary.
 
 ---
 
-# Problem ketiga: observability
+## Problem ketiga: observability
 
-Anggap API sudah hidup.
+Sekarang API hidup.
 
-Bisa diakses.
+HTTP 200. Latency 80 ms.
 
-Request masuk.
-
-Apakah berarti system sehat?
+Apakah sistem sehat?
 
 Belum tentu.
 
-Ada dua kemungkinan:
-
-### Case A
+### Case A — API sehat, model jelek
 
 ~~~text
-API latency = 80 ms
 HTTP 200
-CPU normal
+latency 60 ms
+zero server error
 ~~~
 
-Tapi prediction MAE makin jelek.
+Tapi prediction meleset jauh terus-menerus.
 
-Operationally sehat.
+Operationally sehat. Model-wise buruk.
 
-Model-wise rusak.
+### Case B — model bagus, service bermasalah
 
-### Case B
+Model accuracy masih bagus, tapi API latency 15 detik dan request timeout.
 
-Model sebenarnya masih bagus.
+Model-wise sehat. Service-wise buruk.
 
-Tapi API latency 15 detik.
-
-Request banyak timeout.
-
-Model-wise sehat.
-
-Operationally rusak.
-
-Jadi ML system punya dua health dimension:
+Jadi ML system punya minimal dua health dimension:
 
 ~~~text
-System health
-and
-Model health
+System Health
++
+Model Health
 ~~~
 
-Ini salah satu konsep penting banget di MLOps.
-
-Prometheus/Grafana lebih banyak bantu operational visibility.
-
-Prediction log + delayed ground truth evaluation bantu model quality visibility.
+Ini konsep yang harus benar-benar kalian pegang.
 
 ---
 
-# Problem keempat: maintainability
+## Problem keempat: maintainability
 
-Data di dunia nyata berubah.
+Data dunia nyata berubah.
 
-Behavior user berubah.
-
-Seasonality berubah.
-
-Business context berubah.
-
-Model yang bagus hari ini belum tentu bagus selamanya.
+Behavior berubah. Seasonality berubah. Business context berubah.
 
 Contoh taxi:
 
 ~~~text
-Training period:
+Training:
 January
 
 Later:
 February / March
-different traffic pattern
+different traffic
 different event
-different demand behavior
+different demand pattern
 ~~~
 
-Suatu saat recent MAE bisa naik.
+Model yang bagus di January belum tentu bagus selamanya.
 
-Nah, kalau naik, kita mau ngapain?
-
-Kita butuh lifecycle:
+Jadi lifecycle production bukan:
 
 ~~~text
+train
+↓
+deploy
+↓
+finish
+~~~
+
+lebih realistis:
+
+~~~text
+train
+↓
+deploy
+↓
 observe
-↓
-detect degradation
-↓
-new snapshot
-↓
-retrain
 ↓
 evaluate
 ↓
-register challenger
+retrain if needed
 ↓
 review
 ↓
 promote
+↓
+observe again
 ~~~
 
-Itu sudah jauh lebih dari sekadar model.fit().
+Itu loop.
 
 ---
 
-# Analogi: model itu resep, bukan restoran
+## Jadi MLOps itu apa?
 
-Kita pakai analogi ini cukup sering karena lumayan membantu.
+Sekarang definisinya lebih meaningful.
 
-Bayangin model = recipe.
+Di workshop ini kita pakai definisi practical:
 
-Recipe bagus belum otomatis bikin restoran jalan.
+> **MLOps adalah practices dan engineering yang membuat lifecycle Machine Learning menjadi reproducible, deployable, observable, dan maintainable.**
 
-Restaurant perlu:
+Empat kata ini penting:
 
-| Restaurant | ML System |
-| --- | --- |
-| Recipe | Model |
-| Ingredients | Data |
-| Ingredient batch | Dataset snapshot |
-| Cooking log | Experiment tracking |
-| Approved menu | Model Registry |
-| Waiter | API |
-| Kitchen schedule | Airflow |
-| Standard kitchen environment | Docker |
-| Quality dashboard | Monitoring |
-| New recipe version | Retraining |
+~~~text
+reproducible
+deployable
+observable
+maintainable
+~~~
 
-Kenapa analogy ini useful?
-
-Karena sering banget newbie mikir:
-
-> “Kalau model sudah jadi berarti project selesai.”
-
-Padahal sama seperti restaurant:
-
-> “Kalau recipe sudah jadi berarti restaurant selesai.”
-
-Ya nggak juga.
+Kalau mau ingat MLOps, ingat empat itu.
 
 ---
 
-# Bedanya ML system dengan software biasa
+## Kenapa ML beda dari software biasa?
 
-Traditional software behavior mostly ditentukan oleh code.
+Traditional software behavior mostly ditentukan code.
 
-Misalnya:
+Machine Learning beda.
 
-~~~python
-def add(a, b):
-    return a + b
-~~~
-
-Kalau code-nya sama, behavior cukup predictable.
-
-Di ML, behavior model dipengaruhi oleh:
+Behavior model dipengaruhi:
 
 ~~~text
 code
-+
-training data
-+
+data
 features
-+
 parameters
-+
-randomness
-+
 library version
+random seed
+training process
 ~~~
 
-Misalnya code sama persis, tapi training data beda.
+Artinya source control code saja belum cukup menjelaskan output model.
 
-Model output bisa beda.
-
-Artinya source control code saja belum cukup buat explain behavior model.
-
-Ini kenapa MLOps punya concern tambahan seperti:
+Makanya ML engineering punya concern tambahan:
 
 - dataset lineage,
 - experiment tracking,
 - model registry,
-- model performance monitoring.
+- model monitoring,
+- retraining policy.
 
 ---
 
-# Git, DVC, MLflow: bedanya apa?
+## Git vs DVC vs MLflow
 
-Ini salah satu confusion paling umum.
+Ini confusion yang super common.
 
-Coba lihat seperti ini:
-
-## Git
+### Git
 
 Pertanyaan:
 
-> “Code version yang dipakai apa?”
+> “Code version yang mana?”
 
-Tracks:
-
-- Python,
-- YAML,
-- docs,
-- DAG,
-- config.
-
-## DVC
+### DVC
 
 Pertanyaan:
 
-> “Training data snapshot yang dipakai apa?”
+> “Training snapshot exact yang dipakai apa?”
 
-Tracks/reproduces:
-
-- data pipeline artifacts,
-- snapshot state.
-
-## MLflow
+### MLflow
 
 Pertanyaan:
 
-> “Experiment ini menghasilkan apa?”
+> “Run ini parameter, metric, artifact, dan dataset context-nya apa?”
 
-Tracks:
-
-- parameters,
-- metrics,
-- model artifact,
-- dataset fingerprint,
-- run metadata.
-
-Ringkasnya:
+Simplified:
 
 ~~~text
 Git
-→ source history
+→ what code?
 
 DVC
-→ data state
+→ what data?
 
 MLflow
-→ experiment history
+→ what experiment result?
 ~~~
+
+Ketiganya nyambung.
 
 ---
 
-# Airflow masuk di mana?
+## Airflow masuk di mana?
 
-Airflow beda lagi.
-
-Airflow bukan primarily tracking model.
-
-Airflow jawab:
-
-> “Step mana yang harus jalan dulu?”
-
-Misalnya:
+Bayangin pipeline:
 
 ~~~text
-release data
+download
 ↓
 validate
 ↓
 aggregate
 ↓
-feature engineering
-~~~
-
-Airflow jadi coordinator.
-
-Dia nggak melakukan feature engineering “karena Airflow”.
-
-Dia memanggil Python logic yang kita sudah buat.
-
-Itu distinction yang penting.
-
----
-
-# Docker masuk di mana?
-
-Docker lebih ke runtime.
-
-Problem-nya:
-
-~~~text
-works on my machine
-~~~
-
-Kita ingin environment lebih controlled.
-
-Docker bantu package:
-
-~~~text
-OS userspace
-Python
-dependencies
-application
-startup command
-~~~
-
-Jadi application bisa dijalankan lebih consistent across machines.
-
----
-
-# CI/CD masuk di mana?
-
-CI/CD lebih dekat ke software delivery.
-
-Misalnya ada PR.
-
-Sebelum merge, kita ingin otomatis cek:
-
-~~~text
-lint
-tests
-docs
-Docker build
-~~~
-
-Itu CI.
-
-Setelah main healthy:
-
-~~~text
-build container
+features
 ↓
-publish to registry
+train
+↓
+evaluate
 ~~~
 
-Itu continuous delivery di project kita.
+Kalau sekali jalan manual, gampang.
+
+Kalau setiap hari? Kalau validate gagal? Kalau task kelima butuh output task ketiga? Kalau data belum datang?
+
+Mulai terasa kita butuh orchestration.
+
+Airflow coordinate workflow. Airflow bukan bikin model lebih pintar.
 
 ---
 
-# Monitoring kenapa jadi penting?
+## Docker masuk di mana?
 
-Karena setelah deployment, kita kehilangan kepastian.
+Project works di laptop kalian.
 
-Offline validation bilang:
+Di laptop teman:
 
 ~~~text
-MAE = 10
+ModuleNotFoundError
+different Python
+missing system package
 ~~~
 
-Tapi itu berdasarkan historical validation set.
+Classic.
 
-Production-like future data mungkin beda.
+Docker bantu package runtime environment.
 
-Jadi kita nggak bisa bilang:
+Intuition-nya:
 
-> “Karena validation bagus maka selamanya bagus.”
+> “Daripada saya kasih list instalasi panjang, saya definisikan environment yang konsisten.”
 
-Monitoring memberi feedback loop.
+Docker nggak solve bad model atau bad data. Dia solve environment consistency layer.
 
 ---
 
-# Apakah MLOps berarti semua harus otomatis?
+## CI/CD masuk di mana?
 
-Nggak.
+Setiap ada pull request, siapa yang memastikan test, lint, docs, dan Docker build jalan?
 
-Automation itu bukan tujuan akhir.
+Kalau jawabannya:
 
-Contohnya di project kita:
+> “Semoga contributor ingat.”
+
+itu fragile.
+
+GitHub Actions automate repository checks.
+
+Perhatikan bedanya:
 
 ~~~text
-retraining
-→ otomatis bisa
+code changed
+→ CI/CD
 
-promotion to champion
-→ tetap explicit
+model performance degraded
+→ monitoring/retraining
 ~~~
 
-Kenapa?
-
-Karena automation level harus sesuai risk.
-
-Kita tidak ingin model baru langsung mengganti production model hanya karena satu condition terpenuhi tanpa review.
-
-MLOps yang matang bukan berarti “automate everything”.
-
-Lebih tepat:
-
-> **Automate what is repeatable, keep governance where judgment is still important.**
+Dua trigger yang berbeda.
 
 ---
 
-# Satu mental model untuk dibawa terus
+## Monitoring masuk di mana?
 
-Kalau nanti tools mulai terasa banyak, balik ke pertanyaan ini:
+Begitu service live, kita butuh feedback loop.
 
-### Data
-
-~~~text
-Where did training data come from?
-~~~
-
-### Training
+Operational feedback:
 
 ~~~text
-What exactly did we run?
+request rate
+latency
+errors
+service health
 ~~~
 
-### Registry
+Model feedback:
 
 ~~~text
-Which model is approved?
+prediction
+vs
+actual
+↓
+MAE / RMSE
 ~~~
 
-### Serving
+Tanpa feedback, production system seperti nyetir mobil tanpa dashboard. Mobilnya mungkin jalan, tapi kita nggak tahu kondisi mesin atau bensinnya.
+
+---
+
+## MLOps bukan checklist tools
+
+MLOps bukan:
 
 ~~~text
-How does application use it?
+Airflow ✅
+Docker ✅
+MLflow ✅
+Grafana ✅
 ~~~
 
-### Monitoring
+Kalau tools ada tapi training nggak reproducible, model nggak traceable, dan performance nggak dimonitor, tools tersebut cuma dekorasi architecture diagram.
 
-~~~text
-Is system healthy and is model still good?
-~~~
-
-### Retraining
-
-~~~text
-What do we do when quality drops?
-~~~
-
-Kalau kalian bisa follow six questions ini, kalian sudah punya kerangka berpikir MLOps yang jauh lebih useful daripada sekadar hafal tools.
+Fokus kita adalah lifecycle. Tool cuma implementasi.

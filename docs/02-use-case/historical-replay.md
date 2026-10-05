@@ -1,38 +1,26 @@
-# Historical Replay — Simulating Production Without Waiting for Tomorrow
+# Historical Replay — Gimana Demo Production Lifecycle Pakai Data Masa Lalu?
 
-## Kenapa perlu replay?
+Production system menerima data over time.
 
-Production data datang over time.
+Workshop kita pakai historical data yang sebenarnya sudah lengkap.
 
-Misalnya real system hari ini tanggal Jan 27.
+Problemnya:
 
-System belum punya Jan 28.
+Kalau kita langsung kasih semua future data ke pipeline, simulation jadi nggak realistic.
 
-Besok baru Jan 28 muncul.
+Model bisa accidentally lihat masa depan.
 
-Itu natural.
-
-Tapi workshop cuma beberapa jam.
-
-Kita nggak mungkin:
-
-> “Sekarang pipeline Jan 27 ya. Besok kita lanjut Jan 28.”
-
-😄
-
-Jadi kita punya historical data lengkap, tapi kita **reveal gradually** seolah-olah waktu berjalan.
-
-Ini kita sebut historical replay.
+Historical replay solve itu.
 
 ---
 
-# Analogi: recorded football match
+## Analogi pertandingan rekaman
 
-Coba kalian punya full recording pertandingan.
+Kalian punya full recording pertandingan sepak bola.
 
-Kalian sebenarnya sudah punya semua minute.
+Skor akhir sudah tersimpan di video.
 
-Tapi kalau mau simulate live commentator, kalian nggak langsung buka final score.
+Tapi kalau mau latihan jadi live commentator, kalian nggak langsung lompat menit 90.
 
 Kalian play:
 
@@ -43,32 +31,29 @@ minute 3
 ...
 ~~~
 
-Walaupun future ada di file recording, commentator hanya melihat information yang “sudah terjadi”.
+Data future sebenarnya ada di disk, tapi kalian **reveal gradually**.
 
-Historical replay kita sama.
+Itu replay.
 
 ---
 
-# Source replay
+## Replay Source
 
-Bootstrap menghasilkan compact monthly replay file.
+Bootstrap prepare monthly compact data:
 
 ~~~text
 data/source/replay/
-├── yellow_tripdata_2025-01.parquet
-├── yellow_tripdata_2025-02.parquet
-└── ...
 ~~~
 
-File itu sebenarnya punya whole month.
+Ini recording penuh.
 
-Tapi production simulator release satu date.
+Tapi daily pipeline tidak langsung consume semua.
+
+Kita release per date.
 
 ---
 
-# Release Jan 27
-
-Command manual:
+## Simulate Jan 27
 
 ~~~bash
 uv run python scripts/simulate_daily_data.py --date 2025-01-27
@@ -80,16 +65,22 @@ Output:
 data/raw/trips/2025-01-27.parquet
 ~~~
 
-Sekarang downstream pipeline seolah-olah cuma menerima Jan 27 sebagai daily batch.
+Sekarang downstream pipeline behave seolah Jan 27 baru datang.
 
 ---
 
-# Process daily demand
+## Aggregate ke hourly demand
 
-Setelah raw daily trip available:
+Daily raw trip batch:
 
-~~~bash
-uv run python scripts/prepare_daily_demand.py --date 2025-01-27
+~~~text
+many taxi trips
+~~~
+
+jadi:
+
+~~~text
+zone × hour demand
 ~~~
 
 Output:
@@ -98,180 +89,121 @@ Output:
 data/processed/demand/2025-01-27.parquet
 ~~~
 
-Sekarang bentuknya zone-hour demand.
-
 ---
 
-# Initial history
+## Initial history
 
-Sebelum production replay dimulai, kita butuh training history.
+Kenapa kita sudah prepare Jan 1–26 sebelum replay?
 
-Kita prepare:
-
-~~~text
-Jan 1–26
-~~~
-
-Kenapa sampai 26?
-
-Karena initial lifecycle:
+Karena kita butuh:
 
 ~~~text
 Jan 1–7
-warm-up
+→ lag warm-up
 
 Jan 8–21
-train
+→ initial training
 
 Jan 22–26
-validation
-
-Jan 27 onward
-production-like replay
+→ validation
 ~~~
 
-Jadi timeline-nya clean.
+Lalu “production simulation” mulai Jan 27.
 
 ---
 
-# Prediction timing
+## Prediction timing
 
-Misalnya target:
+Target:
 
 ~~~text
 Jan 28 18:00
 ~~~
 
-Prediction harus dibuat menggunakan data sebelum 18:00.
+Prediction ideally dibuat sebelum actual 18:00 known.
+
+Serving feature provider restrict history sampai:
 
 ~~~text
 17:00
-history latest known
-
-↓ predict
-
-18:00
-target hour begins
-
-18:00–18:59
-trips happen
-
-19:00-ish
-18:00 ground truth complete
 ~~~
 
-Baru setelah actual hour complete, kita bisa evaluate.
+Walaupun file full Jan 28 mungkin eventually ada, logic enforce past-only input.
 
 ---
 
-# “Tapi kan historical file sebenarnya sudah punya future data?”
+## Ground truth delayed
 
-Benar.
+Setelah 18:00 period lewat, actual demand available.
 
-Itulah kenapa access pattern penting.
-
-Source file boleh punya future.
-
-Tapi online feature builder hanya membaca range:
+Sekarang kita bisa evaluate:
 
 ~~~text
-target - 168h
-through
-target - 1h
+prediction 147
+actual 160
+absolute error 13
 ~~~
 
-Jadi logic enforcement ada di serving code.
-
-Historical replay bukan security boundary.
-
-Dia teaching simulation buat chronological dependency.
+Inilah basis model monitoring.
 
 ---
 
-# Idempotency
+## Replay mempercepat waktu, bukan menghapus causality
 
-Kalau kita replay Jan 27 dua kali, apa yang harus terjadi?
+Workshop bisa simulate beberapa hari dalam 20 menit.
 
-Idealnya:
+Apakah itu fake?
 
-- nggak duplicate random rows,
-- output predictable,
-- repeated logical run safe.
+Clock speed-nya simulated.
 
-Konsep ini disebut idempotency.
-
-Dalam data pipeline, rerun itu normal.
-
-Task bisa fail halfway.
-
-Kita mungkin rerun.
-
-Jadi pipeline sebaiknya dirancang supaya rerun tidak bikin data corrupt.
-
----
-
-# Kenapa replay useful buat monitoring?
-
-Karena kita bisa simulate:
+Tapi dependency logic tetap:
 
 ~~~text
-Day 1
+data release
+↓
 prediction
-
-Day 2
-ground truth available
-evaluate
-
-Day 3
-performance worsens
-retrain
+↓
+ground truth
+↓
+evaluation
+↓
+retraining decision
 ~~~
 
-dalam waktu minutes.
-
-Kita speed up the clock.
-
-Tapi lifecycle dependency tetap mirip production.
+Itu yang ingin kita pelajari.
 
 ---
 
-# Apa yang fake dan apa yang real?
+## Daily batch vs one-hour forecast
 
-## Fake / simulated
+Kita process daily files untuk workshop convenience.
 
-~~~text
-speed of time
-~~~
+Tapi prediction unit tetap hourly.
 
-Kita replay historical day lebih cepat.
+Jadi orchestration granularity dan model prediction granularity tidak harus identical.
 
-## Real concept
-
-~~~text
-past-only features
-delayed ground truth
-separate daily batches
-retraining based on evaluated predictions
-~~~
-
-Jadi workshop tetap ngajarin lifecycle yang transferable.
+Daily pipeline bisa prepare data, sementara model predict individual zone-hour target.
 
 ---
 
-# Next step
+## Idempotent replay
 
-Setelah ngerti replay, nanti Airflow akan mengambil manual flow:
+Kalau Jan 27 direlease ulang, output sebaiknya deterministic.
 
-~~~text
-simulate_daily_data.py
-↓
-validate
-↓
-aggregate
-↓
-rebuild features
-~~~
+Kenapa?
 
-dan mengubahnya jadi observable DAG.
+Karena retry itu normal.
 
-Itulah titik di mana orchestration mulai terasa useful.
+Historical replay juga jadi latihan buat production pipeline habit:
+
+> Same logical input should not randomly duplicate/corrupt output.
+
+---
+
+## Checkpoint
+
+1. Kenapa historical data perlu direplay?
+2. Apa bedanya replay source dan released raw batch?
+3. Kenapa Jan 1–26 disiapkan dulu?
+4. Bagaimana kita mencegah prediction melihat future?
+5. Apa yang simulated dan apa yang tetap realistic?

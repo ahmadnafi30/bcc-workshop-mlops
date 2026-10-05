@@ -1,159 +1,92 @@
-# MLflow Tracking — Experiment Notebook yang Nggak Mengandalkan Ingatan
+# MLflow Tracking — Biar Experiment Kita Nggak Cuma Hidup di Ingatan
 
-## Satu run masih gampang
+Sekarang kita punya baseline dan main model.
 
-Misalnya:
+Awalnya mungkin cuma dua run.
 
-~~~text
-Run 1
-MAE = 10.8
-~~~
+Masih gampang diingat.
 
-Besok:
+Tapi bayangin nanti:
 
 ~~~text
-Run 2
-learning_rate = 0.05
-MAE = 10.2
+run 1
+run 2
+run 3
+run 4
+...
+run 37
 ~~~
 
-Lusa:
+Ada feature change, parameter change, snapshot baru, retraining.
+
+Kalau tracking-nya cuma:
 
 ~~~text
-Run 3
-max_iter changed
-MAE = 10.4
+notes.txt
+model_final.joblib
+model_final_bener.joblib
+model_final_bener_fix.joblib
 ~~~
 
-Setelah 20 run:
+chaos tinggal tunggu waktu. 😭
 
-> “Yang 10.2 itu snapshot apa ya?”
-
-> “Param-nya apa?”
-
-> “Model artifact-nya yang mana?”
-
-Inilah pain yang MLflow Tracking solve.
+MLflow Tracking masuk buat bikin experiment history lebih structured.
 
 ---
 
-# MLflow Tracking itu apa?
+## Analogi: laboratory notebook
 
-Satu experiment execution dicatat sebagai **run**.
+Scientist yang serius nggak cuma bilang:
 
-Run bisa punya:
-
-~~~text
-parameters
-metrics
-tags
-artifacts
-dataset metadata
-run ID
-~~~
-
-Jadi terminal output berubah menjadi structured experiment record.
-
----
-
-# Analogi: laboratory notebook
-
-Researcher tidak hanya menulis:
-
-~~~text
-result bagus
-~~~
+> “Kemarin eksperimen saya bagus.”
 
 Dia catat:
 
 - sample,
-- setup,
 - condition,
+- procedure,
 - measurement,
 - result.
 
-MLflow kurang lebih seperti lab notebook untuk ML experiments.
+MLflow kurang lebih jadi laboratory notebook untuk ML experiments.
+
+Satu experiment run punya context yang bisa dilihat lagi nanti.
 
 ---
 
-# Start MLflow
+## Experiment dan Run
 
-~~~bash
-uv run python scripts/start_mlflow.py
-~~~
+### Experiment
 
-UI:
-
-~~~text
-http://127.0.0.1:5000
-~~~
-
-Workshop helper menyimpan state ke:
-
-~~~text
-.mlflow/
-~~~
-
-Folder ini juga dipakai Compose nanti.
-
-Jadi local experiment history dan Registry state tetap nyambung.
-
----
-
-# Tracking URI
-
-Training code perlu tahu server address.
-
-Lokal:
-
-~~~text
-http://127.0.0.1:5000
-~~~
-
-Dalam Docker:
-
-~~~text
-http://mlflow:5000
-~~~
-
-Same service concept.
-
-Different network perspective.
-
----
-
-# Experiment
-
-MLflow experiment adalah grouping run.
+Grouping logical.
 
 Project kita punya experiment taxi demand forecasting.
 
-Di dalamnya ada baseline run dan model runs.
+Di dalamnya ada banyak run.
 
----
+### Run
 
-# Run
+Satu execution training/evaluation.
 
-Satu training execution = satu run.
-
-Kita log dua run initial:
+Misalnya:
 
 ~~~text
 naive-24h
 hist-gradient-boosting
+retraining-run-february
 ~~~
 
-Kenapa baseline dilog juga?
-
-Karena comparison context harus persisted.
-
-Kalau hanya model utama yang tersimpan, evidence “kenapa model ini worth it” hilang.
+Setiap run punya unique ID.
 
 ---
 
-# Parameters
+## Apa yang kita log?
 
-Parameter = configuration/input.
+Ada empat kategori utama.
+
+### Parameters
+
+Input/configuration.
 
 Contoh:
 
@@ -168,13 +101,11 @@ validation_rows
 
 Pertanyaan yang dijawab:
 
-> Experiment dijalankan dengan setting apa?
+> “Run ini dijalankan dengan setting apa?”
 
----
+### Metrics
 
-# Metrics
-
-Metric = measured output.
+Measured result.
 
 ~~~text
 mae
@@ -183,15 +114,11 @@ rmse
 
 Pertanyaan:
 
-> Hasilnya bagaimana?
+> “Hasilnya bagaimana?”
 
----
+### Tags
 
-# Tags
-
-Tag = descriptive context.
-
-Contoh:
+Descriptive metadata.
 
 ~~~text
 task
@@ -199,194 +126,100 @@ model_family
 stage
 ~~~
 
-Useful buat search/filter.
-
----
-
-# Artifacts
-
-Model juga dilog sebagai MLflow artifact.
-
-Ini lebih structured daripada random file:
-
-~~~text
-model_final_bener.joblib
-~~~
-
-Artifact linked ke run.
-
----
-
-# Run ID
-
-Setiap run punya unique ID.
-
-Nanti Registry model version reference source run.
-
-Chain:
-
-~~~text
-model version
-↓
-run ID
-↓
-metrics
-params
-artifact
-dataset fingerprint
-~~~
-
----
-
-# Dataset fingerprint
-
-Snapshot kita calculate SHA256.
-
-Logged metadata:
-
-~~~text
-dataset_snapshot
-dataset_sha256
-dataset_rows
-dataset_zones
-~~~
-
-Kenapa hash penting?
-
-Filename alone nggak guarantee content sama.
-
-Hash membantu identify content.
-
----
-
-# Run tracked training
-
-~~~bash
-uv run python scripts/train_with_mlflow.py
-~~~
-
-Expected:
-
-~~~text
-baseline run
-model run
-metric comparison
-~~~
-
----
-
-# Explore UI
-
-Jangan cuma lihat table summary.
-
-Open run.
-
-Cari:
-
-### Parameters
-
-Model setting.
-
-### Metrics
-
-MAE/RMSE.
-
-### Tags
-
-Stage.
+Useful buat filter/search.
 
 ### Artifacts
 
-Saved model.
+File hasil run.
 
-### Run ID
+Model artifact, plot, report, atau file lain.
 
-Lineage reference.
+Project kita log model sklearn sebagai artifact.
 
 ---
 
-# Compare runs
+## Kenapa baseline juga dilog?
 
-MLflow UI bisa compare side-by-side.
+Karena baseline adalah comparison context.
 
-Misalnya:
+Kalau kita cuma log main model:
 
 ~~~text
-Run A
-MAE 10.8
-
-Run B
-MAE 10.2
-
-Run C
-MAE 10.5
+MAE = 10.2
 ~~~
 
-Sekarang param difference lebih gampang dilihat.
+kita tahu nilainya, tapi nggak tahu apakah itu actually bagus dibanding simple rule.
 
----
-
-# MLflow Tracking vs Registry
-
-Jangan campur.
+Dengan baseline:
 
 ~~~text
-Tracking
-→ what experiments happened?
-
-Registry
-→ which model versions are managed candidates?
+naive MAE = 13.5
+model MAE = 10.2
 ~~~
 
-Most runs mungkin never masuk Registry.
-
-Itu normal.
+sekarang ada evidence bahwa model memberi improvement.
 
 ---
 
-# MLflow vs DVC
+## Start MLflow
 
-Juga beda.
+Workshop helper:
+
+~~~bash
+uv run python scripts/start_mlflow.py
+~~~
+
+UI:
 
 ~~~text
-DVC
-→ reproduce data artifact state
-
-MLflow
-→ record experiment context + result
+http://127.0.0.1:5000
 ~~~
 
-Mereka complement.
+State disimpan ke:
+
+~~~text
+.mlflow/
+~~~
+
+Kenapa helper custom?
+
+Supaya local MLflow dan Docker Compose MLflow share state directory yang sama.
+
+Jadi setelah kalian register champion locally, pindah ke Compose tidak tiba-tiba registry kosong.
+
+Ini hasil audit workshop flow yang penting banget.
 
 ---
 
-# Workshop takeaway
+## Tracking URI
 
-Sebelum MLflow:
+Application perlu tahu MLflow server ada di mana.
 
-> “Kayaknya run kemarin paling bagus.”
+Local:
 
-Setelah MLflow:
+~~~text
+http://127.0.0.1:5000
+~~~
 
-> “Run abc memakai snapshot SHA xyz, learning_rate 0.05, validation MAE 10.2, dan artifact model ini.”
+Docker:
 
-Much better.
+~~~text
+http://mlflow:5000
+~~~
 
+Same logical service, different network context.
 
 ---
 
-# Implementation Deep Dive — Logging One MLflow Run
+## Actual logging pattern
 
-Project kita secara concept melakukan:
+Conceptually code kita melakukan:
 
 ~~~python
-with mlflow.start_run(
-    run_name="hist-gradient-boosting"
-) as run:
+with mlflow.start_run(run_name="hist-gradient-boosting"):
 
     mlflow.log_params(
         {
-            "model_type": "hist_gradient_boosting",
             "learning_rate": 0.05,
             "dataset_snapshot": "...",
             "dataset_sha256": "...",
@@ -414,45 +247,191 @@ with mlflow.start_run(
     )
 ~~~
 
-## start_run
+Sekarang kita bedah.
 
-Membuka context satu run.
+### start_run
 
-## log_params
+Buka satu experiment run context.
 
-Configuration/input.
+### log_params
 
-## log_metrics
+Simpan configuration.
 
-Measured numeric result.
+### log_metrics
 
-## set_tags
+Simpan numeric result.
 
-Searchable/descriptive context.
+### set_tags
 
-## log_model
+Simpan descriptive context.
 
-Store model artifact dalam MLflow model format.
+### log_model
 
-## Kenapa input_example?
-
-MLflow bisa menyimpan contoh input dan infer signature.
-
-Model artifact jadi lebih inspectable daripada binary opaque saja.
+Simpan model artifact dengan MLflow model packaging.
 
 ---
 
-# Kalau design tracking sendiri
+## Dataset lineage di MLflow
 
-Jangan log everything random.
+Kita log:
+
+~~~text
+dataset_snapshot
+dataset_sha256
+dataset_rows
+dataset_zones
+~~~
+
+Kenapa?
+
+Supaya run tidak cuma bilang:
+
+> “Saya punya MAE 10.2.”
+
+tapi:
+
+> “Saya punya MAE 10.2 dari snapshot X dengan hash Y.”
+
+Itu jauh lebih traceable.
+
+---
+
+## Run ID
+
+Run ID adalah unique identifier.
+
+Nanti saat model masuk Registry, model version bisa point ke source run.
+
+Chain:
+
+~~~text
+registered model version
+↓
+source run ID
+↓
+metrics
+parameters
+dataset fingerprint
+artifact
+~~~
+
+Ini lineage.
+
+---
+
+## Tracking vs Registry
+
+Jangan campur.
+
+### Tracking
+
+Pertanyaan:
+
+> “Experiment apa saja yang terjadi?”
+
+### Registry
+
+Pertanyaan:
+
+> “Model version mana yang kita manage sebagai candidate/production?”
+
+Most experiment runs tidak harus masuk Registry.
+
+Itu normal.
+
+Kita bisa punya 100 experiments, tapi cuma 3 model version yang dianggap layak candidate.
+
+---
+
+## MLflow vs DVC
+
+Juga beda.
+
+~~~text
+DVC
+→ reproduce data artifact
+
+MLflow
+→ record experiment context + result
+~~~
+
+Mereka complement.
+
+---
+
+## Input example dan signature
+
+Saat log model, MLflow bisa simpan contoh input dan model signature.
+
+Kenapa useful?
+
+Karena artifact jadi lebih self-describing.
+
+Kita bisa lihat model expected columns dan type.
+
+Ini bantu serving dan debugging.
+
+---
+
+## Common mistake: log everything
+
+MLflow bisa simpan banyak metadata, tapi bukan berarti semua hal harus dilog.
+
+Kalau log 500 random params yang nggak pernah dipakai buat comparison, UI justru noisy.
 
 Tanya:
 
+> “Apa yang dibutuhkan untuk reproduce, compare, dan trace run?”
+
+Logging yang purposeful lebih valuable daripada logging banyak.
+
+---
+
+## Common mistake: metric tanpa context
+
+MAE 10.2 sendirian belum lengkap.
+
+Kita juga butuh:
+
 ~~~text
-Apa yang dibutuhkan buat compare run?
-Apa yang dibutuhkan buat trace data?
-Apa artifact yang perlu disimpan?
-Apa context yang useful buat filter?
+on what validation period?
+using what snapshot?
+what model config?
+what baseline?
 ~~~
 
-Logging yang purposeful lebih valuable daripada metadata banyak tapi nggak jelas gunanya.
+Context matters.
+
+---
+
+## Hands-on mindset
+
+Saat buka MLflow UI nanti, jangan cuma lihat row paling atas.
+
+Klik run.
+
+Cari:
+
+- parameters,
+- metrics,
+- tags,
+- artifacts,
+- run ID,
+- dataset metadata.
+
+Coba explain run itu seperti kalian lagi review experiment orang lain.
+
+Kalau bisa, tracking system-nya sudah meaningful.
+
+---
+
+## Checkpoint
+
+1. Experiment beda apa dengan Run?
+2. Parameter beda apa dengan Metric?
+3. Artifact itu apa?
+4. Kenapa baseline ikut dilog?
+5. Dataset fingerprint buat apa?
+6. Tracking beda apa dengan Registry?
+
+Kalau clear, Model Registry section berikutnya bakal jauh lebih gampang.

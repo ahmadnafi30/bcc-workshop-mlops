@@ -1,435 +1,332 @@
-# Workshop Overview
+# Workshop Overview — Kita Sebenarnya Lagi Bangun Apa Sih?
 
-## Sebelum ngomongin tools, kita samakan cerita dulu
+Hi peers 👋
 
-Hi peers!
+Sebelum masuk ke DVC, Airflow, MLflow, Docker, Prometheus, dan teman-temannya, aku pengen kita punya satu mental model yang sama dulu. Karena kalau dari awal kita langsung dilempar ke tools, MLOps itu kelihatannya kayak kumpulan logo teknologi yang random banget. Hari ini belajar Airflow, besok MLflow, habis itu Docker, terus entah kenapa ada Grafana. Ujung-ujungnya kita hafal command, tapi pas ditanya **“kenapa sih tool ini dibutuhkan?”**, malah bingung.
 
-Di section ini kita belum akan install Airflow, belum buka MLflow, dan belum ngomongin Docker.
+Di workshop ini kita nggak mau belajar seperti itu.
 
-Kenapa?
-
-Karena kalau workshop dimulai dengan:
+Kita akan mulai dari satu project Machine Learning yang sangat normal. Ada data, ada feature engineering, ada model, ada metric. Baru setelah project itu mulai punya problem nyata, kita masukin satu tool untuk solve problem tersebut. Jadi urutannya bukan:
 
 ~~~text
-pip install airflow
-docker compose up
-mlflow server
+Tool
+↓
+cari use case
 ~~~
 
-besar kemungkinan yang kalian ingat setelah pulang cuma command-command random.
-
-Kita mau kebalikannya.
-
-Kita pengen nanti saat melihat tool, kalian bisa bilang:
-
-> “Oh iya, tool ini muncul karena tadi ada problem itu.”
-
-Jadi di halaman ini kita lihat dulu big picture-nya.
-
----
-
-# Project yang kita bangun
-
-Kita akan membuat system yang memprediksi demand Yellow Taxi di Manhattan satu jam ke depan.
-
-Misalnya:
+tapi:
 
 ~~~text
-Current time:
-17:00
-
-Taxi Zone:
-161
-
-Target:
-18:00
-
-Prediction:
-148 pickups
+Problem
+↓
+butuh capability apa?
+↓
+baru pilih tool
 ~~~
 
-Di balik satu prediction sesederhana itu ternyata banyak hal yang harus terjadi.
-
-Model butuh historical data.
-
-Historical data harus diproses.
-
-Feature harus dibentuk dengan benar.
-
-Model harus ditrain.
-
-Eksperimen perlu dicatat.
-
-Model terbaik perlu dipilih.
-
-Application perlu akses prediction.
-
-System perlu dimonitor.
-
-Dan nanti ketika performa turun, kita perlu decide apakah retraining perlu dilakukan.
-
-Itulah kenapa project ini cocok buat belajar MLOps end-to-end.
+Itu mindset paling penting yang pengen kita bawa dari workshop ini.
 
 ---
 
-# Siapa target audience workshop ini?
+## Use case kita: NYC Yellow Taxi Demand Forecasting
 
-Workshop ini cocok untuk kalian yang sudah pernah sedikit menyentuh Machine Learning, tapi mungkin workflow-nya masih seperti:
+Sepanjang workshop kita cuma pakai **satu use case yang sama**, supaya semua materi terasa nyambung.
+
+Goal-nya:
+
+> **Predict berapa banyak pickup Yellow Taxi yang akan terjadi di setiap Manhattan taxi zone satu jam ke depan.**
+
+Misalnya sekarang jam 17:00.
+
+Kita pengen jawab:
 
 ~~~text
-notebook
-↓
-train
-↓
-metric
-↓
-save model
-↓
-selesai
+Zone 161
+Target time: 18:00
+
+Predicted demand:
+147 pickups
 ~~~
 
-Kalian minimal cukup familiar dengan:
+Kenapa use case ini enak banget buat MLOps? Karena dia punya lifecycle yang cukup realistis. Data-nya time-based, ground truth datang belakangan, model bisa memburuk, prediction bisa dipakai application lain, ada alasan natural buat monitoring, dan ada alasan natural buat retraining.
 
-- Python,
-- Pandas,
-- train/validation split,
-- model.fit(),
-- model.predict(),
-- regression metric seperti MAE.
+Jadi kita nggak perlu bikin-bikin alasan kenapa monitoring dibutuhkan. Nanti kita benar-benar punya pertanyaan:
 
-Kalian **nggak perlu** sudah ngerti:
-
-- Docker,
-- Airflow,
-- DVC,
-- MLflow,
-- FastAPI,
-- Prometheus,
-- Grafana,
-- GitHub Actions.
-
-Semua akan kita bangun gradually.
+> “Model ini masih bagus nggak setelah beberapa hari dipakai?”
 
 ---
 
-# What will you learn?
+## Mulainya dari project ML biasa
 
-Setelah workshop, target-nya bukan supaya kalian hafal syntax semua tools.
-
-Target-nya lebih ke kalian bisa menjawab pertanyaan seperti:
-
-> Kenapa Git saja belum cukup buat tracking ML experiment?
-
-> Bedanya DVC dan MLflow apa?
-
-> DAG itu sebenarnya apa?
-
-> Kenapa logic preprocessing sebaiknya nggak ditaruh semua di DAG?
-
-> Model Registry buat apa kalau kita sudah punya file model?
-
-> Kenapa serving code load champion alias, bukan hard-code version?
-
-> Bedanya monitoring API dan monitoring model apa?
-
-> Kalau MAE production naik, apakah model harus langsung diganti?
-
-Kalau kalian bisa explain pertanyaan-pertanyaan itu dengan bahasa sendiri, workshop ini berhasil.
-
----
-
-# Kita akan membangun ini secara bertahap
-
-## Stage 1 — Data dulu
-
-Kita ambil NYC Yellow Taxi Trip Records.
-
-Raw data bentuknya:
+Bayangin kalian Data Scientist dan project awalnya cuma:
 
 ~~~text
-1 row = 1 taxi trip
+dataset
+   ↓
+feature engineering
+   ↓
+train model
+   ↓
+evaluate
+   ↓
+model.joblib
 ~~~
 
-Tapi model kita butuh:
+Kita punya result:
 
 ~~~text
-1 row = 1 taxi zone × 1 hour
+Validation MAE = 10.2
 ~~~
 
-Jadi data harus di-aggregate dulu.
+Secara Machine Learning, ini valid banget. Kalau konteksnya tugas kuliah, Kaggle experiment, atau proof of concept, mungkin sudah cukup.
+
+Tapi sekarang bayangin project ini mulai dipakai orang lain.
+
+Backend engineer datang:
+
+> “Modelnya dipanggil gimana?”
+
+Manager nanya:
+
+> “Model ini pakai data versi mana?”
+
+Teman satu tim nanya:
+
+> “Experiment yang MAE 10.2 itu parameter-nya apa?”
+
+Ops engineer nanya:
+
+> “Kalau service-nya error kita tahu dari mana?”
+
+Sebulan kemudian:
+
+> “Kok prediction-nya mulai jelek ya?”
+
+Dan akhirnya:
+
+> “Kalau memang jelek, retrain-nya kapan?”
+
+Nah, mulai dari sini kita sudah keluar dari problem sekadar **training model**. Kita masuk ke problem:
+
+> **How do we operate a Machine Learning system over time?**
+
+Di situlah MLOps mulai meaningful.
 
 ---
 
-## Stage 2 — Train model tanpa MLOps tools
-
-Kita sengaja **tidak langsung pakai MLflow**.
-
-Kita bikin dulu workflow ML normal:
+## Lifecycle yang kita bangun
 
 ~~~text
-load data
-↓
-build features
-↓
-split train / validation
-↓
-baseline
-↓
-train ML model
-↓
-calculate MAE
+NYC TLC Data
+      ↓
+Data Preparation
+      ↓
+Hourly Demand
+      ↓
+Feature Engineering
+      ↓
+Training Snapshot
+      ↓
+DVC
+      ↓
+Model Training
+      ↓
+MLflow Tracking
+      ↓
+Model Registry
+      ↓
+Airflow Orchestration
+      ↓
+FastAPI Serving
+      ↓
+Docker + Docker Compose
+      ↓
+GitHub Actions CI/CD
+      ↓
+Prometheus + Grafana
+      ↓
+Prediction Evaluation
+      ↓
+Retraining Decision
+      ↓
+New Challenger
+      ↓
+Review
+      ↓
+Champion
 ~~~
 
-Kenapa?
+Kelihatannya panjang? Iya.
 
-Supaya kalian merasakan dulu limitation-nya.
+Tapi jangan dihafal.
 
-Kalau dari awal semua sudah otomatis, susah ngerti kenapa automation itu useful.
-
----
-
-## Stage 3 — DVC masuk saat kita mulai bertanya soal data
-
-Misalnya model kita bagus.
-
-Terus dua minggu kemudian data berubah.
-
-Kita train ulang.
-
-Pertanyaannya:
-
-> “Model version sebelumnya sebenarnya pakai data yang mana?”
-
-Nah, di sini kita mulai butuh training snapshot yang reproducible.
-
-Masuklah DVC.
-
----
-
-## Stage 4 — MLflow masuk saat eksperimen mulai banyak
-
-Awalnya:
+Yang perlu kalian ingat cuma pola ini:
 
 ~~~text
-run 1
-run 2
-run 3
+setiap tool
+harus punya problem
+yang dia solve
 ~~~
 
-Masih bisa dicatat manual.
-
-Nanti jadi:
+Contohnya:
 
 ~~~text
-model A
-model B
-different params
-different snapshots
-different metrics
-different artifacts
-~~~
-
-Mulai ribet.
-
-MLflow membantu kita record experiment secara structured.
-
----
-
-## Stage 5 — Model Registry masuk saat eksperimen berubah jadi candidate
-
-Ada perbedaan besar antara:
-
-> “Model ini punya MAE bagus.”
-
-dan:
-
-> “Model ini sudah approved buat dipakai application.”
-
-Model Registry membantu kita punya konsep:
-
-~~~text
-challenger
-champion
-~~~
-
-Jadi model lifecycle lebih jelas.
-
----
-
-## Stage 6 — Airflow masuk saat manual steps mulai repot
-
-Kita akan punya flow:
-
-~~~text
-release daily batch
+"Dataset model ini exact-nya mana?"
 ↓
-validate
+DVC
+
+"Experiment kemarin parameter dan metric-nya apa?"
 ↓
-aggregate
+MLflow
+
+"Step A harus selesai sebelum B, terus kalau B gagal gimana?"
 ↓
-build features
+Airflow
+
+"Gimana backend request prediction?"
+↓
+FastAPI
+
+"Works on my machine, di laptop lain error."
+↓
+Docker
+
+"Setiap PR siapa yang ingetin run test?"
+↓
+GitHub Actions
+
+"API hidup nggak? Latency-nya berapa?"
+↓
+Prometheus + Grafana
+
+"Model masih akurat nggak?"
+↓
+Model monitoring
 ~~~
 
-dan flow lain:
+Dengan mental model kayak gini, tools jadi jauh lebih gampang dipahami.
+
+---
+
+## Analogi yang bakal sering kita pakai
+
+Anggap **model itu resep**.
+
+Kalian punya resep burger terbaik sedunia. Apakah resep itu otomatis jadi restoran? Ya nggak.
+
+Kalian masih butuh bahan, supplier, kitchen workflow, quality control, waiter, inventory, monitoring, dan cara update menu.
+
+| Restaurant | ML System |
+| --- | --- |
+| Recipe | Model |
+| Ingredients | Data |
+| Batch ingredients | Dataset snapshot |
+| Cooking process | Training pipeline |
+| Experiment notebook | MLflow |
+| Approved menu | Model Registry |
+| Waiter | FastAPI |
+| Kitchen schedule | Airflow |
+| Kitchen environment | Docker |
+| Quality dashboard | Prometheus + Grafana |
+| Update recipe | Retraining |
+
+Analogi ini nggak 100% perfect, tapi useful banget buat satu ide:
+
+> **Model itu cuma satu komponen dari ML system.**
+
+Kalau workshop ini berhasil, kalian nggak lagi melihat training sebagai akhir project. Kalian mulai melihat dia sebagai salah satu step di lifecycle yang lebih panjang.
+
+---
+
+## Cara belajar yang kita pakai
+
+Setiap materi kurang lebih akan mengikuti pola:
 
 ~~~text
-snapshot
+problem dulu
 ↓
-train
+intuition
 ↓
-register
+analogy
+↓
+concept
+↓
+actual implementation project kita
+↓
+kenapa implementasinya begitu
+↓
+common mistake
+↓
+hands-on
+↓
+checkpoint
 ~~~
 
-Kalau semua manual terus, lama-lama:
+Jadi misalnya Airflow. Kita nggak mulai dari kalimat “DAG adalah Directed Acyclic Graph.” Kita mulai dari:
 
-> “Tadi step yang mana sudah dijalankan?”
+> “Kalian punya lima script yang harus jalan urut. Kalau script ketiga gagal, kalian tahu dari mana? Kalau perlu retry, ulang semua atau cuma step itu?”
 
-Airflow masuk buat orchestration.
-
----
-
-## Stage 7 — FastAPI masuk saat model perlu dipakai system lain
-
-Python object model hanya bisa dipakai langsung dari Python process.
-
-Application lain lebih nyaman punya interface:
-
-~~~http
-POST /predict
-~~~
-
-FastAPI menjadi boundary antara ML logic dan external client.
+Setelah problem-nya terasa, baru konsep DAG masuk.
 
 ---
 
-## Stage 8 — Docker masuk karena environment harus konsisten
+## Production-like, bukan production copy-paste
 
-Klasik banget:
+Repo ini sengaja simplify beberapa hal:
 
-> “Di laptopku jalan.”
-
-Terus laptop orang lain:
-
-> “Kok error?”
-
-Docker membantu kita package runtime environment.
-
-Bukan berarti semua masalah hilang, tapi environment jadi jauh lebih controlled.
-
----
-
-## Stage 9 — CI/CD masuk karena perubahan code perlu quality gate
-
-Kita mulai punya repo yang cukup kompleks.
-
-Kalau ada perubahan:
-
-- tests harus jalan,
-- lint harus lolos,
-- docs jangan rusak,
-- Docker harus masih bisa build.
-
-GitHub Actions otomatis ngecek itu.
-
----
-
-## Stage 10 — Monitoring masuk setelah system hidup
-
-Model yang sudah diserve belum berarti selesai.
-
-Kita perlu tahu dua hal:
-
-~~~text
-Is the system healthy?
-and
-Is the model still good?
-~~~
-
-Prometheus + Grafana bantu operational monitoring.
-
-Prediction log + ground truth evaluation bantu model performance monitoring.
-
----
-
-## Stage 11 — Retraining
-
-Kalau recent performance memburuk:
-
-~~~text
-recent MAE
->
-reference MAE × threshold
-~~~
-
-system bisa create new training snapshot, retrain, lalu register challenger.
-
-Tapi kita tidak otomatis promote ke champion.
-
-Kenapa?
-
-Karena:
-
-> **Automatic retraining tidak harus berarti automatic production promotion.**
-
-Itu governance decision yang beda.
-
----
-
-# Kenapa project ini sengaja “production-like”, bukan “production-grade”?
-
-Ini juga penting.
-
-Workshop ini bukan mau pura-pura bahwa architecture lokal kita sama persis dengan system production skala besar.
-
-Kita masih pakai simplification seperti:
-
-- local files,
-- SQLite,
+- local filesystem,
+- SQLite untuk MLflow metadata,
 - Airflow standalone,
 - Docker Compose,
+- historical replay,
 - manual champion approval.
 
-Kenapa nggak langsung Kubernetes, S3, Terraform, Kafka, feature store, dsb?
+Kenapa bukan langsung Kubernetes, S3, Kafka, feature store, Terraform, managed Airflow, dan cloud IAM? Karena kalau semua itu masuk sekaligus, kita malah sibuk setup infrastructure dan lupa lifecycle yang ingin dipelajari.
 
-Karena tujuan pertama kita adalah memahami lifecycle.
-
-Kalau lifecycle-nya belum paham tapi infrastructure-nya langsung super kompleks, kita malah belajar debugging platform, bukan MLOps.
-
-Jadi philosophy-nya:
+Nanti infrastructure bisa diganti:
 
 ~~~text
-Understand the concept first.
-Scale the infrastructure later.
+local file
+→ object storage
+
+Docker Compose
+→ Kubernetes
+
+standalone Airflow
+→ managed Airflow
+
+local MLflow
+→ remote tracking server
 ~~~
+
+Pattern lifecycle-nya tetap sama.
 
 ---
 
-# Alur belajar yang kita pakai
+## Outcome yang kita cari
 
-Setiap tool akan dibahas dengan pattern yang sama:
+Target kita bukan:
 
-### 1. Problem
+> “Saya hafal command Airflow.”
 
-Apa yang bikin workflow sebelumnya kurang enak?
+Tapi:
 
-### 2. Concept
+> “Kalau workflow saya mulai punya dependency, retry, schedule, dan task failure, saya ngerti kenapa orchestrator dibutuhkan.”
 
-Secara konsep kita butuh apa?
+Bukan:
 
-### 3. Tool
+> “Saya hafal Dockerfile.”
 
-Baru kita lihat tool yang dipakai.
+Tapi:
 
-### 4. Project implementation
+> “Saya ngerti kenapa packaging runtime membantu reproducibility.”
 
-Tool itu masuk di bagian mana dari repo?
+Bukan:
 
-### 5. Hands-on
+> “Saya bisa buka Grafana.”
 
-Kita jalanin.
+Tapi:
 
-### 6. Checkpoint
+> “Saya ngerti beda system health dengan model health.”
 
-Apa yang harus kalian pahami sebelum lanjut?
-
-Dengan pattern ini, harapannya workshop terasa seperti satu cerita panjang, bukan sebelas mini tutorial yang nggak nyambung.
+Kalau kalian bisa menjelaskan **why** dari tiap komponen, kalian sudah punya fondasi yang bagus banget buat belajar MLOps lebih jauh.

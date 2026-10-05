@@ -1,29 +1,41 @@
-# Step 10 — Retraining: Closing the Loop
+# Step 10 — Retraining: Menutup Feedback Loop
 
-Kita sudah sampai final loop.
+Ini final lifecycle step.
 
-Model sudah:
+Kita sudah:
 
-- trained,
-- registered,
-- served,
-- monitored.
+~~~text
+train
+track
+register
+serve
+monitor
+~~~
 
-Sekarang pertanyaan terakhir:
-
-> “Kalau performa memburuk, system ngapain?”
+Sekarang kalau evidence bilang model degraded, apa yang terjadi?
 
 ---
 
-# 1. Inspect current summary
+## Goal
 
-Open:
+Setelah step ini:
+
+- performance summary dipahami,
+- monitoring DAG dijalankan,
+- healthy path dipahami,
+- degraded path dipahami,
+- challenger lifecycle dipahami,
+- promotion tetap explicit.
+
+---
+
+## 1. Buka summary
 
 ~~~text
 data/monitoring/performance_summary.json
 ~~~
 
-Look at:
+Cari:
 
 ~~~text
 recent_mae
@@ -33,53 +45,44 @@ evaluation_count
 retrain_recommended
 ~~~
 
----
+Before Airflow, kalian harus ngerti decision input.
 
-# 2. Understand decision before triggering DAG
-
-Default:
-
-~~~text
-threshold
-=
-reference MAE × 1.25
-~~~
-
-dan:
-
-~~~text
-minimum evaluation samples
-=
-100
-~~~
-
-Jadi condition:
-
-~~~text
-recent_mae > threshold_mae
-AND
-evaluation_count >= min_samples
-~~~
+Automation bukan alasan buat hide logic.
 
 ---
 
-# 3. Healthy model is a valid outcome
+## 2. Hitung manual
 
-Kalau:
+Misalnya:
 
 ~~~text
-retrain_recommended = false
+reference = 10
+multiplier = 1.25
 ~~~
 
-jangan kecewa karena “demo retrain nggak jalan”.
+Threshold:
 
-Justru itu correct decision.
+~~~text
+12.5
+~~~
 
-Automation shouldn’t create unnecessary work.
+Kalau recent = 13 dan samples 200:
+
+~~~text
+retrain recommended
+~~~
+
+Kalau samples 5:
+
+~~~text
+not enough evidence
+~~~
 
 ---
 
-# 4. Open Airflow monitoring DAG
+## 3. Open monitoring DAG
+
+Airflow:
 
 ~~~text
 taxi_model_monitoring
@@ -89,192 +92,150 @@ Graph:
 
 ~~~text
 evaluate_model
-      ↓
+↓
 maybe_retrain
 ~~~
 
-Trigger.
+Kelihatannya cuma dua task.
+
+Tapi maybe_retrain encapsulate conditional lifecycle.
 
 ---
 
-# 5. Evaluate task
+## 4. Trigger default params
 
-Task akan:
+~~~text
+degradation_multiplier = 1.25
+min_samples = 100
+recent_limit = 500
+~~~
 
-1. resolve champion from MLflow;
-2. get champion validation MAE;
-3. load prediction logs;
-4. join available actual demand;
-5. calculate recent metric;
-6. save summary.
+Run.
 
 ---
 
-# 6. maybe_retrain
+## 5. Healthy path
 
-Kalau healthy:
+Kalau model healthy:
 
 ~~~text
 status = not_needed
 ~~~
 
-Kalau degraded:
+Jangan kecewa. 😭
+
+Ini actually good.
+
+Pipeline observe dan decide no action.
+
+Automation yang selalu retrain justru suspicious.
+
+---
+
+## 6. Degraded path
+
+Kalau condition met:
 
 ~~~text
 latest evaluated date
-↓
-new training snapshot
-↓
-MLflow training
-↓
-latest 5-day validation
-↓
-candidate metric
-↓
-beat naive baseline?
-↓
-register challenger
-~~~
-
----
-
-# 7. Why latest five days?
-
-Retraining snapshot baru lebih panjang.
-
-Validation harus move.
-
-Misalnya snapshot sampai Feb 10.
-
-~~~text
-train:
-older history through Feb 5
-
-validation:
-Feb 6–10
-~~~
-
-Kalau validation tetap Jan 22–26 selamanya, kita nggak test recent behavior.
-
----
-
-# 8. Inspect new MLflow run
-
-Kalau retrain terjadi, buka MLflow.
-
-Cari run dengan stage:
-
-~~~text
-retraining-validation
-~~~
-
-Compare dengan initial run.
-
-Look at:
-
-- dataset snapshot name,
-- dataset SHA,
-- MAE,
-- RMSE,
-- row count.
-
----
-
-# 9. Inspect Registry
-
-Candidate baru bisa jadi:
-
-~~~text
-challenger
-~~~
-
-Champion belum berubah.
-
----
-
-# 10. Why no auto champion?
-
-Misalnya new model:
-
-~~~text
-beats naive baseline
-~~~
-
-tapi:
-
-~~~text
-still worse than current champion
-~~~
-
-Kalau auto-promote berdasarkan baseline saja, production could regress.
-
-Makanya promotion explicit.
-
----
-
-# 11. Review before promotion
-
-Checklist:
-
-- candidate MAE?
-- candidate RMSE?
-- current champion validation?
-- production-like recent MAE?
-- newer snapshot?
-- run metadata valid?
-
-Kalau approved:
-
-~~~bash
-uv run python scripts/promote_model.py   --version <VERSION>
-~~~
-
----
-
-# 12. Serving picks it up
-
-FastAPI loader periodically refresh Registry metadata.
-
-Setelah alias champion pindah:
-
-~~~text
-old version
-→
-new version
-~~~
-
-next refresh/load akan use new champion.
-
-No API source edit.
-
----
-
-# Full loop
-
-Sekarang complete:
-
-~~~text
-data
-↓
-features
 ↓
 snapshot
 ↓
 train
 ↓
-track
+validation
 ↓
-register
+MLflow
 ↓
-champion
+baseline gate
 ↓
+challenger
+~~~
+
+---
+
+## 7. Inspect MLflow
+
+Cari run stage:
+
+~~~text
+retraining-validation
+~~~
+
+Compare:
+
+- dataset snapshot,
+- SHA,
+- MAE,
+- RMSE,
+- date range.
+
+Question:
+
+> “Apakah snapshot sama dengan initial?”
+
+Harusnya lebih baru.
+
+---
+
+## 8. Validation moves
+
+Initial validation January.
+
+Retrain snapshot later → last 5 days move.
+
+Kenapa?
+
+Kita mau evaluate on recent holdout, bukan old frozen January forever.
+
+---
+
+## 9. Registry
+
+Kalau candidate pass baseline gate, challenger alias update.
+
+Champion belum berubah.
+
+This is intentional.
+
+---
+
+## 10. Manual review
+
+Before promotion, inspect:
+
+~~~text
+candidate MAE
+current champion
+recent production-like error
+dataset period
+run lineage
+~~~
+
+Lalu kalau approved:
+
+~~~bash
+uv run python scripts/promote_model.py --version <VERSION>
+~~~
+
+---
+
+## 11. Serving picks new champion
+
+API loader periodically check alias.
+
+Setelah champion move, future prediction bisa use new model.
+
+No source code hard-code version.
+
+Closed loop:
+
+~~~text
 serve
 ↓
-log
-↓
-ground truth
-↓
 monitor
+↓
+evaluate
 ↓
 retrain
 ↓
@@ -283,26 +244,22 @@ challenger
 review
 ↓
 champion
+↓
+serve
 ~~~
-
-Inilah end-to-end MLOps story workshop kita.
 
 ---
 
-# Final reflection
+## Final challenge
 
-Coba jawab tiga pertanyaan:
+Coba jelaskan full lifecycle tanpa lihat diagram.
 
-### 1
+Mulai dari:
 
-Kenapa retraining otomatis tapi promotion manual?
+> “NYC TLC monthly data...”
 
-### 2
+dan finish:
 
-Kenapa recent MAE compare ke champion validation MAE?
+> “...new champion diserve.”
 
-### 3
-
-Kenapa application load alias champion bukan version number?
-
-Kalau kalian bisa jawab dengan bahasa sendiri, lifecycle sudah benar-benar masuk.
+Kalau bisa explain causality-nya, bukan cuma nama tools, berarti workshop goal tercapai.

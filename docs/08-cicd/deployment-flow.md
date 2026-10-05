@@ -1,18 +1,16 @@
-# Container Delivery — From Tested Code to GHCR
+# Container Delivery — Dari Source Code Jadi Artifact yang Siap Dipakai Environment Lain
 
-## Setelah CI hijau, what next?
+Setelah CI green, source code sudah verified.
 
-Code sudah verified.
+Tapi deployment platform biasanya nggak mau clone repo lalu build random di production.
 
-Sekarang kita mau produce reusable runtime artifact.
+Kita ingin deliver artifact.
 
-Artifact-nya:
+Project kita pilih Docker image sebagai artifact.
 
-~~~text
-Docker image
-~~~
+---
 
-Flow:
+## Flow
 
 ~~~text
 main commit
@@ -21,30 +19,60 @@ CI success
 ↓
 Container Delivery
 ↓
-build exact revision
+build image
 ↓
-tag
+tag image
 ↓
 push GHCR
 ~~~
 
+GHCR = GitHub Container Registry.
+
 ---
 
-# Image kita
+## Kenapa build image lagi?
 
-Separate images:
+CI Docker build:
+
+> “Can this image build successfully?”
+
+Delivery Docker build:
+
+> “Produce the artifact we actually publish.”
+
+CD checkout exact tested commit.
+
+Jadi:
 
 ~~~text
-bcc-workshop-mlops-api
-bcc-workshop-mlops-mlflow
-bcc-workshop-mlops-airflow
+tested revision
+=
+published revision
 ~~~
 
-Mereka dibuild dari target Dockerfile berbeda.
+Ini lineage.
 
 ---
 
-# latest tag
+## Image naming
+
+Project punya separate image:
+
+~~~text
+...-api
+...-mlflow
+...-airflow
+~~~
+
+Kenapa separate?
+
+Karena service responsibility beda.
+
+Deployment target nanti bisa scale/update independently.
+
+---
+
+## Tag latest
 
 Convenient:
 
@@ -52,134 +80,102 @@ Convenient:
 latest
 ~~~
 
-Tapi movable.
+Tapi pointer bergerak.
 
-Hari ini menunjuk commit A.
+Hari ini latest = A.
 
-Besok commit B.
+Besok latest = B.
 
-Jadi jangan rely on latest untuk precise audit.
+Useful buat casual pull, kurang ideal buat exact audit.
 
 ---
 
-# SHA tag
-
-Contoh:
+## SHA tag
 
 ~~~text
-sha-a1d7567
+sha-abc123
 ~~~
 
-Trace ke exact Git commit.
+Represent exact Git revision.
 
-Benefit:
+Kalau incident:
 
-- rollback,
-- audit,
-- reproducibility,
-- deployment trace.
+> “Image mana yang running?”
 
----
-
-# Kenapa CD build lagi kalau CI sudah build?
-
-Good question.
-
-CI build:
-
-> Can this image build successfully?
-
-CD build:
-
-> Build artifact that will actually be published.
-
-CD checkout exact tested commit.
-
-Jadi published artifact berasal dari revision yang sudah lolos quality gate.
+SHA tag lebih informative.
 
 ---
 
-# GHCR sebagai warehouse
+## Rollback application
 
-Analogi factory:
+Suppose image latest broken.
+
+Deployment platform bisa pin previous SHA.
+
+Ini application rollback.
+
+Jangan confuse dengan model rollback.
+
+### Application rollback
+
+Docker image version.
+
+### Model rollback
+
+MLflow champion version.
+
+MLOps punya dua version dimensions.
+
+---
+
+## Kenapa workshop berhenti di GHCR?
+
+Karena kita belum define real target production environment.
+
+Kalau kita tambahin:
 
 ~~~text
-CI
-→ quality inspection
-
-Docker build
-→ packaging
-
-GHCR
-→ warehouse
+ssh fake-server
+kubectl apply
 ~~~
 
-Deployment platform nanti tinggal pull image.
+tanpa environment real, itu theater.
+
+Better teaching:
+
+> Continuous Delivery selesai saat verified artifact siap di registry.
+
+Nanti extension bisa deploy ke:
+
+- VM,
+- Cloud Run,
+- ECS,
+- Kubernetes.
 
 ---
 
-# Kita belum Continuous Deployment
+## Artifact immutability
 
-Workflow berhenti di GHCR.
+Idealnya published artifact tidak dimodifikasi diam-diam.
 
-Belum ada:
-
-- VPS restart,
-- Kubernetes rollout,
-- Cloud Run deploy.
-
-Jadi terminology kita:
+Kalau code berubah:
 
 ~~~text
-Continuous Delivery
+new commit
+→ new image
+→ new tag/digest
 ~~~
 
-Bukan full Continuous Deployment.
+Bukan edit container running manual.
+
+Ini infrastructure hygiene.
 
 ---
 
-# App version vs model version
+## Checkpoint
 
-Ini perlu banget dipahami.
-
-Misalnya:
-
-~~~text
-API image:
-sha-a1d7567
-
-Champion model:
-version 5
-~~~
-
-Besok model promote ke version 6.
-
-API image masih sama.
-
-Atau API bug fix deploy image baru.
-
-Champion masih version 6.
-
-Mereka independent.
-
-MLOps observability ideal harus bisa trace both.
-
----
-
-# Future extension
-
-Kalau punya target server, flow bisa extend:
-
-~~~text
-GHCR
-↓
-deployment platform
-↓
-health check
-↓
-traffic
-~~~
-
-Tapi workshop stop sebelum infrastructure-specific detail.
-
-Itu intentional.
+1. Kenapa deployment artifact perlu?
+2. CI build dan delivery build beda tujuan apa?
+3. latest dan SHA tag tradeoff?
+4. Application rollback beda apa dengan model rollback?
+5. Kenapa workshop nggak fake auto-deploy?

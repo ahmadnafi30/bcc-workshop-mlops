@@ -1,32 +1,30 @@
-# Step 2 — Feature Engineering and Baseline Model
+# Step 2 — Feature Engineering + Baseline: Jangan MLOps-in Model yang Belum Jelas
 
 Sekarang kita punya hourly demand.
 
-Next question:
+Before DVC, MLflow, dan Airflow, kita harus punya **ML workflow yang benar**.
 
-> “Gimana caranya model memanfaatkan history buat predict satu jam ke depan?”
+Kenapa?
 
-Di step ini kita build features dan train model pertama **tanpa MLflow dulu**.
+Karena MLOps bukan pengganti Machine Learning fundamentals.
 
-Kenapa tanpa MLflow?
-
-Supaya kita tahu normal ML workflow-nya dulu.
+Kalau feature leakage, orchestration yang bagus cuma automate leakage lebih cepat. 😭
 
 ---
 
-# Target step
+## Goal
 
-Setelah selesai:
+Setelah step ini:
 
-- feature dataset ada,
-- training snapshot ada,
-- naive baseline dievaluasi,
-- HistGradientBoosting ditrain,
-- kalian ngerti leakage protection.
+- model-ready feature table terbentuk,
+- kalian ngerti lag dan rolling features,
+- leakage rule jelas,
+- training snapshot manual dibuat,
+- baseline dan main model dibandingkan.
 
 ---
 
-# 1. Build features
+## 1. Build features
 
 ~~~bash
 uv run python scripts/build_features.py
@@ -40,13 +38,13 @@ data/features/taxi_demand_features.parquet
 
 ---
 
-# 2. Inspect feature columns
+## 2. Inspect columns
 
 ~~~bash
 uv run python -c "import pandas as pd; df=pd.read_parquet('data/features/taxi_demand_features.parquet'); print(df.columns.tolist()); print(df.head())"
 ~~~
 
-Kalian akan lihat feature seperti:
+Cari:
 
 ~~~text
 hour
@@ -56,214 +54,187 @@ lag_1h
 lag_24h
 lag_168h
 rolling_mean_3h
-...
+rolling_mean_24h
 target_trip_count
 ~~~
 
 ---
 
-# 3. Coba verify satu row secara manual
+## 3. Pause: leakage check
 
-Ambil satu zone dan timestamp.
+Ambil satu target row.
+
+Misalnya:
+
+~~~text
+target = Jan 10 18:00
+~~~
 
 Tanya:
 
-> Kalau target jam 18:00, lag_1h berasal dari jam berapa?
+> “Kalau feature ini digunakan, apakah nilainya sudah diketahui sebelum jam 18:00?”
 
-Expected:
+Kalau tidak, leakage.
+
+---
+
+## 4. Kenapa rolling mean shift dulu?
+
+Misalnya rolling 3h.
+
+Bad:
 
 ~~~text
+16:00
+17:00
+18:00 actual
+~~~
+
+Target leaked.
+
+Correct:
+
+~~~text
+15:00
+16:00
 17:00
 ~~~
 
-lag_24h?
+atau previous three hours sesuai implementation.
 
-~~~text
-yesterday 18:00
-~~~
-
-lag_168h?
-
-~~~text
-same hour one week earlier
-~~~
+Jadi shift dulu, baru rolling.
 
 ---
 
-# 4. Leakage check
-
-Ini jangan dilewati.
-
-Rolling feature kita dibuat dari:
-
-~~~text
-shift(1)
-then
-rolling()
-~~~
-
-Kenapa?
-
-Karena target hour actual tidak boleh masuk feature.
-
-Coba bayangin kalau current target ikut.
-
-Metric bisa dramatically bagus.
-
-Tapi production impossible.
-
----
-
-# 5. Build training snapshot manual
+## 5. Create initial snapshot
 
 ~~~bash
-uv run python scripts/create_training_snapshot.py   --cutoff-date 2025-01-26
+uv run python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
 ~~~
 
 Output:
 
 ~~~text
-data/snapshots/training/
-taxi_demand_2025-01-26.parquet
+data/snapshots/training/taxi_demand_2025-01-26.parquet
 ~~~
 
-Kenapa snapshot?
+Kenapa snapshot sekarang?
 
-Karena live feature file terus berubah saat Jan 27, Jan 28 masuk.
+Karena feature dataset akan terus tumbuh.
 
-Training input harus frozen.
+Training butuh frozen input identity.
 
 ---
 
-# 6. Train model
+## 6. Train manually
 
 ~~~bash
 uv run python scripts/train_model.py
 ~~~
 
-Kalian akan lihat result baseline dan main model.
+Kalian akan lihat:
 
-Jangan langsung tutup terminal setelah selesai.
-
-Read numbers.
+- baseline MAE/RMSE,
+- model MAE/RMSE,
+- row counts.
 
 ---
 
-# 7. Compare baseline
+## 7. Jangan langsung lihat “model bagus”
 
-Naive prediction:
+Pertanyaan pertama:
+
+> “Main model beat baseline nggak?”
+
+Kalau iya, good.
+
+Kalau nggak, itu bukan kegagalan workshop.
+
+Itu finding.
+
+ML yang sehat nggak memaksa fancy model selalu menang.
+
+---
+
+## 8. Baseline intuition
+
+Naive:
 
 ~~~text
-prediction(t)
+prediction today 18:00
 =
-lag_24h
+yesterday 18:00
 ~~~
 
-Kalau model utama:
+Taxi demand punya daily cycle, jadi baseline reasonable.
 
-~~~text
-MAE lower than baseline
-~~~
-
-bagus.
-
-Kalau lebih tinggi:
-
-> ML model belum justify complexity.
-
-Dan itu valid outcome.
+Ini jauh lebih meaningful daripada baseline random.
 
 ---
 
-# 8. Jangan invent metric
+## 9. Time split
 
-Metric actual tergantung run/data.
+Kenapa tidak random?
 
-Docs tidak kasih fake expected MAE.
+Karena target production ada di future.
 
-Kenapa?
-
-Karena kita mau peserta percaya output real, bukan mencari angka yang “harus cocok”.
-
-Yang penting relation:
+Time split mimic:
 
 ~~~text
-baseline
-vs
-model
+learn from past
+↓
+validate on later period
 ~~~
+
+Random split bisa mix time context.
 
 ---
 
-# 9. Inspect local artifacts
+## 10. Inspect local artifact
 
-Setelah training:
+Generated:
 
 ~~~text
 models/
-taxi_demand_model.joblib
-initial_metrics.json
 ~~~
 
-Ini temporary manual artifact path.
+Kenapa folder nggak ada permanent placeholder lagi?
 
-Nanti MLflow replace manual bookkeeping.
+Karena script create runtime folder saat dibutuhkan.
+
+Generated artifact tidak perlu dipaksa exist di source repo.
 
 ---
 
-# 10. Think like reviewer
+## Mini challenge
 
-Coba jawab:
+### Question A
 
-### Model metric jauh terlalu bagus, first suspicion apa?
+Kalau lag_24h model sangat kuat, apa artinya?
 
-~~~text
-data leakage
-~~~
+Ada strong daily seasonality.
 
-### Kenapa random split kurang ideal?
+### Question B
 
-~~~text
-time order bisa bocor / tidak mimic future
-~~~
+Kalau model beat baseline by 0.01 MAE tapi jauh lebih complex, apakah automatically worth it?
 
-### Kenapa zone_id categorical?
+Belum tentu.
 
-~~~text
-ID bukan numeric magnitude
-~~~
+Complexity vs gain harus dipikirkan.
 
 ---
 
-# Mini challenge
+## Checkpoint
 
-Kalau:
+Kalian harus bisa explain:
 
-~~~text
-baseline MAE = 9
-model MAE = 11
-~~~
-
-Apakah kita register model sebagai challenger?
-
-Dalam project logic:
-
-~~~text
-no
-~~~
-
-Karena main model gagal beat simple baseline.
-
----
-
-# Checkpoint
-
-Kalian siap lanjut kalau bisa explain:
-
-- feature lag,
+- target,
+- lags,
 - rolling,
 - leakage,
+- warm-up,
 - time split,
-- baseline.
+- baseline,
+- model comparison.
 
-Next kita masuk DVC dan mulai membahas reproducibility.
+Baru setelah itu kita version data snapshot dengan DVC.
