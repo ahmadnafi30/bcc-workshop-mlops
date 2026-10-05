@@ -1,47 +1,92 @@
-# FastAPI
+# FastAPI — Building the Prediction Interface
 
-## Why FastAPI?
+## Kenapa FastAPI?
 
-FastAPI gives us a small HTTP application around prediction logic.
+Kita butuh HTTP interface yang:
 
-The project separates:
+- gampang dibuat,
+- punya request validation,
+- punya auto docs,
+- gampang dites,
+- cocok dengan Python ML stack.
 
-~~~text
-api/
-→ HTTP concerns
+FastAPI fit banget.
 
-src/serving/
-→ ML serving logic
-~~~
+Tapi yang penting bukan brand tool-nya.
 
-That separation makes testing easier.
+Yang penting concept:
 
-## Main files
+> Model inference dibungkus dalam stable service interface.
+
+---
+
+# Folder separation
 
 ~~~text
 api/
 ├── main.py
 ├── schemas.py
 └── dependencies.py
+
+src/serving/
+├── feature_provider.py
+├── model_loader.py
+└── predictor.py
 ~~~
 
-### main.py
+Kenapa dipisah?
 
-Defines endpoints and maps Python exceptions into HTTP responses.
+Karena HTTP concern dan ML serving concern beda.
 
-### schemas.py
+---
 
-Defines request and response shapes using Pydantic models.
+# api/main.py
 
-### dependencies.py
+Responsibility:
 
-Creates reusable objects such as the predictor.
+- define endpoints,
+- HTTP status handling,
+- middleware,
+- response objects.
 
-## Endpoint: GET /health
+Dia bukan tempat train model.
 
-Purpose:
+Dia bukan tempat implement rolling feature 200 lines.
 
-> Is the API process alive?
+---
+
+# schemas.py
+
+Pydantic model define request/response contract.
+
+Contoh request:
+
+~~~text
+zone_id
+target_datetime
+~~~
+
+Validation bisa ensure:
+
+- zone_id positive,
+- target time at exact hour,
+- no timezone ambiguity untuk workshop mode.
+
+---
+
+# dependencies.py
+
+Build reusable predictor dependency.
+
+FastAPI dependency injection memudahkan testing.
+
+Di test, real predictor bisa diganti fake.
+
+Jadi API contract bisa dites tanpa MLflow server real.
+
+---
+
+# GET /health
 
 Response:
 
@@ -51,24 +96,35 @@ Response:
 }
 ~~~
 
-This endpoint intentionally does not require MLflow to be healthy.
+Apa arti health?
 
-Why?
+> FastAPI process alive dan bisa respond.
 
-Because two questions are different:
+Apa yang **tidak** dijamin?
+
+- champion exists,
+- MLflow healthy,
+- history data complete.
+
+Kenapa health tidak check everything?
+
+Kalau health endpoint depends on semua dependency, sulit distinguish:
 
 ~~~text
-Is FastAPI alive?
-Is the model dependency ready?
+API process down
+vs
+MLflow dependency down
 ~~~
 
-## Endpoint: GET /model-info
+Separation health signal bisa lebih informative.
 
-Purpose:
+---
 
-> Which registered model is currently selected by the serving alias?
+# GET /model-info
 
-Example information:
+Endpoint ini query Registry metadata.
+
+Response roughly:
 
 ~~~text
 model_name
@@ -78,9 +134,19 @@ run_id
 model_uri
 ~~~
 
-If champion is missing, this endpoint can return 503.
+Kalau champion missing:
 
-## Endpoint: POST /predict
+~~~text
+503 Service Unavailable
+~~~
+
+Meaning:
+
+> API alive, model dependency not ready.
+
+---
+
+# POST /predict
 
 Request:
 
@@ -91,132 +157,228 @@ Request:
 }
 ~~~
 
-Response contains:
+Flow:
 
 ~~~text
-zone_id
-target_datetime
-predicted_trip_count
-model_name
-model_version
-model_alias
-run_id
-model_uri
+Pydantic validation
+↓
+feature provider
+↓
+registry loader
+↓
+model predict
+↓
+prediction logger
+↓
+response
 ~~~
 
-Including model metadata makes debugging much easier.
+---
 
-If someone asks:
+# Why 422?
 
-> “Which model created this prediction?”
-
-the response already gives us useful lineage.
-
-## HTTP status codes in this project
-
-### 200
-
-Request succeeded.
-
-### 422
-
-The request structure may be valid JSON, but prediction cannot be built from the supplied input or available history.
-
-Examples:
-
-- target time is not at the start of an hour,
-- required historical demand is missing.
-
-### 503
-
-The API process is alive, but the model dependency is not ready.
-
-Example:
-
-- champion alias does not exist in MLflow Registry.
-
-## Dependency injection
-
-FastAPI can inject reusable dependencies into endpoints.
-
-Our predictor is created through a dependency function.
-
-That makes tests easier because we can replace the real predictor with a fake predictor.
-
-## Why fake dependencies in tests?
-
-Unit tests should not require:
-
-- a real MLflow server,
-- a real registered model,
-- a huge TLC dataset.
-
-We override the dependency and test the API contract separately.
-
-That means:
+Contoh:
 
 ~~~text
-API test
-→ test HTTP behavior
-
-serving test
-→ test feature + model behavior
-
-integration demo
-→ test the real stack
+target_datetime = 18:30
 ~~~
 
-Different test levels answer different questions.
+Model kita hourly.
 
-## Before starting locally
+Request valid JSON, tapi semantically invalid buat prediction contract.
 
-Start the shared local MLflow server first:
+FastAPI/Pydantic return 422.
 
-~~~bash
-uv run python scripts/start_mlflow.py
+History incomplete juga mapped ke 422 in project.
+
+---
+
+# Why 503?
+
+Model dependency unavailable.
+
+Contoh:
+
+~~~text
+champion alias missing
 ~~~
 
-Make sure the registered model already has a `champion` alias. The API resolves that alias instead of hard-coding a model version.
+API code itself healthy.
 
-## Start locally
+Dependency not ready.
+
+---
+
+# Swagger UI
+
+Start:
 
 ~~~bash
 uv run uvicorn api.main:app --reload
 ~~~
 
-Open Swagger UI:
+Open:
 
 ~~~text
 http://127.0.0.1:8000/docs
 ~~~
 
-Swagger is especially useful for beginners because you can inspect schemas and send requests without writing curl commands.
+Swagger membantu newbie karena:
 
-## Metrics endpoint
+- endpoint list visible,
+- schema visible,
+- request bisa dicoba langsung,
+- response code visible.
 
-FastAPI also exposes:
+Presenter bisa demo tanpa curl.
+
+---
+
+# Start MLflow first
+
+Sebelum model-info/predict:
+
+~~~bash
+uv run python scripts/start_mlflow.py
+~~~
+
+Pastikan Registry punya champion.
+
+Kalau nggak, API nggak punya model yang harus diserve.
+
+---
+
+# Middleware metrics
+
+API punya HTTP middleware yang record:
+
+- request count,
+- latency,
+- status.
+
+Setiap request melewati middleware.
+
+Flow:
+
+~~~text
+request starts
+↓
+timer starts
+↓
+endpoint executes
+↓
+response
+↓
+timer stops
+↓
+Prometheus metric updated
+~~~
+
+---
+
+# /metrics
+
+Prometheus scrape:
 
 ~~~text
 GET /metrics
 ~~~
 
-Prometheus scrapes this endpoint later.
+Endpoint return exposition format.
 
-It is hidden from the main OpenAPI workshop interface because it is operational infrastructure, not a user-facing prediction API.
+Hidden dari main Swagger schema karena bukan business API.
 
-## Common errors
+Dia operational endpoint.
 
-### 503 model champion unavailable
+---
 
-Check:
+# Path label normalization
 
-1. MLflow is running;
-2. a model was registered;
-3. a model version was promoted to champion;
-4. MLFLOW_TRACKING_URI points to the correct server.
+Prometheus label bisa explode cardinality kalau arbitrary URL path dipakai.
 
-### 422 history missing
+Project normalize known paths.
 
-The model needs up to 168 hours of history.
+Unknown jadi:
 
-Make sure processed demand exists for the full lookback window.
+~~~text
+other
+~~~
+
+Kenapa?
+
+Kita nggak mau millions unique metric series karena dynamic URL.
+
+---
+
+# Testing API tanpa real MLflow
+
+Test use dependency override.
+
+FakePredictor return deterministic data.
+
+Kenapa useful?
+
+Karena unit test API harus test:
+
+- request validation,
+- response structure,
+- HTTP code.
+
+Bukan startup full MLflow.
+
+Integration test bisa separate.
+
+---
+
+# Testing layers
+
+Mental model:
+
+~~~text
+unit test
+→ function behavior
+
+API contract test
+→ HTTP behavior with fake dependency
+
+integration
+→ real MLflow + data + model + API
+~~~
+
+Jangan paksa setiap test jadi full integration test.
+
+Nanti lambat dan flaky.
+
+---
+
+# Common debugging
+
+## /health works, /predict 503
+
+API healthy.
+
+MLflow/champion problem.
+
+## /predict 422
+
+Request/history problem.
+
+## connection refused
+
+API process not running / wrong port.
+
+## model-info version unexpected
+
+Check champion alias in MLflow.
+
+---
+
+# Takeaway
+
+FastAPI bukan “ML tool”.
+
+Dia application interface.
+
+Itu justru bagus.
+
+MLOps banyak menggunakan normal software engineering practice untuk membuat ML usable.

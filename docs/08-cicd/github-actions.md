@@ -1,71 +1,166 @@
-# GitHub Actions
+# GitHub Actions — Automating Repository Checks
 
-## What is a workflow?
+## Workflow disimpan sebagai code
 
-A GitHub Actions workflow is YAML stored under:
+GitHub Actions workflow ada di:
 
 ~~~text
 .github/workflows/
+├── ci.yml
+└── cd.yml
 ~~~
 
-It describes automated jobs triggered by repository events.
+Ini penting karena automation itself version-controlled.
 
-Our main files:
+Kalau CI rule berubah, perubahan bisa direview seperti code lain.
 
-~~~text
-ci.yml
-cd.yml
-~~~
+---
 
-## Event → workflow
+# Event-driven
 
-Examples:
+GitHub Actions mulai dari event.
+
+Contoh:
 
 ~~~text
 push
-→ CI
-
-pull request
-→ CI
-
-successful CI on main
-→ container delivery
+pull_request
+workflow_run
+workflow_dispatch
 ~~~
 
-This event-driven model is different from Airflow's data workflow orchestration.
+Workflow CI kita trigger saat branch relevant berubah.
 
-## CI workflow
+Delivery trigger setelah CI main selesai sukses.
 
-### Branch policy
+---
 
-For pull requests:
+# Branch strategy
+
+Repo kita:
+
+~~~text
+feat/* / fix/* / docs/* / chore/*
+              ↓
+           develop
+              ↓
+            main
+~~~
+
+Feature nggak langsung merge ke main.
+
+Develop integration dulu.
+
+---
+
+# Branch policy job
+
+Untuk Pull Request, CI check direction.
+
+Allowed:
 
 ~~~text
 feat/* → develop
+fix/* → develop
+docs/* → develop
+chore/* → develop
+
 develop → main
 ~~~
 
-The CI job checks that PR direction matches the repository workflow.
-
-This does not replace GitHub branch protection, but it makes the expected process visible and testable.
-
-### Quality job
-
-The quality job installs uv, prepares Python, and runs checks.
+Kalau:
 
 ~~~text
-Ruff
-pytest
-MkDocs build
+feat/foo → main
 ~~~
 
-Why build docs in CI?
+branch policy fail.
 
-Because broken documentation links or invalid navigation should be caught before workshop day.
+Kenapa?
 
-### Docker matrix
+Supaya workflow repository nggak cuma ditulis di CONTRIBUTING, tapi juga automatically checked.
 
-We build multiple targets:
+---
+
+# Quality job
+
+High-level:
+
+~~~text
+checkout repo
+↓
+install uv
+↓
+prepare Python
+↓
+uv sync --group docs
+↓
+Ruff
+↓
+pytest
+↓
+MkDocs strict build
+~~~
+
+---
+
+# actions/checkout
+
+Runner GitHub awalnya kosong.
+
+Checkout action download repository content untuk commit yang sedang dites.
+
+---
+
+# setup-uv
+
+Install uv di runner.
+
+Kita pin action version.
+
+Kenapa pin?
+
+Automation dependency juga bisa berubah.
+
+Version pin mengurangi surprise.
+
+---
+
+# Ruff
+
+~~~bash
+uv run ruff check src api scripts tests
+~~~
+
+Fast static lint.
+
+---
+
+# pytest
+
+~~~bash
+uv run pytest -q
+~~~
+
+Unit/API logic tests.
+
+---
+
+# MkDocs strict
+
+~~~bash
+uv run --group docs mkdocs build --strict
+~~~
+
+Strict mode bikin docs warning tertentu fail build.
+
+Bagus buat workshop repo karena broken reference jangan lolos diam-diam.
+
+---
+
+# Docker matrix
+
+Kita punya target:
 
 ~~~text
 api
@@ -73,77 +168,147 @@ mlflow
 airflow
 ~~~
 
-A matrix avoids copying the same job three times.
-
-Conceptually:
+Daripada copy job 3 kali, GitHub Actions matrix:
 
 ~~~text
-same build logic
+same job template
 ×
-different target
+three target values
 ~~~
 
-## Cache
+Runner build each.
 
-GitHub Actions can reuse cached dependencies and Docker layers.
+---
 
-Caching is not correctness.
+# Cache
 
-It is an optimization.
+Docker Buildx dan uv bisa pakai cache.
 
-The workflow should still produce the same result when the cache is empty.
+Benefit:
 
-## Concurrency
+- faster repeated runs,
+- less download/build.
 
-Suppose you push commit A, then immediately push commit B.
+Tapi important:
 
-CI for A may no longer be useful.
+> Cache is optimization, not correctness dependency.
 
-The workflow can cancel the older in-progress run for the same branch.
+Workflow harus tetap bisa run from empty cache.
 
-This saves runner time.
+---
 
-## Delivery workflow
+# Concurrency
 
-The CD workflow waits for CI completion.
+Kalau commit A sedang CI lalu commit B push ke branch sama, run A bisa obsolete.
 
-It only publishes when:
+CI config cancel in-progress run untuk same group.
 
-- CI succeeded,
-- event came from a push,
-- branch is main.
+Ini save runner time.
 
-Pull requests do not publish release images.
+---
 
-## GITHUB_TOKEN
+# CD workflow
 
-GitHub automatically provides a token to the workflow.
+Setelah CI main success:
 
-For GHCR publishing, the job requests:
+~~~text
+workflow_run
+↓
+Container Delivery
+~~~
+
+CD ensure event:
+
+- CI success,
+- push event,
+- branch main.
+
+PR saja tidak publish release image.
+
+---
+
+# GHCR login
+
+GHCR = GitHub Container Registry.
+
+Workflow pakai:
+
+~~~text
+GITHUB_TOKEN
+~~~
+
+dengan permission:
 
 ~~~text
 packages: write
 ~~~
 
-This avoids storing a personal registry password in the repository.
+Kita nggak perlu simpan personal Docker password.
 
-## Secrets rule
+---
 
-Never commit credentials into workflow YAML.
+# Image metadata
 
-Use GitHub Secrets or environment-based credentials for real secret values.
+Published image dapat tags seperti:
 
-Our local demo configuration only contains non-secret defaults.
+~~~text
+latest
+sha-abcdef
+~~~
 
-## Reading a workflow
+latest convenient.
 
-When a YAML file looks overwhelming, read it in this order:
+SHA traceable.
 
-1. name;
-2. trigger;
-3. permissions;
-4. jobs;
-5. steps inside one job;
-6. only then study expressions.
+---
 
-Do not try to understand the whole file at once.
+# Kenapa exact SHA useful?
+
+Kalau latest berubah setiap release:
+
+~~~text
+today latest = commit A
+tomorrow latest = commit B
+~~~
+
+Rollback/audit butuh fixed reference.
+
+SHA tag memberi exact application revision.
+
+---
+
+# Secrets
+
+Rule basic:
+
+> Jangan taruh secret literal di YAML.
+
+Use:
+
+- GitHub Secrets,
+- environment secret,
+- workload identity,
+
+depending deployment.
+
+Workshop tidak membutuhkan external cloud credential.
+
+---
+
+# Cara baca workflow YAML sebagai newbie
+
+Jangan baca semua sekaligus.
+
+Urutan:
+
+1. name
+2. on / trigger
+3. permissions
+4. jobs
+5. one job
+6. steps
+7. expressions
+
+Pelan-pelan.
+
+YAML CI terlihat scary mostly karena nested structure, bukan karena concept-nya selalu rumit.

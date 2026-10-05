@@ -1,111 +1,185 @@
-# Container Delivery
+# Container Delivery — From Tested Code to GHCR
 
-## What happens after CI succeeds?
+## Setelah CI hijau, what next?
 
-On main:
+Code sudah verified.
+
+Sekarang kita mau produce reusable runtime artifact.
+
+Artifact-nya:
 
 ~~~text
+Docker image
+~~~
+
+Flow:
+
+~~~text
+main commit
+↓
 CI success
-   ↓
+↓
 Container Delivery
-   ↓
-build exact tested revision
-   ↓
-tag image
-   ↓
-push to GHCR
+↓
+build exact revision
+↓
+tag
+↓
+push GHCR
 ~~~
 
-GHCR means GitHub Container Registry.
+---
 
-## Images
+# Image kita
 
-The workflow publishes separate images for:
+Separate images:
 
 ~~~text
-api
-mlflow
-airflow
+bcc-workshop-mlops-api
+bcc-workshop-mlops-mlflow
+bcc-workshop-mlops-airflow
 ~~~
 
-Naming pattern:
+Mereka dibuild dari target Dockerfile berbeda.
 
-~~~text
-ghcr.io/<owner>/bcc-workshop-mlops-api
-~~~
+---
 
-## Why tag with commit SHA?
+# latest tag
 
-A tag such as latest is convenient but movable.
+Convenient:
 
 ~~~text
 latest
-today → commit A
-tomorrow → commit B
 ~~~
 
-A SHA-based tag points to a specific code revision.
+Tapi movable.
 
-That makes audit and rollback easier.
+Hari ini menunjuk commit A.
 
-## Why rebuild in delivery?
+Besok commit B.
 
-CI proves:
+Jadi jangan rely on latest untuk precise audit.
 
-> This image can be built.
+---
 
-Delivery creates the artifact we actually publish.
+# SHA tag
 
-The delivery job checks out the exact commit that passed CI.
-
-That preserves a clean chain:
+Contoh:
 
 ~~~text
-tested revision
-=
-published revision
+sha-a1d7567
 ~~~
 
-## Why no automatic cloud deployment?
+Trace ke exact Git commit.
 
-Because we do not have a real target environment in this workshop.
+Benefit:
 
-Adding fake SSH commands just to say “we have CD” would teach the wrong lesson.
+- rollback,
+- audit,
+- reproducibility,
+- deployment trace.
 
-Our boundary is honest:
+---
+
+# Kenapa CD build lagi kalau CI sudah build?
+
+Good question.
+
+CI build:
+
+> Can this image build successfully?
+
+CD build:
+
+> Build artifact that will actually be published.
+
+CD checkout exact tested commit.
+
+Jadi published artifact berasal dari revision yang sudah lolos quality gate.
+
+---
+
+# GHCR sebagai warehouse
+
+Analogi factory:
 
 ~~~text
-code
-↓
-verified
-↓
-container image
-↓
+CI
+→ quality inspection
+
+Docker build
+→ packaging
+
+GHCR
+→ warehouse
+~~~
+
+Deployment platform nanti tinggal pull image.
+
+---
+
+# Kita belum Continuous Deployment
+
+Workflow berhenti di GHCR.
+
+Belum ada:
+
+- VPS restart,
+- Kubernetes rollout,
+- Cloud Run deploy.
+
+Jadi terminology kita:
+
+~~~text
+Continuous Delivery
+~~~
+
+Bukan full Continuous Deployment.
+
+---
+
+# App version vs model version
+
+Ini perlu banget dipahami.
+
+Misalnya:
+
+~~~text
+API image:
+sha-a1d7567
+
+Champion model:
+version 5
+~~~
+
+Besok model promote ke version 6.
+
+API image masih sama.
+
+Atau API bug fix deploy image baru.
+
+Champion masih version 6.
+
+Mereka independent.
+
+MLOps observability ideal harus bisa trace both.
+
+---
+
+# Future extension
+
+Kalau punya target server, flow bisa extend:
+
+~~~text
 GHCR
 ↓
-ready for a deployment platform
+deployment platform
+↓
+health check
+↓
+traffic
 ~~~
 
-A future extension could deploy that image to:
+Tapi workshop stop sebelum infrastructure-specific detail.
 
-- a VPS,
-- Cloud Run,
-- ECS,
-- Kubernetes,
-- another container platform.
-
-## Rollback mental model
-
-If a bad application image is deployed, a platform can pull an older SHA-tagged image.
-
-This is separate from **model rollback**, where MLflow champion can point to an older model version.
-
-MLOps often has both:
-
-~~~text
-application version
-and
-model version
-~~~
-
-They need separate lineage.
+Itu intentional.
