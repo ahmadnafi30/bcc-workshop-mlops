@@ -1,126 +1,119 @@
 # Problem Statement
 
-Di workshop ini kita bakal bikin **Taxi Demand Forecasting** untuk NYC Yellow Taxi.
+## Prediction target
 
-Fokus kita bukan bikin model yang paling fancy atau ngejar leaderboard. Yang mau kita pelajari adalah gimana sebuah model ML bisa hidup dari awal sampai production: data masuk, diproses, ditrain, ditrack, diserve, dimonitor, lalu diretrain kalau performanya mulai turun.
+We predict:
 
-## The problem
+> **the number of Yellow Taxi pickups in one Manhattan taxi zone for one target hour.**
 
-Bayangin kita punya sistem yang harus jawab pertanyaan ini:
+Example:
 
-> Di setiap taxi zone di Manhattan, kira-kira bakal ada berapa pickup dalam satu jam ke depan?
+~~~text
+target:
+zone 161 at 18:00
 
-Contohnya:
+output:
+predicted_trip_count
+~~~
 
-```text
-Zone: Midtown Center
+## What information is allowed?
 
-14:00 -> 128 pickups
-15:00 -> 141 pickups
-16:00 -> 153 pickups
-17:00 -> 169 pickups
+For target 18:00, the model may use:
 
-Prediction for 18:00 -> 182 pickups
-```
+- demand at 17:00,
+- demand at 16:00,
+- yesterday at 18:00,
+- last week at 18:00,
+- recent rolling averages,
+- hour and weekday.
 
-Kalau demand satu jam ke depan bisa diprediksi, secara business ini bisa dipakai untuk planning supply, repositioning, capacity planning, atau sekadar understanding demand pattern.
+It may **not** use actual 18:00 demand.
 
-Di workshop ini kita tidak akan bikin optimization system setelah prediksi. Scope kita berhenti di **forecasting + MLOps lifecycle**.
+That would be leakage.
 
-## Prediction unit
+## Raw vs model granularity
 
-Satu prediction bukan untuk satu individual trip.
+Raw:
 
-Prediction kita adalah:
+~~~text
+one row = one taxi trip
+~~~
 
-```text
-1 taxi zone x 1 target hour = predicted number of pickups
-```
+Model:
 
-Jadi model akan melihat historical demand suatu zone dan menjawab demand pada jam berikutnya.
+~~~text
+one row = one zone × one hour
+~~~
+
+Example aggregation:
+
+| pickup time | zone |
+| --- | ---: |
+| 17:03 | 161 |
+| 17:10 | 161 |
+| 17:44 | 162 |
+
+becomes:
+
+| timestamp | zone_id | trip_count |
+| --- | ---: | ---: |
+| 17:00 | 161 | 2 |
+| 17:00 | 162 | 1 |
 
 ## Scope
 
-- Service: **NYC Yellow Taxi**
-- Area: **Manhattan pickup zones**
-- Time granularity: **hourly**
-- Forecast horizon: **1 hour ahead**
-- Data period: **January - March 2025**
-- Main data source: **NYC TLC Trip Record Data**
-- Primary metric: **MAE**
-- Secondary metric: **RMSE**
+Core workshop:
 
-Kenapa Manhattan saja? Karena kita nggak butuh seluruh NYC buat memahami lifecycle MLOps. Yellow Taxi activity di Manhattan juga cukup padat untuk bikin demand pattern yang interesting.
+- Yellow Taxi,
+- Manhattan pickup zones,
+- early 2025 historical data,
+- one-hour forecast horizon,
+- pickup count target.
 
-## What are we actually learning?
+## Metrics
 
-Secara ML, problem ini sebenarnya cukup straightforward. Yang bikin project ini menarik justru lifecycle-nya:
+Primary:
 
-```text
-Trip data
-   ↓
-Batch ingestion
-   ↓
-Preprocessing
-   ↓
-Feature engineering
-   ↓
-Training
-   ↓
-Experiment tracking
-   ↓
-Model registry
-   ↓
-Serving
-   ↓
-Monitoring
-   ↓
-Retraining
-```
+~~~text
+MAE
+~~~
 
-Tools yang kita pakai masuk karena ada problem yang memang perlu diselesaikan, bukan karena sekadar pengen pakai banyak tools.
+MAE 10 means the model is wrong by around 10 pickups per zone-hour on average.
 
-| Problem | Tool / Concept |
-| --- | --- |
-| Data datang per batch dan workflow harus berurutan | Airflow |
-| Training dataset perlu reproducible | DVC |
-| Experiment mulai banyak dan susah dibandingin | MLflow |
-| Model perlu diakses aplikasi lain | FastAPI |
-| Environment harus konsisten | Docker |
-| Testing dan delivery jangan manual terus | GitHub Actions |
-| Service production perlu dipantau | Prometheus + Grafana |
+Secondary:
 
-## What does production mean here?
+~~~text
+RMSE
+~~~
 
-Kita nggak punya taxi system live beneran, jadi kita pakai **historical replay**.
+RMSE reacts more strongly to large errors.
 
-Data January-March 2025 sebenarnya sudah tersedia dari awal, tapi pipeline dibuat seolah-olah data itu datang sedikit demi sedikit setiap hari.
+## Baseline
 
-```text
-DAG run 1 -> release data Jan 27
-DAG run 2 -> release data Jan 28
-DAG run 3 -> release data Jan 29
-...
-```
+Our naive baseline is:
 
-Dari sisi pipeline, behavior-nya jadi mirip production batch system: setiap run cuma melihat data yang memang sudah available pada waktu itu.
+~~~text
+prediction(t) = demand(t - 24 hours)
+~~~
 
-Detail mekanismenya ada di [Historical Replay](historical-replay.md).
+In plain language:
 
-## Success criteria
+> Use the same hour yesterday.
 
-Di akhir project, system kita minimal bisa:
+A more complicated model should beat this baseline before its complexity feels justified.
 
-1. menerima batch taxi trip baru,
-2. mengubah raw trip menjadi hourly demand per zone,
-3. menghasilkan feature tanpa data leakage,
-4. train dan evaluate model,
-5. log experiment ke MLflow,
-6. register model yang layak,
-7. serve prediction lewat API,
-8. package service menggunakan Docker,
-9. menjalankan CI/CD,
-10. monitor service dan recent model performance,
-11. trigger retraining ketika memang dibutuhkan.
+## Why this is good for MLOps
 
-Kalau semua ini jalan, kita sudah punya mini end-to-end MLOps system yang cukup representative buat workshop.
+A normal assignment might stop after train + evaluate.
+
+This project continues into:
+
+~~~text
+tracking
+registry
+serving
+monitoring
+retraining
+~~~
+
+That continuation is the important part.

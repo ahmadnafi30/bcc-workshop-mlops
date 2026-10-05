@@ -1,135 +1,155 @@
-# Project Setup with uv
+# Step 0 — Setup
 
-Project ini pakai **uv** sebagai default tool buat Python environment dan dependency management.
+## Goal
 
-Tujuannya simpel: peserta nggak perlu bikin virtual environment manual lalu install dependency satu-satu.
+At the end of this step:
 
-## Setup pertama
+- Python 3.11 is available through uv,
+- project dependencies are installed,
+- tests can run,
+- you understand the main repository folders.
 
-Pastikan uv sudah terinstall, lalu dari root repository:
+Do not download the taxi dataset yet. First make sure the project itself is healthy.
 
-```bash
-uv sync
-```
+## 1. Clone the repository
 
-Command ini bakal:
-
-```text
-baca pyproject.toml
-        ↓
-pilih Python yang sesuai
-        ↓
-buat .venv
-        ↓
-resolve dependency
-        ↓
-install project + dev dependency
-```
-
-Project punya file:
-
-```text
-.python-version
-```
-
-yang kita set ke Python 3.11 supaya environment workshop lebih konsisten.
-
-## Jalanin command
-
-Kita pakai pola:
-
-```bash
-uv run <command>
-```
-
-Contoh:
-
-```bash
-uv run pytest
-uv run python scripts/bootstrap_data.py
-uv run mlflow server
-```
-
-Jadi kita nggak wajib activate environment dulu.
-
-Kalau memang mau activate manual:
-
-```bash
-source .venv/bin/activate
-```
-
-Windows:
-
-```powershell
-.venv\Scripts\activate
-```
-
-## Tambah dependency
-
-Kalau nanti ada dependency baru:
-
-```bash
-uv add <package>
-```
-
-Untuk dev dependency:
-
-```bash
-uv add --dev <package>
-```
-
-uv bakal update `pyproject.toml` dan lock file.
-
-## Tentang uv.lock
-
-Lock file penting karena dua orang yang menjalankan workshop seharusnya dapat dependency version yang sama.
-
-Di environment ini kita belum generate `uv.lock` langsung dari repository karena dependency resolution tetap butuh akses package index. Begitu project dijalankan di laptop yang punya internet:
-
-```bash
-uv sync
-```
-
-uv akan generate lock file.
-
-Setelah sudah dites:
-
-```bash
-git add uv.lock
-git commit -m "chore: lock Python dependencies"
-```
-
-Jadi flow setup peserta nanti cukup:
-
-```bash
-git clone ...
+~~~bash
+git clone https://github.com/ahmadnafi30/bcc-workshop-mlops.git
 cd bcc-workshop-mlops
+~~~
+
+If the repository is private, GitHub may ask you to authenticate.
+
+## 2. Install uv
+
+Follow the official uv installation method for your operating system.
+
+Verify:
+
+~~~bash
+uv --version
+~~~
+
+## 3. Sync the environment
+
+~~~bash
 uv sync
-```
+~~~
 
-lalu project siap dipakai.
+What happens conceptually:
 
+~~~text
+pyproject.toml
+      ↓
+uv resolves dependencies
+      ↓
+Python environment in .venv
+      ↓
+project package installed
+~~~
 
-## Airflow environment
+You do not need to manually activate the virtual environment for workshop commands.
 
-Airflow sengaja ditaruh di dependency group terpisah karena dependency-nya jauh lebih besar dibanding core ML project.
+## 4. Verify Python
 
-Untuk install core project + Airflow:
+~~~bash
+uv run python --version
+~~~
 
-```bash
-uv sync --group airflow
-```
+Expected family:
 
-Jalankan Airflow dengan:
+~~~text
+Python 3.11.x
+~~~
 
-```bash
-uv run --group airflow python scripts/start_airflow.py
-```
+The repository intentionally targets Python 3.11 for a predictable workshop environment.
 
-Kalau mau cek DAG dari CLI:
+## 5. Run the setup doctor
 
-```bash
-uv run --group airflow airflow dags list
-```
+~~~bash
+uv run python scripts/doctor.py
+~~~
 
-Di Windows, jalankan bagian Airflow lewat WSL2. Core Python project tetap bisa dipakai seperti biasa dari environment lain yang didukung uv.
+The doctor checks basic Python imports, project structure, and whether useful local commands such as Docker are discoverable.
+
+A missing Docker command does not block the early ML steps. It matters later during containerization.
+
+## 6. Run tests
+
+~~~bash
+uv run pytest
+~~~
+
+Why run tests before touching anything?
+
+Because we want a known-good starting point.
+
+If tests already fail before you change code, later debugging becomes ambiguous.
+
+## 7. Optional: start the documentation
+
+~~~bash
+uv sync --group docs
+uv run --group docs mkdocs serve
+~~~
+
+Open:
+
+~~~text
+http://127.0.0.1:8000
+~~~
+
+Keep the docs open during the workshop.
+
+## Windows note
+
+The core Python flow works with uv.
+
+For the Docker + Airflow parts, WSL2 is usually the smoother learning environment on Windows.
+
+The important thing is consistency: do not mix several Python installations and environments without knowing which one is active.
+
+## Repository orientation
+
+Before continuing, look at:
+
+~~~text
+scripts/
+src/
+dags/
+api/
+tests/
+~~~
+
+Remember:
+
+~~~text
+scripts
+→ commands humans run
+
+src
+→ reusable logic
+
+dags
+→ workflow definitions
+
+api
+→ HTTP interface
+
+tests
+→ automated checks
+~~~
+
+## Checkpoint
+
+You are ready when:
+
+~~~text
+uv run python --version
+→ 3.11.x
+
+uv run pytest
+→ pass
+~~~
+
+Next: download and understand the data.

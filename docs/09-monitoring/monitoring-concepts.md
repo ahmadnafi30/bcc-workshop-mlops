@@ -1,128 +1,158 @@
 # Monitoring Concepts
 
-Setelah model sudah bisa diserve, kita nggak cukup cuma tahu API-nya hidup.
+## Two health questions
 
-Ada dua hal yang beda:
+An ML system has at least two different health dimensions.
 
-```text
-system health
-vs
-model health
-```
+### System health
 
-## System health
+~~~text
+Is the API alive?
+Is it slow?
+Are requests failing?
+How much traffic is arriving?
+~~~
 
-Pertanyaannya:
+### Model health
 
-```text
-API masih up?
-request rate berapa?
-latency naik nggak?
-berapa request yang error?
-prediction masih jalan?
-```
+~~~text
+Are predictions still accurate?
+Which model version is serving?
+Is recent MAE getting worse?
+Should we retrain?
+~~~
 
-Metric seperti ini cocok buat Prometheus.
+A fast API can serve a bad model.
 
-## Model health
+A good model can sit behind a broken API.
 
-Pertanyaannya beda:
+We need both views.
 
-```text
-prediction masih akurat?
-MAE sekarang berapa?
-lebih jelek dari waktu validation nggak?
-model version mana yang performanya turun?
-```
+## Analogy: delivery restaurant
 
-Model metric baru bisa dihitung setelah ground truth datang.
+Operational monitoring asks:
 
-Jadi lifecycle-nya:
+> Is the kitchen open? Are orders delayed?
 
-```text
-target hour
-    ↓
-prediction dibuat
-    ↓
-prediction dicatat
+Model monitoring asks:
 
-beberapa waktu kemudian
-    ↓
-actual demand tersedia
-    ↓
-prediction vs actual
-    ↓
-MAE / RMSE
-```
+> Does the food still taste good?
 
-## Kenapa prediction harus dilog?
+Both matter, but they measure different things.
 
-Kalau kita cuma expose metric prediction count, kita nggak punya pasangan:
+## Delayed ground truth
 
-```text
-prediction
-actual
-```
+For target 18:00:
 
-Makanya setiap successful prediction masuk append-only file:
+~~~text
+before 18:00
+prediction exists
 
-```text
+after 18:00
+actual demand becomes available
+~~~
+
+We cannot know prediction error before the actual outcome exists.
+
+So we log predictions first, evaluate them later.
+
+## Prediction log
+
+Stored as JSONL:
+
+~~~text
 data/monitoring/predictions.jsonl
-```
+~~~
 
-Isi pentingnya:
+Important fields:
 
-```text
-target_datetime
-zone_id
-predicted_trip_count
-model_version
-run_id
-logged_at
-```
+- zone,
+- target time,
+- prediction,
+- model version,
+- run ID.
 
-Begitu processed demand untuk target hour tersedia, evaluation job bisa nyari actual value.
+## Evaluation table
+
+When ground truth becomes available:
+
+~~~text
+prediction
++
+processed actual demand
+↓
+absolute error
+squared error
+~~~
+
+Output:
+
+~~~text
+data/monitoring/evaluations.parquet
+~~~
+
+## Performance summary
+
+The project writes:
+
+~~~text
+data/monitoring/performance_summary.json
+~~~
+
+It contains values such as:
+
+- recent MAE,
+- recent RMSE,
+- reference MAE,
+- threshold MAE,
+- number of evaluated predictions,
+- retraining recommendation.
 
 ## Reference performance
 
-Kita nggak pakai threshold MAE random.
+We do not choose an arbitrary fixed number such as:
 
-Reference diambil dari validation MAE champion model di MLflow.
+~~~text
+if MAE > 20
+~~~
 
-Misalnya:
+Instead we compare against the champion's validation MAE from MLflow.
 
-```text
+Example:
+
+~~~text
 champion validation MAE = 10
-```
+multiplier = 1.25
 
-dan multiplier:
+threshold = 12.5
+~~~
 
-```text
-1.25
-```
+This makes the threshold relative to known model quality.
 
-maka threshold:
+## Minimum sample
 
-```text
-10 x 1.25 = 12.5
-```
+We also require enough evaluated predictions.
 
-Kalau recent MAE di atas 12.5 dan sample sudah cukup, monitoring kasih:
+Why?
 
-```text
-retrain_recommended = true
-```
+A single weird hour should not immediately cause retraining.
 
-Multiplier dan minimum sample tetap configurable karena tolerance production tiap use case bisa beda.
+Monitoring decisions should look for a pattern, not panic over one outlier.
 
-## Monitoring bukan retraining
+## Drift vs performance degradation
 
-Monitoring cuma jawab:
+This workshop directly monitors performance degradation using ground truth.
 
-> performa turun nggak?
+Data drift is related but different.
 
-Retraining jawab:
+~~~text
+data drift
+→ input distribution changed
 
-> kalau turun, kita ngapain?
+performance degradation
+→ prediction error got worse
+~~~
 
-Keduanya sengaja dipisah supaya sistem nggak retrain cuma gara-gara satu request error besar.
+Drift can happen without accuracy loss, and accuracy can degrade for reasons beyond simple feature distribution drift.
+
+A future extension could add Evidently or custom drift metrics.

@@ -1,112 +1,111 @@
-# Container Delivery Flow
+# Container Delivery
 
-Setelah CI sukses di `main`, workflow CD build ulang image dari commit yang sama lalu push ke GitHub Container Registry atau GHCR.
+## What happens after CI succeeds?
 
-## Image names
+On main:
 
-Project publish tiga image:
-
-```text
-ghcr.io/<owner>/bcc-workshop-mlops-api
-ghcr.io/<owner>/bcc-workshop-mlops-mlflow
-ghcr.io/<owner>/bcc-workshop-mlops-airflow
-```
-
-Owner otomatis diambil dari GitHub context, jadi workflow nggak hard-code username.
-
-## Tags
-
-Setiap image punya SHA tag:
-
-```text
-sha-a1b2c3d
-```
-
-dan image dari main juga punya:
-
-```text
-latest
-```
-
-`latest` adalah pointer yang bisa pindah. SHA tag ngasih tahu exact code revision yang menghasilkan image itu, jadi lebih enak buat rollback dan audit.
-
-## Flow lengkap
-
-```text
-commit A
+~~~text
+CI success
    ↓
-CI
+Container Delivery
    ↓
-tests pass
-Docker builds pass
+build exact tested revision
    ↓
-CD
+tag image
    ↓
-GHCR
+push to GHCR
+~~~
 
+GHCR means GitHub Container Registry.
+
+## Images
+
+The workflow publishes separate images for:
+
+~~~text
 api
-├── latest
-└── sha-...
-
 mlflow
-├── latest
-└── sha-...
-
 airflow
-├── latest
-└── sha-...
-```
+~~~
 
-## Kenapa build lagi di CD?
+Naming pattern:
 
-CI build memastikan image bisa dibangun. CD build menghasilkan artifact yang benar-benar dipublish.
+~~~text
+ghcr.io/<owner>/bcc-workshop-mlops-api
+~~~
 
-CD checkout exact commit SHA yang sebelumnya lolos CI, jadi kita nggak sengaja publish revision lain yang belum dites.
+## Why tag with commit SHA?
 
-## Continuous delivery, bukan deployment
+A tag such as latest is convenient but movable.
 
-Sampai tahap ini pipeline selesai di:
+~~~text
+latest
+today → commit A
+tomorrow → commit B
+~~~
 
-```text
+A SHA-based tag points to a specific code revision.
+
+That makes audit and rollback easier.
+
+## Why rebuild in delivery?
+
+CI proves:
+
+> This image can be built.
+
+Delivery creates the artifact we actually publish.
+
+The delivery job checks out the exact commit that passed CI.
+
+That preserves a clean chain:
+
+~~~text
+tested revision
+=
+published revision
+~~~
+
+## Why no automatic cloud deployment?
+
+Because we do not have a real target environment in this workshop.
+
+Adding fake SSH commands just to say “we have CD” would teach the wrong lesson.
+
+Our boundary is honest:
+
+~~~text
+code
+↓
+verified
+↓
+container image
+↓
 GHCR
-```
+↓
+ready for a deployment platform
+~~~
 
-Belum ada SSH ke server, `kubectl apply`, cloud deploy, atau production restart.
+A future extension could deploy that image to:
 
-Kalau nanti project punya VPS, Kubernetes, ECS, Cloud Run, atau target lain, baru kita tambahin deployment job setelah delivery.
+- a VPS,
+- Cloud Run,
+- ECS,
+- Kubernetes,
+- another container platform.
 
-## Lihat package
+## Rollback mental model
 
-Setelah workflow pertama berhasil, image akan muncul di bagian **Packages** akun/repository GitHub.
+If a bad application image is deployed, a platform can pull an older SHA-tagged image.
 
-Kalau repository atau package private, consumer perlu authentication untuk pull image.
+This is separate from **model rollback**, where MLflow champion can point to an older model version.
 
-## Pull image
+MLOps often has both:
 
-Contoh secara umum:
+~~~text
+application version
+and
+model version
+~~~
 
-```bash
-docker pull ghcr.io/<owner>/bcc-workshop-mlops-api:latest
-```
-
-Untuk exact revision:
-
-```bash
-docker pull ghcr.io/<owner>/bcc-workshop-mlops-api:sha-<commit>
-```
-
-## Workshop takeaway
-
-Yang penting bukan hafal YAML-nya. Yang perlu kebawa adalah dependency:
-
-```text
-code change
-   ↓
-verify
-   ↓
-package
-   ↓
-deliver
-```
-
-GitHub Actions cuma tool yang mengotomatisasi lifecycle itu.
+They need separate lineage.

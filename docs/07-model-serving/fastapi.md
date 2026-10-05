@@ -1,162 +1,222 @@
 # FastAPI
 
-FastAPI jadi HTTP layer untuk model serving kita.
+## Why FastAPI?
 
-Core logic-nya tetap ada di:
+FastAPI gives us a small HTTP application around prediction logic.
 
-```text
-src/serving/
-├── feature_provider.py
-├── model_loader.py
-└── predictor.py
-```
+The project separates:
 
-Sedangkan:
-
-```text
+~~~text
 api/
+→ HTTP concerns
+
+src/serving/
+→ ML serving logic
+~~~
+
+That separation makes testing easier.
+
+## Main files
+
+~~~text
+api/
+├── main.py
 ├── schemas.py
-├── dependencies.py
-└── main.py
-```
+└── dependencies.py
+~~~
 
-fokus ke request, response, dependency injection, dan HTTP error.
+### main.py
 
-## Sebelum start API
+Defines endpoints and maps Python exceptions into HTTP responses.
 
-Pastikan project sudah siap:
+### schemas.py
 
-```bash
-uv sync
-```
+Defines request and response shapes using Pydantic models.
 
-MLflow server juga harus hidup:
+### dependencies.py
 
-```bash
-uv run mlflow server
-```
+Creates reusable objects such as the predictor.
 
-dan registry harus punya alias:
+## Endpoint: GET /health
 
-```text
-champion
-```
+Purpose:
 
-Kalau belum, promote model version yang sudah direview:
-
-```bash
-uv run python scripts/promote_model.py --version <VERSION>
-```
-
-## Start API
-
-```bash
-uv run uvicorn api.main:app --reload
-```
-
-Default address:
-
-```text
-http://127.0.0.1:8000
-```
-
-Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## GET /health
-
-```bash
-curl http://127.0.0.1:8000/health
-```
+> Is the API process alive?
 
 Response:
 
-```json
+~~~json
 {
   "status": "ok"
 }
-```
+~~~
 
-Endpoint ini cuma ngecek API process hidup. Dia sengaja nggak bergantung ke MLflow.
+This endpoint intentionally does not require MLflow to be healthy.
 
-## GET /model-info
+Why?
 
-```bash
-curl http://127.0.0.1:8000/model-info
-```
+Because two questions are different:
 
-Endpoint ini ngecek model yang sekarang ditunjuk alias serving.
+~~~text
+Is FastAPI alive?
+Is the model dependency ready?
+~~~
 
-Kalau champion belum ada, response-nya 503.
+## Endpoint: GET /model-info
 
-## POST /predict
+Purpose:
 
-Contoh:
+> Which registered model is currently selected by the serving alias?
 
-```bash
-curl -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "zone_id": 161,
-    "target_datetime": "2025-01-28T18:00:00"
-  }'
-```
+Example information:
 
-Flow internal:
+~~~text
+model_name
+model_version
+model_alias
+run_id
+model_uri
+~~~
 
-```text
-request validation
-       ↓
-load 168h history
-       ↓
-build online features
-       ↓
-resolve champion alias
-       ↓
-load / refresh model
-       ↓
-predict
-       ↓
-response
-```
+If champion is missing, this endpoint can return 503.
 
-## Kenapa ada /model-info?
+## Endpoint: POST /predict
 
-Ini useful buat observability dan debugging.
+Request:
 
-Kita bisa jawab:
+~~~json
+{
+  "zone_id": 161,
+  "target_datetime": "2025-01-28T18:00:00"
+}
+~~~
 
-```text
-API sekarang sebenarnya pakai model version berapa?
-run MLflow mana?
-alias apa?
-```
+Response contains:
 
-Nanti endpoint ini juga berguna saat kita masuk Docker dan monitoring.
+~~~text
+zone_id
+target_datetime
+predicted_trip_count
+model_name
+model_version
+model_alias
+run_id
+model_uri
+~~~
 
-## Error yang sengaja dibedakan
+Including model metadata makes debugging much easier.
 
-**422**
+If someone asks:
 
-request valid secara JSON, tapi prediction nggak bisa dibuat. Misalnya history demand belum lengkap.
+> “Which model created this prediction?”
 
-**503**
+the response already gives us useful lineage.
 
-API hidup, tapi champion model dari MLflow Registry belum ready.
+## HTTP status codes in this project
 
-Ini lebih berguna daripada semua error dibalikin jadi generic 500.
+### 200
 
-## Tests
+Request succeeded.
 
-API test pakai FastAPI `TestClient` dan dependency override.
+### 422
 
-Jadi unit test nggak perlu benar-benar nyalain MLflow server:
+The request structure may be valid JSON, but prediction cannot be built from the supplied input or available history.
 
-```bash
-uv run pytest tests/test_api.py tests/test_predictor.py tests/test_serving_features.py
-```
+Examples:
 
-Model dan registry diganti fake object khusus test. Ini bikin test cepat dan deterministic.
+- target time is not at the start of an hour,
+- required historical demand is missing.
+
+### 503
+
+The API process is alive, but the model dependency is not ready.
+
+Example:
+
+- champion alias does not exist in MLflow Registry.
+
+## Dependency injection
+
+FastAPI can inject reusable dependencies into endpoints.
+
+Our predictor is created through a dependency function.
+
+That makes tests easier because we can replace the real predictor with a fake predictor.
+
+## Why fake dependencies in tests?
+
+Unit tests should not require:
+
+- a real MLflow server,
+- a real registered model,
+- a huge TLC dataset.
+
+We override the dependency and test the API contract separately.
+
+That means:
+
+~~~text
+API test
+→ test HTTP behavior
+
+serving test
+→ test feature + model behavior
+
+integration demo
+→ test the real stack
+~~~
+
+Different test levels answer different questions.
+
+## Before starting locally
+
+Start the shared local MLflow server first:
+
+~~~bash
+uv run python scripts/start_mlflow.py
+~~~
+
+Make sure the registered model already has a `champion` alias. The API resolves that alias instead of hard-coding a model version.
+
+## Start locally
+
+~~~bash
+uv run uvicorn api.main:app --reload
+~~~
+
+Open Swagger UI:
+
+~~~text
+http://127.0.0.1:8000/docs
+~~~
+
+Swagger is especially useful for beginners because you can inspect schemas and send requests without writing curl commands.
+
+## Metrics endpoint
+
+FastAPI also exposes:
+
+~~~text
+GET /metrics
+~~~
+
+Prometheus scrapes this endpoint later.
+
+It is hidden from the main OpenAPI workshop interface because it is operational infrastructure, not a user-facing prediction API.
+
+## Common errors
+
+### 503 model champion unavailable
+
+Check:
+
+1. MLflow is running;
+2. a model was registered;
+3. a model version was promoted to champion;
+4. MLFLOW_TRACKING_URI points to the correct server.
+
+### 422 history missing
+
+The model needs up to 168 hours of history.
+
+Make sure processed demand exists for the full lookback window.

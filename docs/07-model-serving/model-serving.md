@@ -1,150 +1,189 @@
 # Model Serving
 
-Setelah model selesai ditrain dan masuk MLflow Registry, next problem-nya bukan training lagi.
+## From model file to usable service
 
-Sekarang kita perlu jawab:
+Training produces a model.
 
-> application lain pakai model ini gimana?
+But another application cannot conveniently call:
 
-Di project ini boundary-nya kita bikin lewat FastAPI.
+~~~text
+open this Python process
+import sklearn
+load this file
+build the exact features
+predict
+~~~
 
-```text
-client
-  ↓
-FastAPI
-  ↓
-online feature construction
-  ↓
-MLflow champion model
-  ↓
-prediction
-```
+for every request.
 
-## Request-nya sengaja simple
+Model serving creates a stable interface around the model.
 
-Client nggak perlu tahu feature engineering internal model.
+In this workshop, the interface is HTTP through FastAPI.
 
-Request cukup:
+## Analogy: kitchen and waiter
 
-```json
+The trained model is like the kitchen.
+
+A customer should not walk into the kitchen and manually combine ingredients.
+
+The waiter accepts a simple order:
+
+~~~text
+zone 161
+target 18:00
+~~~
+
+The serving layer handles the internal details.
+
+That is why our API request does **not** ask clients to provide lag_24h or rolling_mean_6h.
+
+## Request contract
+
+Client sends:
+
+~~~json
 {
   "zone_id": 161,
   "target_datetime": "2025-01-28T18:00:00"
 }
-```
+~~~
 
-Kita **nggak** minta client ngirim:
+Backend responsibilities:
 
-```text
-lag_1h
-lag_24h
-lag_168h
-rolling_mean_3h
-rolling_mean_24h
-```
-
-Karena feature seperti itu adalah tanggung jawab serving pipeline, bukan caller.
+1. validate the request;
+2. load historical demand;
+3. build online features;
+4. resolve the champion model;
+5. run prediction;
+6. log prediction metadata;
+7. return a response.
 
 ## Online feature construction
 
-API ambil processed demand dari:
+The model expects the same feature schema used during training.
 
-```text
-data/processed/demand/
-```
+For target 18:00:
 
-Untuk target:
-
-```text
-2025-01-28 18:00
-```
-
-feature provider cuma boleh baca sampai:
-
-```text
-2025-01-28 17:00
-```
-
-Lalu dibangun:
-
-```text
+~~~text
 lag_1h
-lag_2h
-lag_3h
+→ 17:00
+
 lag_24h
-lag_168h
+→ yesterday 18:00
+
 rolling_mean_3h
-rolling_mean_6h
-rolling_mean_24h
-```
+→ recent history ending before 18:00
+~~~
 
-Jadi serving path punya leakage rule yang sama dengan training.
+The serving code never reads actual demand at the target hour.
 
-Kalau history 168 jam belum lengkap, API fail dengan response 422 daripada bikin prediction dari feature yang salah.
+This protects against leakage.
 
-## Target datetime
+## Training-serving consistency
 
-Untuk sekarang timestamp dianggap sebagai **waktu lokal NYC** dan request harus pas di awal jam.
+A common production failure is:
 
-Valid:
+~~~text
+training feature definition
+≠
+serving feature definition
+~~~
 
-```text
-2025-01-28T18:00:00
-```
+Then a model can look excellent offline but receive different inputs online.
 
-Tidak valid:
+Our project keeps the feature contract explicit.
 
-```text
-2025-01-28T18:30:00
-```
+A larger production system might use a feature store, but the principle is the same:
 
-Timezone-aware datetime juga belum kita pakai di API workshop supaya konsisten dengan TLC timestamp yang kita proses sebagai local wall-clock time.
+> Training and serving must agree on feature meaning.
 
-## Model loading
+## Champion model
 
-API tidak load hard-coded model version seperti:
+Serving does not hard-code:
 
-```text
-models:/taxi-demand-forecasting-model/1
-```
-
-Yang dipakai:
-
-```text
-models:/taxi-demand-forecasting-model@champion
-```
-
-Loader cek version yang sekarang ditunjuk alias `champion`.
-
-Kalau alias pindah:
-
-```text
+~~~text
 version 1
-   ↓
-version 2
-```
+~~~
 
-request berikutnya akan reload model version baru.
+It asks MLflow Registry for:
 
-Jadi application code nggak perlu diedit cuma karena ada model baru.
+~~~text
+champion
+~~~
 
-## Prediction output
+This separates:
 
-Response kira-kira:
+~~~text
+application code
+from
+model promotion decision
+~~~
 
-```json
-{
-  "zone_id": 161,
-  "target_datetime": "2025-01-28T18:00:00",
-  "predicted_trip_count": 147.8,
-  "model_name": "taxi-demand-forecasting-model",
-  "model_version": "2",
-  "model_alias": "champion",
-  "run_id": "abc123",
-  "model_uri": "models:/taxi-demand-forecasting-model@champion"
-}
-```
+## Loader cache
 
-Model prediction tetap float karena regression output tidak harus integer.
+Querying Model Registry for every individual prediction would create unnecessary traffic.
 
-Untuk sekarang hasil negatif dibatasi minimum nol karena jumlah pickup secara domain nggak mungkin negatif.
+The loader caches model metadata for a short interval.
+
+It periodically checks whether champion changed.
+
+If champion moves to a new version, the model can be reloaded.
+
+## Prediction logging
+
+A successful prediction is written to:
+
+~~~text
+data/monitoring/predictions.jsonl
+~~~
+
+We need this later because model accuracy cannot be calculated until actual demand exists.
+
+Each log includes information such as:
+
+- target time,
+- zone,
+- predicted count,
+- model version,
+- MLflow run ID,
+- log time.
+
+## Why JSONL?
+
+JSON Lines stores one JSON object per line.
+
+It is simple for append-only workshop logging:
+
+~~~text
+prediction 1
+prediction 2
+prediction 3
+~~~
+
+A larger production system might use a database, event stream, or data warehouse.
+
+## Negative regression outputs
+
+A regression model can mathematically return a negative number.
+
+Taxi pickup count cannot be negative.
+
+The serving layer clips the final prediction at zero.
+
+That is a domain constraint applied after model inference.
+
+## Serving is not deployment
+
+Important distinction:
+
+~~~text
+serving
+→ how predictions are exposed
+
+deployment
+→ how the serving application is placed into an environment
+~~~
+
+FastAPI handles serving.
+
+Docker/GHCR are part of packaging and delivery.

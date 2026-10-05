@@ -1,132 +1,203 @@
 # Docker
 
-Sebelum Docker masuk, semua service sebenarnya sudah bisa jalan langsung dari uv environment.
+## The problem
 
-Masalah berikutnya:
+A project works on one laptop.
 
-> gimana caranya supaya environment serving, tracking, dan orchestration konsisten di laptop yang berbeda?
+Another person runs it and gets:
 
-Di sini Docker mulai kepake.
+~~~text
+different Python
+missing system package
+different dependency
+different command
+~~~
 
-## Satu Dockerfile, beberapa target
+Docker reduces that environmental variation by packaging an application runtime into an image.
 
-Project punya:
+## Analogy: shipping container
 
-```text
+Before standard shipping containers, every type of cargo required different handling.
+
+A container gives a standard outer shape.
+
+Docker does something similar for applications:
+
+~~~text
+application
+dependencies
+runtime setup
+start command
+↓
+image
+~~~
+
+The host still matters, but the application environment becomes much more predictable.
+
+## Image vs container
+
+This is one of the most common beginner questions.
+
+~~~text
+image
+→ blueprint / template
+
+container
+→ running instance of that image
+~~~
+
+Analogy:
+
+~~~text
+class
+→ image
+
+object
+→ container
+~~~
+
+Not technically identical, but useful.
+
+## Dockerfile
+
+Our file:
+
+~~~text
 docker/Dockerfile
-```
+~~~
 
-tapi image-nya nggak cuma satu bentuk.
+describes how an image is built.
 
-Kita pakai multi-stage build:
+Important instructions include:
 
-```text
+- FROM: base image,
+- RUN: execute build command,
+- COPY: copy files,
+- ENV: set environment variable,
+- WORKDIR: set working directory,
+- CMD: default start command.
+
+## Multi-stage build
+
+We use one Dockerfile with multiple targets:
+
+~~~text
 base
 ├── api
 ├── mlflow
 └── airflow
-```
+~~~
+
+Why?
+
+All services share the same core project, but they do not need identical runtime behavior.
 
 ### base
 
-Isinya dependency core project:
+Contains:
 
-```text
-Python 3.11
-uv
-DVC
-MLflow client
-FastAPI
-scikit-learn
-project package
-```
-
-Target ini juga dipakai service `workspace` buat command one-shot seperti bootstrap data.
+- Python 3.11,
+- uv,
+- project package,
+- core dependencies.
 
 ### api
 
-Reuse `base`, lalu start:
-
-```text
-uvicorn api.main:app
-```
+Starts Uvicorn + FastAPI.
 
 ### mlflow
 
-Reuse `base`, lalu start MLflow Tracking Server.
-
-Metadata disimpan ke SQLite di volume Docker:
-
-```text
-/mlflow/mlflow.db
-```
-
-Artifact juga disimpan persisten:
-
-```text
-/mlflow/artifacts
-```
-
-MLflow serve artifacts lewat tracking server, jadi FastAPI dan Airflow cukup tahu:
-
-```text
-http://mlflow:5000
-```
-
-Mereka nggak perlu mount folder artifact MLflow langsung.
+Starts MLflow tracking server.
 
 ### airflow
 
-Reuse `base`, lalu install dependency group tambahan:
+Adds the Airflow dependency group and starts Airflow.
 
-```text
-airflow
-```
+## Why not one giant container?
 
-Setelah itu image membawa folder `dags/` dan jalan lewat:
+You could run every process in one container, but service boundaries become harder to understand and manage.
 
-```text
-python scripts/start_airflow.py
-```
+Separate containers make the architecture clearer:
 
-## Build manual
+~~~text
+API lifecycle
+≠
+MLflow lifecycle
+≠
+Airflow lifecycle
+~~~
 
-Kalau mau lihat target satu-satu:
+## Build manually
 
-```bash
+~~~bash
 docker build -f docker/Dockerfile --target api -t bcc-mlops-api .
-docker build -f docker/Dockerfile --target mlflow -t bcc-mlops-mlflow .
-docker build -f docker/Dockerfile --target airflow -t bcc-mlops-airflow .
-```
+~~~
 
-Tapi untuk workshop kita lebih sering pakai Docker Compose karena service ini memang saling berhubungan.
+You normally use Docker Compose later, but manual build helps explain what Compose is automating.
 
-## Kenapa nggak satu container?
+## Bind mount vs volume
 
-Secara teknis bisa saja.
+Two storage ideas appear in the project.
 
-Tapi kalau semua dimasukin ke satu container:
+### Bind mount
 
-```text
-FastAPI + MLflow + Airflow
-```
+Example:
 
-boundary service jadi kabur.
+~~~text
+./data → /app/data
+~~~
 
-Dengan container terpisah, lebih gampang lihat:
+The host folder is directly visible inside the container.
 
-```text
-API punya lifecycle sendiri
-MLflow punya storage sendiri
-Airflow punya state sendiri
-```
+Useful for workshop-generated files that we want to inspect from the host.
 
-Ini juga lebih dekat dengan cara service beneran dideploy.
+### Named volume
+
+Example:
+
+~~~text
+mlflow-data
+~~~
+
+Docker manages the storage location.
+
+Useful for service state.
 
 ## Non-root user
 
-Image jalan sebagai user `app`, bukan root.
+Our application image uses a non-root app user.
 
-UID-nya dibuat 1000 supaya bind-mounted data di Linux lebih nyaman dan file output nggak selalu jadi milik root.
+That is a healthier default than running every process as root.
 
-Ini bukan security hardening production lengkap, tapi sudah lebih baik daripada semua process jalan sebagai root.
+It is not complete production hardening, but it introduces the idea that container security still matters.
+
+## Common mistakes
+
+### localhost confusion
+
+Inside a container:
+
+~~~text
+localhost
+→ this container
+~~~
+
+To reach another Compose service, use its service name.
+
+### Rebuilding after code changes
+
+A Docker image is a built artifact.
+
+If source copied into the image changes, rebuild it.
+
+### Assuming Docker solves everything
+
+Docker helps runtime reproducibility.
+
+It does not automatically solve:
+
+- bad code,
+- data leakage,
+- model drift,
+- insecure credentials,
+- poor architecture.

@@ -1,249 +1,175 @@
 # Docker Compose
 
-Docker Compose dipakai buat nyalain local MLOps stack tanpa buka tiga terminal dan setup environment service satu-satu.
+## Why Compose?
 
-Architecture-nya:
+We now have several services:
 
-```text
-                     Docker network
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-       MLflow           Airflow          FastAPI
-      :5000             :8080            :8000
-          │                │                │
-          │                └──────┐         │
-          │                       │         │
-          └───────────────────────┴─────────┘
-                      tracking URI
+~~~text
+FastAPI
+MLflow
+Airflow
+Prometheus
+Grafana
+~~~
 
-Host ./data
-    │
-    ├────────────── Airflow
-    ├────────────── FastAPI
-    └────────────── workspace
-```
+Starting each one manually with the correct network, port, volume, and environment variable would be annoying.
 
-## Start stack
+Docker Compose describes the local stack in one file:
 
-Dari root repository:
+~~~text
+docker-compose.yml
+~~~
 
-```bash
+## Analogy: apartment building manager
+
+Docker images are individual apartment designs.
+
+Compose is the building plan:
+
+- which apartments exist,
+- which ports are exposed,
+- which storage they use,
+- which services depend on others,
+- how they find each other.
+
+## Start everything
+
+~~~bash
 docker compose up -d --build
-```
+~~~
 
-Cek status:
+Break it down:
 
-```bash
-docker compose ps
-```
+~~~text
+up
+→ create/start services
 
-Service utama:
+-d
+→ detached mode
 
-```text
-MLflow  -> http://localhost:5000
-Airflow -> http://localhost:8080
-FastAPI -> http://localhost:8000
-```
+--build
+→ rebuild local images first
+~~~
 
-## Service networking
+## Service discovery
 
-Di dalam Docker network, service nggak pakai `localhost` buat saling komunikasi.
+Compose creates a default network.
 
-Contohnya FastAPI punya:
+Services can reach each other by service name.
 
-```text
-MLFLOW_TRACKING_URI=http://mlflow:5000
-```
+Examples:
 
-Kenapa bukan:
+~~~text
+api → http://mlflow:5000
+prometheus → http://api:8000/metrics
+grafana → http://prometheus:9090
+~~~
 
-```text
+From your browser, you use published host ports:
+
+~~~text
 http://localhost:5000
-```
+http://localhost:8000
+~~~
 
-karena `localhost` di container API berarti container API itu sendiri.
+Internal and external addresses are different views of the same service.
 
-Docker Compose kasih DNS berdasarkan service name:
+## depends_on and health checks
 
-```text
-mlflow
-api
-airflow
-```
+Starting a process does not always mean it is ready.
 
-Makanya API dan Airflow bisa reach MLflow lewat hostname `mlflow`.
+For example:
 
-## Persistent volumes
+~~~text
+MLflow container started
+≠
+MLflow HTTP endpoint ready
+~~~
 
-Kita pakai tiga named volumes.
+Health checks let Compose wait for useful readiness before dependent services proceed.
 
-### mlflow-data
+## Persistent state
 
-Nyimpen:
+Persistent storage is split into a bind mount and named volumes.
 
-```text
-SQLite metadata
-MLflow artifacts
-Model Registry state
-```
+### Shared MLflow bind mount
 
-Jadi stop container nggak langsung ngilangin experiment.
+~~~text
+./.mlflow
+→ /mlflow
+~~~
 
-### airflow-home
+The local helper `scripts/start_mlflow.py` and the Docker MLflow service use the same repository-local state directory. That keeps experiment history and Model Registry state continuous when the workshop moves from local processes to Docker Compose.
 
-Nyimpen:
+### Named volumes
 
-```text
-Airflow database
-logs
-generated local auth password
-config
-```
+~~~text
+airflow-home
+prometheus-data
+grafana-data
+dvc-cache
+~~~
 
-### dvc-cache
+Stopping a container does not necessarily remove those volumes.
 
-Dipakai Airflow dan workspace untuk cache DVC lokal.
+### Stop
 
-## Shared data
-
-Folder host:
-
-```text
-./data
-```
-
-di-bind ke:
-
-```text
-/app/data
-```
-
-di Airflow, API, dan workspace.
-
-Jadi:
-
-```text
-Airflow bikin processed demand
-        ↓
-file muncul di host ./data
-        ↓
-FastAPI bisa baca history yang sama
-```
-
-## Bootstrap lewat workspace container
-
-Service `workspace` sengaja pakai profile supaya dia nggak hidup terus.
-
-Jalankan command one-shot:
-
-```bash
-docker compose run --rm workspace python scripts/bootstrap_data.py
-
-docker compose run --rm workspace \
-  python scripts/prepare_historical_demand.py
-
-docker compose run --rm workspace \
-  python scripts/build_features.py
-```
-
-Kalau mau bikin DVC snapshot:
-
-```bash
-docker compose run --rm workspace \
-  dvc repro create_training_snapshot
-```
-
-## MLflow
-
-MLflow server di container pakai:
-
-```text
-SQLite backend
-+
-proxied artifact storage
-```
-
-Untuk local workshop ini cukup.
-
-Kita belum pakai PostgreSQL karena tujuan sekarang adalah ngerti relationship antar service, bukan bikin production-grade control plane.
-
-Kalau nanti stack mau dibuat lebih production-like, backend MLflow dan metadata Airflow bisa dipindah ke database terpisah.
-
-## Airflow login
-
-Airflow 3 standalone generate password local.
-
-Lihat file-nya:
-
-```bash
-docker compose exec airflow \
-  cat /airflow/simple_auth_manager_passwords.json.generated
-```
-
-Atau lihat logs:
-
-```bash
-docker compose logs airflow
-```
-
-Airflow standalone memang cocok buat local development, bukan deployment production. citeturn414372search3
-
-## Logs
-
-Semua service:
-
-```bash
-docker compose logs -f
-```
-
-Satu service:
-
-```bash
-docker compose logs -f api
-docker compose logs -f mlflow
-docker compose logs -f airflow
-```
-
-## Stop
-
-Stop container tanpa hapus state:
-
-```bash
+~~~bash
 docker compose down
-```
+~~~
 
-Kalau benar-benar mau reset named volumes juga:
+### Stop and delete volumes
 
-```bash
+~~~bash
 docker compose down -v
-```
+~~~
 
-Hati-hati, command kedua menghapus metadata MLflow dan state Airflow lokal.
+The second command deletes the named volumes above. It does **not** delete the bind-mounted `.mlflow/` directory, so MLflow state remains unless you remove that folder yourself.
 
-## Typical workshop flow
+## Workspace service
 
-```bash
-docker compose up -d --build
+The Compose file also has a tools profile with a workspace container.
 
+It is useful for one-off commands:
+
+~~~bash
 docker compose run --rm workspace python scripts/bootstrap_data.py
-docker compose run --rm workspace python scripts/prepare_historical_demand.py
-docker compose run --rm workspace python scripts/build_features.py
+~~~
 
+This means a participant can execute the project logic inside the same containerized environment.
+
+## Check the stack
+
+~~~bash
 docker compose ps
-```
+~~~
 
-Setelah itu:
+Logs:
 
-```text
-Airflow UI
-→ trigger pipeline
+~~~bash
+docker compose logs -f
+~~~
 
-MLflow UI
-→ inspect experiment / registry
+One service:
 
-FastAPI /docs
-→ coba prediction
-```
+~~~bash
+docker compose logs -f api
+~~~
 
-FastAPI baru bisa predict setelah registry punya alias `champion`.
+## Workshop URLs
+
+| Service | Host URL |
+| --- | --- |
+| MLflow | http://localhost:5000 |
+| Airflow | http://localhost:8080 |
+| FastAPI | http://localhost:8000 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
+
+## Production note
+
+Compose is excellent for local learning and many development workflows.
+
+A large production platform may use another orchestrator or cloud service.
+
+The lesson here is the multi-service boundary and configuration, not “Compose is always production”.

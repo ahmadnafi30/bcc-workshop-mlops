@@ -1,206 +1,143 @@
-# Feature and Model Design
+# Feature & Model Design
 
-Setelah raw trip di-aggregate, dataset ML kita berubah menjadi hourly demand per zone.
+## From demand to features
 
-Hal paling penting di bagian ini adalah memastikan semua feature yang dipakai memang **available sebelum target hour terjadi**.
+After aggregation:
 
-## Row definition
+| timestamp | zone_id | trip_count |
+| --- | ---: | ---: |
+| 17:00 | 161 | 142 |
+| 18:00 | 161 | 165 |
 
-Anggap satu row punya target hour `t`.
+For the 18:00 row:
 
-Contohnya:
+~~~text
+target_trip_count = 165
+~~~
 
-```text
-zone_id = 161
-target_hour = 2025-01-15 18:00
-```
+Every predictive feature must come from information available before 18:00.
 
-Target-nya adalah jumlah pickup selama 18:00-18:59.
+## Calendar features
 
-Feature historis hanya boleh menggunakan informasi sampai sebelum 18:00.
-
-```text
-lag_1h  = demand 17:00
-lag_2h  = demand 16:00
-lag_3h  = demand 15:00
-lag_24h = demand yesterday at 18:00
-```
-
-## Target
-
-Target utama:
-
-```text
-target_trip_count
-```
-
-Definisinya: jumlah Yellow Taxi pickup pada suatu Manhattan taxi zone selama target hour.
-
-Secara sederhana:
-
-```text
-y(zone, t) = number of pickups in zone during hour t
-```
-
-## Feature set
-
-### Calendar features
-
-```text
-zone_id
+~~~text
 hour
 day_of_week
 is_weekend
-```
+~~~
 
-Calendar feature berguna karena demand taxi punya pattern berdasarkan waktu.
+Taxi demand at Monday 08:00 can look very different from Saturday 23:00.
 
-```text
-08:00 weekday != 08:00 Sunday
-18:00 Friday  != 18:00 Monday
-```
+## Lag features
 
-### Lag features
-
-```text
+~~~text
 lag_1h
 lag_2h
 lag_3h
 lag_24h
 lag_168h
-```
+~~~
 
-| Feature | Meaning |
-| --- | --- |
-| `lag_1h` | demand satu jam sebelumnya |
-| `lag_2h` | demand dua jam sebelumnya |
-| `lag_3h` | demand tiga jam sebelumnya |
-| `lag_24h` | demand pada jam yang sama kemarin |
-| `lag_168h` | demand pada jam yang sama minggu lalu |
+For target 18:00:
 
-`lag_168h` butuh history satu minggu. Karena itu 1-7 January kita pakai sebagai warm-up history, lalu model-ready row mulai efektif dari 8 January.
+~~~text
+lag_1h   = 17:00
+lag_24h  = yesterday 18:00
+lag_168h = one week ago 18:00
+~~~
 
-### Rolling features
+Analogy:
 
-```text
+> To guess how busy a cafe will be at 18:00, you might ask how busy it is now, yesterday at 18:00, and last week at 18:00.
+
+## Rolling features
+
+~~~text
 rolling_mean_3h
 rolling_mean_6h
 rolling_mean_24h
-```
+~~~
 
-Rolling window harus dihitung dari historical values sebelum target hour, bukan termasuk target itu sendiri.
+Important:
 
-Untuk target 18:00:
+~~~text
+shift first
+then rolling
+~~~
 
-```text
-rolling_mean_3h
-=
-mean(demand 15:00, demand 16:00, demand 17:00)
-```
+If the target is 18:00, the rolling window must end before 18:00.
 
-## Example ML row
+Otherwise the feature contains part of the answer.
 
-```text
-target_hour          2025-01-15 18:00
-zone_id              161
+## Warm-up period
 
-hour                  18
-day_of_week            2
-is_weekend             0
+The longest lag is 168 hours, or one week.
 
-lag_1h               169
-lag_2h               153
-lag_3h               141
-lag_24h              162
-lag_168h             174
+Therefore the first seven days only provide history.
 
-rolling_mean_3h      154.3
-rolling_mean_6h      146.8
-rolling_mean_24h     121.6
+~~~text
+Jan 1–7
+warm-up
 
-target_trip_count     182
-```
+Jan 8 onward
+complete training rows
+~~~
 
-## Baseline first
+## Zero-demand rows
 
-Sebelum pakai ML model, kita butuh simple baseline.
+A zone with zero pickups still has meaningful demand: zero.
 
-```text
-prediction(t) = demand(t - 24h)
-```
+So aggregation creates every combination:
 
-Artinya demand jam 18:00 hari ini diprediksi sama dengan demand jam 18:00 kemarin.
+~~~text
+24 hours × all Manhattan zones
+~~~
 
-Baseline penting karena model ML yang lebih kompleks tetap harus menjawab satu pertanyaan sederhana:
+and fills missing counts with zero.
 
-> Apakah model kita beneran lebih bagus dibanding rule sederhana?
-
-Nanti baseline juga kita log ke MLflow.
+That keeps each zone's hourly time series continuous.
 
 ## Main model
 
-Untuk core workshop, pilihan utama kita adalah **HistGradientBoostingRegressor** dari scikit-learn. `zone_id` kita treat sebagai categorical feature karena ID zone bukan angka yang punya hubungan besar-kecil.
+We use scikit-learn:
 
-Alasannya:
+~~~text
+HistGradientBoostingRegressor
+~~~
 
-- training relatif cepat,
-- bisa menangkap nonlinear pattern,
-- tidak butuh GPU,
-- dependency tetap ringan,
-- peserta bisa fokus ke MLOps, bukan model tuning.
+Why:
 
-Random Forest bisa jadi additional experiment kalau waktunya cukup.
+- strong tabular baseline,
+- fast,
+- CPU-friendly,
+- easy to package,
+- no GPU needed,
+- supports categorical features.
 
-Kita sengaja belum pakai LSTM atau Transformer. Model forecasting yang lebih complex bisa jadi extension, tapi bukan inti workshop.
+Zone ID is categorical because ID 200 is not mathematically larger than ID 100 in a meaningful way.
 
-## Evaluation metrics
+## Baseline
 
-### Primary metric: MAE
+~~~text
+prediction = lag_24h
+~~~
 
-Kalau `MAE = 10`, artinya secara rata-rata prediction meleset sekitar 10 pickup per zone-hour.
+The ML model must beat this simple rule on MAE.
 
-MAE gampang dijelaskan dan intuitive buat workshop.
+## Time-based validation
 
-### Secondary metric: RMSE
+Initial snapshot:
 
-RMSE ikut kita log untuk melihat apakah ada error besar yang cukup ekstrem.
+~~~text
+Jan 8–21  training
+Jan 22–26 validation
+~~~
 
-Jadi minimal MLflow akan mencatat:
+We do not use a random split because future and past should not be mixed arbitrarily.
 
-```text
-mae
-rmse
-```
+For retraining, validation becomes the last five days of the latest snapshot.
 
-## Time-based split
+## Why not LSTM or Chronos?
 
-```text
-Jan 01 ─ Jan 07
-   WARM-UP
+Those can be good advanced experiments.
 
-Jan 08 ───────── Jan 21
-      TRAIN
-
-Jan 22 ─ Jan 26
-   VALIDATION
-
-Jan 27 ───────────── Mar 31
-      PRODUCTION REPLAY
-```
-
-Kita tidak pakai random split karena model seharusnya belajar dari past dan dievaluate ke future.
-
-## Retraining idea
-
-Setelah masuk simulated production, kita collect recent prediction dan actual demand.
-
-Rule awal bisa sesederhana:
-
-```python
-if recent_mae > threshold:
-    retrain = True
-```
-
-Tapi model tidak akan diretrain setiap kali ada batch baru.
-
-Goal-nya justru menunjukkan bahwa retraining adalah **decision**, bukan ritual yang dijalankan tanpa alasan.
+The core workshop keeps the model simple so the MLOps lifecycle stays visible.

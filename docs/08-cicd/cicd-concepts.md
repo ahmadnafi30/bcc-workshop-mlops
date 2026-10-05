@@ -1,114 +1,112 @@
 # CI/CD Concepts
 
-Sekarang project kita sudah punya code, tests, Docker image, dan beberapa service.
+## Why automation after Git push?
 
-Problem berikutnya:
+Without CI, code quality depends on someone remembering:
 
-> setiap ada perubahan code, siapa yang ngecek semuanya masih aman?
-
-Kalau jawabannya masih:
-
-```text
-jalanin pytest sendiri
-coba docker build sendiri
-```
-
-berarti prosesnya masih bergantung ke manusia.
-
-Di sini CI/CD mulai kepake.
-
-## CI
-
-CI atau **Continuous Integration** fokus ke pertanyaan:
-
-> perubahan code ini aman buat digabung?
-
-Flow project kita:
-
-```text
-push / pull request
-        ↓
-install project
-        ↓
+~~~text
 run tests
-        ↓
-validate Docker Compose
-        ↓
-build Docker images
-        ↓
-pass / fail
-```
+run lint
+build docs
+build Docker
+~~~
 
-Jadi CI bukan deployment. CI adalah quality gate sebelum perubahan dianggap sehat.
+Humans forget.
 
-## CD
+CI makes the verification step consistent.
 
-CD bisa berarti Continuous Delivery atau Continuous Deployment.
+## CI — Continuous Integration
 
-Di workshop ini kita pakai **Continuous Delivery**.
+Question:
 
-```text
-CI success
-    ↓
-build service images
-    ↓
-tag images
-    ↓
-push to GHCR
-```
+> Is this change safe enough to integrate?
 
-Setelah itu image sudah siap dipakai deployment environment, tapi kita belum otomatis deploy ke cloud/server karena project ini memang belum punya target infrastructure.
+Our CI checks:
 
-Itu beda dengan Continuous Deployment:
+~~~text
+branch policy
+      ↓
+dependency setup
+      ↓
+Ruff
+      ↓
+pytest
+      ↓
+MkDocs build
+      ↓
+Docker Compose validation
+      ↓
+Docker image build
+~~~
 
-```text
-CI success
-    ↓
-build image
-    ↓
-push registry
-    ↓
-automatic deploy
-    ↓
-production
-```
+CI does not automatically mean deployment.
 
-Kita belum sampai bagian terakhir itu.
+It is primarily a quality gate.
 
-## Kenapa dipisah?
+## CD has two common meanings
 
-Biar jelas boundary-nya:
+### Continuous Delivery
 
-```text
-CI
-apakah perubahan ini aman?
-
-CD
-kalau aman, artifact-nya dikirim ke mana?
-```
-
-Artifact yang kita deliver sekarang adalah Docker image.
-
-## Pipeline project
-
-```text
-developer
+~~~text
+verified code
    ↓
-git push
+build artifact
    ↓
-GitHub
+publish artifact
    ↓
-CI workflow
-   ├── pytest
-   └── Docker build
-          ↓
-       success
-          ↓
-Container Delivery workflow
-          ↓
-        GHCR
-          ↓
-api / mlflow / airflow images
-```
+ready to deploy
+~~~
 
-Jadi setelah tahap ini, source code bukan satu-satunya output project. Kita juga punya container image yang bisa dipakai environment lain.
+### Continuous Deployment
+
+~~~text
+verified code
+   ↓
+publish
+   ↓
+automatically deploy to production
+~~~
+
+Our workshop uses **Continuous Delivery**.
+
+We publish container images to GHCR but do not pretend we have a real cloud production target.
+
+## Analogy: factory quality control
+
+Code is a product moving through a factory.
+
+CI is the inspection station.
+
+CD is packaging the approved product and putting it in the warehouse.
+
+Continuous Deployment would add:
+
+> automatically ship it to the customer.
+
+## Why Docker image is an artifact
+
+An artifact is a built output of the software process.
+
+Examples:
+
+- Python wheel,
+- binary,
+- Docker image.
+
+For this project, the deployable delivery artifact is the service container image.
+
+## Why code and model lifecycle are separate
+
+There are two kinds of change:
+
+~~~text
+code changed
+→ CI/CD
+
+model performance changed
+→ monitoring/retraining
+~~~
+
+They can interact, but they are not the same trigger.
+
+That distinction is important in MLOps.

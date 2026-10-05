@@ -1,6 +1,6 @@
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 # start Airflow standalone dengan DAG folder project ini tanpa setup path manual

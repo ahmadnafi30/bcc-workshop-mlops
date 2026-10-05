@@ -1,139 +1,142 @@
 # Retraining
 
-Retraining di project ini bukan cron job yang asal train ulang tiap malam.
+## Retraining should answer a reason
 
-Trigger-nya datang dari model performance.
+A weak rule is:
 
-## Decision flow
+~~~text
+retrain every day because ML
+~~~
 
-```text
-prediction log
-      ↓
-ground truth available
-      ↓
+A better question is:
+
+> What evidence says the current model needs a new candidate?
+
+Our workshop uses recent prediction error.
+
+## Decision rule
+
+Default:
+
+~~~text
 recent MAE
-      ↓
-compare champion validation MAE
-      ↓
-degraded?
-   /        \
- no         yes
- ↓           ↓
-stop      retrain
-             ↓
-         challenger
-```
+>
+champion validation MAE × 1.25
+~~~
 
-Default threshold:
+and:
 
-```text
-recent_mae > reference_mae x 1.25
-```
+~~~text
+evaluated predictions >= 100
+~~~
 
-dan minimum:
+Both values are configurable.
 
-```text
-100 evaluated predictions
-```
+## Why relative threshold?
 
-Keduanya bisa diubah dari Airflow trigger params.
+Model quality depends on the task.
 
-## Kenapa perlu minimum sample?
+An MAE of 20 might be terrible for one problem and excellent for another.
 
-Satu prediction bisa error besar karena kondisi lokal yang aneh.
+Using champion validation MAE gives the threshold context.
 
-Kita nggak mau sistem langsung retrain cuma karena satu titik.
+## Why minimum sample?
 
-Minimum sample bikin decision lihat pattern, bukan satu outlier.
+One strange hour is not enough evidence.
 
-## Snapshot retraining
+A minimum evaluation count reduces overreaction.
 
-Kalau monitoring recommend retraining, cutoff snapshot diambil dari actual target paling baru yang sudah dievaluate.
+## Monitoring DAG
 
-Contoh:
-
-```text
-latest evaluated target
-2025-02-10 23:00
-
-snapshot
-taxi_demand_2025-02-10.parquet
-```
-
-Snapshot tetap punya SHA256 dan metadata yang ikut dicatat ke MLflow.
-
-## Validation window ikut maju
-
-Initial model:
-
-```text
-Jan 08 - Jan 21
-train
-
-Jan 22 - Jan 26
-validation
-```
-
-Retraining snapshot sampai Feb 10:
-
-```text
-history sampai Feb 05
-train
-
-Feb 06 - Feb 10
-validation
-```
-
-Jadi validation selalu lima hari paling akhir dari snapshot, bukan tanggal hard-coded.
-
-## Auto retrain bukan auto promote
-
-Setelah retraining:
-
-```text
-new model
-   ↓
-beat naive baseline?
-   ↓ yes
-register challenger
-```
-
-Tapi alias:
-
-```text
-champion
-```
-
-nggak berubah otomatis.
-
-Kita masih review candidate dulu sebelum:
-
-```bash
-uv run python scripts/promote_model.py --version <VERSION>
-```
-
-Boundary ini penting.
-
-Automation boleh bantu bikin candidate baru, tapi decision production masih explicit di workshop ini.
-
-## Run dari Airflow
-
-Trigger:
-
-```text
+~~~text
 taxi_model_monitoring
-```
+~~~
 
-Parameter default:
+Flow:
 
-```text
-degradation_multiplier = 1.25
-min_samples             = 100
-recent_limit            = 500
-```
+~~~text
+evaluate_model
+      ↓
+maybe_retrain
+~~~
 
-Kalau belum cukup ground truth, DAG selesai tanpa retraining.
+If healthy:
 
-Kalau metric masih sehat, DAG juga selesai tanpa retraining.
+~~~text
+stop
+~~~
 
-Training baru benar-benar jalan ketika monitoring condition terpenuhi.
+If degraded:
+
+~~~text
+new snapshot
+    ↓
+train
+    ↓
+validation
+    ↓
+MLflow
+    ↓
+beat baseline?
+    ↓
+register challenger
+~~~
+
+## Moving validation window
+
+Initial snapshot:
+
+~~~text
+older rows → training
+last 5 days → validation
+~~~
+
+A later retraining snapshot follows the same rule.
+
+That prevents validation from staying frozen forever in January while training moves into February.
+
+## Automatic retraining vs automatic promotion
+
+These are different decisions.
+
+We allow:
+
+~~~text
+monitoring
+→ automatic retraining
+→ automatic challenger registration
+~~~
+
+We do not automatically do:
+
+~~~text
+challenger
+→ champion
+~~~
+
+Why?
+
+Because a model can beat the naive baseline without necessarily being better than the current champion in every important way.
+
+Manual promotion keeps governance visible in the workshop.
+
+## Candidate review
+
+Before promotion, inspect:
+
+- candidate validation MAE,
+- candidate RMSE,
+- snapshot date,
+- dataset fingerprint,
+- MLflow run,
+- current champion performance.
+
+Then promote explicitly.
+
+## Retraining is not continual learning
+
+This project retrains a batch model from a newer snapshot.
+
+That is different from online or continual learning where model parameters may update incrementally as data arrives.
+
+Keeping the distinction clear prevents terminology confusion.

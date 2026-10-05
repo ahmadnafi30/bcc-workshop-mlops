@@ -1,223 +1,149 @@
-# Data Bootstrap and Historical Replay
+# Bootstrap & Historical Data Preparation
 
-Sekarang kita mulai masuk ke bagian data pipeline. Sebelum Airflow ikut campur, flow-nya kita bikin jalan manual dulu supaya kelihatan jelas sebenarnya tiap step ngapain.
+## Goal
 
-Flow yang kita punya sekarang:
+At the end of this section, we want:
 
-```text
-NYC TLC monthly data
-        ↓
-bootstrap
-        ↓
-replay source
-        ↓
-release one daily batch
-        ↓
-raw trip data
-        ↓
-aggregate hourly demand
-```
+~~~text
+official TLC source
+      ↓
+compact replay source
+      ↓
+initial hourly demand history
+~~~
 
-Nanti Airflow tinggal orchestrate step-step yang memang sudah bisa jalan ini.
+## Step 1 — bootstrap official data
 
-## Setup project
-
-Dari root repository:
-
-```bash
-uv sync
-```
-
-Setelah itu semua command workshop dijalankan lewat `uv run`.
-
-Detail setup ada di [Project Setup with uv](../10-hands-on/setup.md).
-
-## Bootstrap data
-
-Jalankan:
-
-```bash
+~~~bash
 uv run python scripts/bootstrap_data.py
-```
+~~~
 
-Secara default script akan nyiapin data January sampai March 2025.
+Default months are configured in the script.
 
-Yang dilakukan script ini:
+What happens:
 
-```text
-download Yellow Taxi monthly parquet
-        ↓
-download Taxi Zone Lookup
-        ↓
-ambil pickup zone Manhattan
-        ↓
-buang timestamp di luar bulan yang seharusnya
-        ↓
-simpan compact replay source
-```
+1. download zone lookup;
+2. download monthly Yellow Taxi Parquet;
+3. validate month format;
+4. read the useful columns;
+5. filter Manhattan;
+6. remove timestamps outside the month;
+7. save compact replay data.
 
-File dari TLC yang full tetap disimpan di:
+## Why validate external data?
 
-```text
-data/source/tlc/
-```
+Even official data is still external input.
 
-Sedangkan source yang sudah diringkas buat replay ada di:
+A robust pipeline does not blindly assume every file has exactly the expected schema forever.
 
-```text
-data/source/replay/
-```
+That is why ingestion code checks important columns and date ranges.
 
-Taxi Zone Lookup ada di:
+## Data folders
 
-```text
-data/metadata/
-```
-
-Semua generated data ini masuk `.gitignore`, jadi repository tetap ringan.
-
-Kalau mau bootstrap bulan tertentu saja:
-
-```bash
-uv run python scripts/bootstrap_data.py --months 2025-01
-```
-
-Kalau mau download dan prepare ulang:
-
-```bash
-uv run python scripts/bootstrap_data.py --force
-```
-
-## Cek datanya dulu
-
-Setelah bootstrap selesai, buka:
-
-```text
-notebooks/01-data-exploration.ipynb
-```
-
-Notebook ini sengaja simple. Kita cuma cek beberapa hal penting:
-
-- berapa row yang masuk,
-- berapa pickup zone yang tersedia,
-- range timestamp,
-- missing values,
-- zone dengan pickup terbanyak,
-- contoh hasil aggregation per jam.
-
-Tujuannya supaya sebelum bikin model kita tahu data yang masuk itu memang masuk akal.
-
-## Siapin initial training history
-
-Sebelum production replay mulai, kita butuh history buat model pertama.
-
-```bash
-uv run python scripts/prepare_historical_demand.py
-```
-
-Default-nya script ini nyiapin hourly demand dari 1 sampai 26 January 2025.
-
-Setelah itu feature dataset bisa dibikin dengan:
-
-```bash
-uv run python scripts/build_features.py
-```
-
-Detail feature-nya dibahas di [Feature Engineering](feature-engineering.md).
-
-## Simulate new production data
-
-Misalnya sekarang kita mau pura-pura tanggal production-nya adalah 27 January 2025:
-
-```bash
-uv run python scripts/simulate_daily_data.py --date 2025-01-27
-```
-
-Output-nya:
-
-```text
-data/raw/trips/2025-01-27.parquet
-```
-
-Script hanya mengambil data untuk tanggal tersebut dari replay source.
-
-Kalau command yang sama dijalankan lagi, file yang sudah ada akan di-skip. Kalau memang mau generate ulang:
-
-```bash
-uv run python scripts/simulate_daily_data.py --date 2025-01-27 --force
-```
-
-Behavior ini bakal kepakai nanti waktu kita bahas idempotency di Airflow.
-
-## Aggregate daily demand
-
-Raw daily batch masih berbentuk trip-level data. Sekarang kita ubah menjadi demand per zone per jam:
-
-```bash
-uv run python scripts/prepare_daily_demand.py --date 2025-01-27
-```
-
-Hasilnya:
-
-```text
-data/processed/demand/2025-01-27.parquet
-```
-
-Bentuk datanya kurang lebih:
-
-```text
-timestamp            zone_id    zone               trip_count
-2025-01-27 08:00     161        Midtown Center     143
-2025-01-27 08:00     162        Midtown East       121
-2025-01-27 09:00     161        Midtown Center     158
-...
-```
-
-Kita juga bikin complete zone-hour grid. Jadi kalau satu zone tidak punya pickup pada suatu jam, row-nya tetap ada dan `trip_count = 0`.
-
-Ini penting karena untuk forecasting kita butuh time series yang konsisten, bukan cuma jam yang kebetulan punya trip.
-
-## Folder roles
-
-```text
+~~~text
 data/
 ├── source/
-│   ├── tlc/          full monthly file dari TLC
-│   └── replay/       compact source buat historical replay
-├── metadata/         taxi zone lookup
-├── raw/
-│   └── trips/        daily batch yang sudah "released"
-├── processed/
-│   └── demand/       hourly demand per zone
-├── features/         nanti isi model-ready features
-└── snapshots/        nanti dipakai untuk versioned training dataset
-```
+│   ├── tlc/
+│   └── replay/
+└── metadata/
+~~~
 
-Bedanya `source` dan `raw` memang sengaja.
+The original download and prepared replay data have different responsibilities.
 
-`source` itu data historical yang kita simpan di belakang layar buat simulator. `raw` adalah data yang dianggap sudah available ke production pipeline pada saat tertentu.
+## Step 2 — inspect the data
 
-## Terus Airflow nanti ngapain?
+Optional notebook:
 
-Untuk sekarang kita masih jalanin manual:
+~~~text
+notebooks/01-data-exploration.ipynb
+~~~
 
-```bash
-uv run python scripts/simulate_daily_data.py --date ...
-uv run python scripts/prepare_daily_demand.py --date ...
-```
+Start Jupyter:
 
-Nanti Airflow yang ngatur:
+~~~bash
+uv run jupyter lab
+~~~
 
-```text
-release batch
-    ↓
-validate
-    ↓
-aggregate
-    ↓
-feature engineering
-    ↓
-prediction / evaluation
-```
+The notebook is intentionally lightweight.
 
-Jadi waktu masuk Airflow nanti kita nggak lagi bingung isi task-nya apa. Business logic-nya sudah ada, Airflow tinggal ngatur kapan dan urutannya.
+We are checking:
+
+- row count,
+- time range,
+- missing values,
+- Manhattan zones,
+- sample hourly aggregation.
+
+This is a sanity check, not a full analytics project.
+
+## Step 3 — prepare initial historical demand
+
+~~~bash
+uv run python scripts/prepare_historical_demand.py
+~~~
+
+Default range:
+
+~~~text
+2025-01-01
+through
+2025-01-26
+~~~
+
+Why this range?
+
+~~~text
+Jan 1–7
+warm-up for lag_168h
+
+Jan 8–21
+training
+
+Jan 22–26
+validation
+~~~
+
+## Aggregation
+
+The raw replay source still has one row per trip.
+
+Aggregation creates:
+
+~~~text
+one row = one Manhattan zone × one hour
+~~~
+
+Output:
+
+~~~text
+data/processed/demand/YYYY-MM-DD.parquet
+~~~
+
+## Complete grid
+
+A missing trip group is not the same thing as a missing time step.
+
+If a zone has zero pickups, we still need:
+
+~~~text
+trip_count = 0
+~~~
+
+So the preprocessing code creates every hour × zone combination and fills missing counts with zero.
+
+## Manual daily replay
+
+Later, to simulate new data:
+
+~~~bash
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
+uv run python scripts/prepare_daily_demand.py --date 2025-01-27
+~~~
+
+This manual path is useful before we let Airflow orchestrate the same logic.
+
+## Why learn the manual path first?
+
+Because orchestration should not hide understanding.
+
+If the Airflow task fails, you should still know what underlying command and data transformation it represents.
