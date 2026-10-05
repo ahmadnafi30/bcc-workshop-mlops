@@ -1,28 +1,41 @@
-# Step 5 — Airflow: Dari Command Manual ke DAG yang Bisa Dilihat
+# Step 5 — Airflow: Dari Pipeline Manual ke DAG yang Bisa Dilihat dan Di-debug
 
-Sekarang kita punya beberapa manual steps yang sudah kalian pahami.
+Sampai sekarang kalian sudah menjalankan banyak command manual.
 
-Perfect timing buat masuk Airflow.
+Bagus.
 
-Kalau kalian belum ngerti manual pipeline, jangan skip ke sini dulu.
+Justru sekarang Airflow akan terasa berguna.
 
-Airflow enak dipelajari kalau underlying logic already familiar.
+Kalau dari awal langsung Airflow, peserta cuma lihat UI tanpa ngerti underlying operation.
 
 ---
 
-# 1. Install Airflow dependency group
+## Goal
+
+Setelah step ini:
+
+- Airflow local jalan,
+- tiga DAG visible,
+- daily replay dipicu,
+- kalian ngerti task state/log,
+- ngerti XCom,
+- ngerti kenapa DAG dipisah.
+
+---
+
+## 1. Install Airflow group
 
 ~~~bash
 uv sync --group airflow
 ~~~
 
-Ini lebih berat daripada base sync.
+First install bisa lama.
 
-First install bisa agak lama.
+Airflow dependency tree memang lebih berat.
 
 ---
 
-# 2. Start Airflow
+## 2. Start Airflow
 
 ~~~bash
 uv run --group airflow python scripts/start_airflow.py
@@ -34,11 +47,11 @@ Open:
 http://localhost:8080
 ~~~
 
-Standalone mode setup local Airflow environment.
-
 ---
 
-# 3. Cari tiga DAG
+## 3. Sebelum klik apa-apa
+
+Cari tiga DAG:
 
 ~~~text
 taxi_daily_replay
@@ -46,15 +59,25 @@ taxi_initial_training
 taxi_model_monitoring
 ~~~
 
-Kalau salah satu missing, jangan lanjut seolah normal.
+Pertanyaan:
 
-DAG missing usually berarti parse/import issue.
+> “Kenapa tiga, bukan satu?”
+
+Coba jawab dulu.
+
+Hint:
+
+~~~text
+new data
+≠
+always retrain
+~~~
 
 ---
 
-# 4. Buka taxi_daily_replay
+## 4. Open daily replay Graph
 
-Graph view harus menunjukkan:
+Expected:
 
 ~~~text
 get_replay_date
@@ -68,19 +91,17 @@ aggregate_demand
 rebuild_features
 ~~~
 
-Coba compare dengan command manual Step 1.
+Coba mapping ke Step 1 manual commands.
 
-Recognize pattern?
+Recognize?
 
-Airflow tidak invent pipeline baru.
-
-Dia arrange pipeline yang sudah ada.
+Airflow cuma orchestrate flow yang sudah kalian kenal.
 
 ---
 
-# 5. Trigger Jan 27
+## 5. Trigger Jan 27
 
-Masukkan param:
+Parameter:
 
 ~~~text
 replay_date = 2025-01-27
@@ -88,163 +109,165 @@ replay_date = 2025-01-27
 
 Trigger.
 
-Observe states.
+Jangan langsung pindah tab.
 
-Typical Airflow color/state akan change selama task running/success/fail.
+Observe state.
+
+Task bisa:
+
+~~~text
+scheduled
+running
+success
+failed
+~~~
+
+Lifecycle state ini salah satu value Airflow.
 
 ---
 
-# 6. Klik satu task
+## 6. Klik release_batch
 
 Open logs.
 
-Misalnya release_batch.
+Cari output path dan row count.
 
-Lihat actual output.
+Pertanyaan:
 
-Jangan treat UI sebagai black box.
+> “Kalau release_batch fail, validate_batch harus jalan nggak?”
 
-Task log adalah salah satu tempat debugging utama.
+No.
 
----
-
-# 7. Validate downstream behavior
-
-Kalau release success lalu validate success, aggregate jalan.
-
-Kalau validation fail, aggregate seharusnya tidak blindly lanjut.
-
-Ini dependency in action.
+Dependency prevent downstream execution.
 
 ---
 
-# 8. Check output files
+## 7. Inspect XCom
 
-Setelah run:
+Kalau UI expose output metadata, lihat.
+
+Expected small info:
+
+~~~text
+date
+rows
+path
+~~~
+
+Kenapa bukan DataFrame?
+
+Karena XCom bukan heavy data channel.
+
+---
+
+## 8. Validate file system
+
+Setelah success:
 
 ~~~text
 data/raw/trips/2025-01-27.parquet
 data/processed/demand/2025-01-27.parquet
 ~~~
 
-Feature dataset juga rebuilt.
+Airflow UI green sebaiknya correlate dengan actual artifact.
+
+Jangan trust UI blindly.
 
 ---
 
-# 9. Trigger Jan 28
+## 9. Trigger Jan 28
 
-~~~text
-replay_date = 2025-01-28
-~~~
+Repeat.
 
-Sekarang history extend lagi.
+Sekarang history maju.
 
----
+Observe bahwa pipeline logic same, logical date beda.
 
-# 10. Inspect XCom
-
-Kalau UI expose XCom/task return, lihat.
-
-Yang lewat adalah metadata kecil.
-
-Bukan full taxi DataFrame.
-
-Pertanyaan:
-
-> Kenapa nggak pass DataFrame langsung?
-
-Karena XCom bukan large data channel.
+Ini parameterized workflow.
 
 ---
 
-# 11. Buka initial training DAG
+## 10. Open initial training DAG
 
 ~~~text
 create_snapshot
-      ↓
+↓
 train_model
-      ↓
+↓
 register_candidate
 ~~~
 
-Coba pikir:
+Question:
 
-> Kenapa DAG ini terpisah dari daily replay?
+> “Kenapa daily replay nggak otomatis connect langsung ke training DAG?”
 
-Jawaban:
-
-> New data arrival tidak selalu berarti harus train model.
-
-Lifecycle berbeda.
+Karena retraining trigger bukan setiap new data.
 
 ---
 
-# 12. Buka monitoring DAG
+## 11. Open monitoring DAG
 
 ~~~text
 evaluate_model
-      ↓
+↓
 maybe_retrain
 ~~~
 
-Kita belum perlu trigger sekarang kalau prediction logs belum ada.
+Nanti balik lagi di Step 10.
 
-Tapi lihat graph dulu.
-
-Nanti di Step 10 kita balik ke sini.
+Sekarang cukup pahami graph.
 
 ---
 
-# 13. Failure mindset
+## 12. Simulate debugging mindset
 
-Kalau DAG fail, jangan bilang:
+Bayangin validate_batch merah.
 
-> “Airflow error.”
+Jangan bilang:
 
-Coba lebih specific:
+> “Airflow broken.”
+
+Tanya:
 
 ~~~text
-Which DAG?
-Which run?
-Which task?
-Which exception?
-Which upstream artifact?
+input path?
+schema?
+date?
+stack trace?
+upstream return?
 ~~~
 
-Contoh:
-
-> aggregate_demand failed because input daily parquet missing.
-
-Ini debugging yang jauh lebih actionable.
+Specific problem lebih mudah di-debug.
 
 ---
 
-# Mini challenge
+## Mini challenge
 
-Kalau function feature engineering punya bug, apakah fix-nya sebaiknya ditulis langsung di DAG?
+Kalau feature engineering logic salah, file mana yang harus diubah?
 
 Jawaban:
 
 ~~~text
-No.
-Fix reusable logic in src/features,
-then DAG continues to call it.
+src/features
 ~~~
 
-DAG tetap orchestration layer.
+Bukan copy fix ke DAG.
+
+DAG tetap orchestration.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
-Kalian harus bisa explain:
+Explain:
 
 - DAG,
 - task,
 - dependency,
+- state,
 - XCom,
-- DAG parsing,
-- why DAG thin,
-- why multiple DAGs.
+- task log,
+- manual trigger,
+- why separate DAG.
 
-Next kita pindah dari training/orchestration ke model serving.
+Kalau clear, kita move ke serving.

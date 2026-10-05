@@ -1,103 +1,83 @@
-# Presenter Checklist — Ahmad Nafi & Fatoni
+# Presenter Demo Checklist — Biar Workshop Live Nggak Bergantung Sama Keberuntungan
 
-Halaman ini khusus supaya workshop day lebih smooth.
-
-Presenter:
+Presenters:
 
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
-Tujuan checklist bukan bikin demo scripted kaku.
+Live demo itu beda dengan local development.
 
-Tujuannya mengurangi failure yang sebenarnya bisa dicegah.
+Yang bisa fail bukan cuma code.
+
+Ada:
+
+- venue Wi-Fi,
+- package download,
+- port conflict,
+- Docker cache,
+- browser login,
+- laptop battery. 😭
+
+Jadi kita prepare.
 
 ---
 
-# H-1 / sebelum sesi
-
-## Repository
+## H-1: repository
 
 Check:
 
-~~~text
-main latest?
-develop aligned?
-CI green?
-no accidental generated data committed?
-~~~
-
-## Dependencies
-
 ~~~bash
-uv sync
-uv sync --group airflow
-uv sync --group docs
-~~~
-
-## Tests
-
-~~~bash
+git status
+git branch
 uv run pytest
 uv run ruff check src api scripts tests
 uv run --group docs mkdocs build --strict
 ~~~
 
----
-
-# Data preparation
-
-Internet venue bisa random.
-
-Recommended pre-download TLC data.
-
-Pastikan:
-
-~~~text
-zone lookup ready
-monthly source ready
-replay source ready
-~~~
-
-Tapi saat demo tetap tunjukkan command bootstrap dan explain what it would do.
+Pastikan main stable.
 
 ---
 
-# MLflow backup
+## H-1: data
 
-Punya known-good:
+Jangan bergantung ke live TLC download kalau venue internet uncertain.
+
+Pre-bootstrap data.
+
+Verify required dates.
+
+---
+
+## H-1: MLflow
+
+Prepare known-good backup:
 
 - experiment,
 - model run,
-- registered model,
-- champion alias.
+- registered version,
+- champion.
 
-Kenapa?
-
-Kalau live training unexpected slow, workshop tetap bisa lanjut ke Registry/API.
-
-Prepared backup bukan cheating.
-
-Itu demo reliability.
+Live demo tetap bisa train, tapi backup prevents session stuck.
 
 ---
 
-# Docker pre-build
+## H-1: Docker images
 
-Kalau waktu sesi limited:
+Pre-build:
 
 ~~~bash
 docker compose build
 ~~~
 
-sebelum kelas.
+First Airflow build bisa lama.
 
-Participants tetap belajar command up/build, tapi presenter tidak buang 15 menit nunggu dependency download.
+Workshop bukan tempat ideal nonton pip install 10 menit. 😭
 
 ---
 
-# Ports check
+## Before audience arrives
 
-Pastikan tidak ada random service di:
+Check ports:
 
 ~~~text
 3000
@@ -107,169 +87,144 @@ Pastikan tidak ada random service di:
 9090
 ~~~
 
+Close unrelated services.
+
 ---
 
-# Browser tabs yang enak sudah ready
+## Browser tabs
+
+Siapkan:
 
 1. Docs
-2. GitHub repo
-3. GitHub Actions
-4. MLflow
-5. Airflow
-6. FastAPI Swagger
-7. Prometheus Targets
-8. Grafana
+2. GitHub Actions
+3. MLflow
+4. Airflow
+5. Swagger
+6. Prometheus Targets
+7. Grafana
 
-Jangan baru cari URL saat presentasi.
+Urutkan tab sesuai teaching flow.
 
 ---
 
-# Teaching flow recommendation
+## Teaching flow recommendation
 
-## Opening
+### Opening
 
-Mulai dari model-only pain.
-
-Jangan langsung:
-
-> “Hari ini kita belajar DVC.”
+Jangan langsung sebut 10 tools.
 
 Mulai:
 
-> “Kalau model kalian bagus, gimana orang lain reproduce?”
+> “Model sudah jadi. Terus sekarang problem berikutnya apa?”
+
+Build curiosity.
+
+### Data
+
+Show one trip row.
+
+Then show hourly aggregate.
+
+Biar transformation concrete.
+
+### Feature
+
+Ask audience:
+
+> “Kalau target 18:00, actual 18:00 boleh jadi feature nggak?”
+
+Make leakage interactive.
+
+### Baseline
+
+Before showing model metric, ask:
+
+> “Kalau kemarin jam yang sama dipakai prediction, kira-kira strong nggak?”
+
+### DVC
+
+Ask:
+
+> “Kalau feature file berubah tapi nama sama, model lama pakai yang mana?”
+
+### MLflow
+
+Show messy experiment scenario first.
+
+Then UI.
+
+### Airflow
+
+Draw DAG manually before UI.
+
+Audience harus predict graph dulu.
+
+### FastAPI
+
+Ask:
+
+> “Client perlu kirim lag_168h nggak?”
+
+Then show simple request.
+
+### Docker
+
+Ask why localhost from container fails.
+
+### CI/CD
+
+Show real PR run.
+
+### Monitoring
+
+Generate traffic live.
+
+Grafana movement gives nice visual feedback.
+
+### Retraining
+
+Show healthy path too.
+
+Emphasize:
+
+> no retrain can be correct.
 
 ---
 
-## Data
+## Backup strategy
 
-Show:
+Kalau live training fail:
+
+- use prepared MLflow run,
+- continue Registry section.
+
+Kalau Docker fail:
+
+- use local services,
+- explain intended container boundary.
+
+Kalau Grafana fail:
+
+- show Prometheus raw metrics and provisioned dashboard config.
+
+Goal workshop = understanding lifecycle.
+
+Bukan proving laptop perfect.
+
+---
+
+## Final audience challenge
+
+Minta satu volunteer explain:
 
 ~~~text
-trip
-→ hourly demand
-→ features
+data
+→ model
+→ serving
+→ monitoring
+→ retraining
 ~~~
 
-Jangan skip leakage explanation.
+Then presenters bantu fill gaps.
 
----
-
-## DVC
-
-Tanya peserta dulu:
-
-> “Kalau features.parquet berubah besok, model lama pakai version mana?”
-
-Baru show DVC.
-
----
-
-## MLflow
-
-Tanya:
-
-> “Kalau 20 experiment, kalian track pakai apa?”
-
-Baru show UI.
-
----
-
-## Airflow
-
-Draw manual steps first.
-
-Then show DAG graph.
-
-Biar visual Airflow jadi answer, bukan mystery.
-
----
-
-## FastAPI
-
-Swagger interactive.
-
-Ask one participant choose zone ID.
-
-Show response + model version.
-
----
-
-## Docker
-
-Highlight internal network.
-
-Ini tempat banyak peserta usually “ohhh”.
-
----
-
-## CI/CD
-
-Open real Actions run.
-
-Jangan cuma screenshot.
-
-Show green job + one log.
-
----
-
-## Monitoring
-
-Generate real HTTP traffic.
-
-Watch Grafana move.
-
-Then explain model MAE delayed.
-
----
-
-## Retraining
-
-Show healthy case first.
-
-Important:
-
-> “Tidak retrain juga bisa menjadi correct result.”
-
-Kalau perlu demo degraded path, presenter bisa adjust threshold on a controlled branch/run, tapi explain bahwa itu demo setting.
-
----
-
-# Kalau demo fail live
-
-Rule:
-
-~~~text
-Do not spend 20 minutes silently debugging.
-~~~
-
-1. Identify layer.
-2. Explain what should happen.
-3. Show log.
-4. Switch to prepared state if needed.
-5. Continue learning objective.
-
-Workshop tujuan utamanya understanding, bukan stress test Wi-Fi.
-
----
-
-# Closing questions
-
-Tanya peers:
-
-### Q1
-
-Kalau API latency bagus tapi model MAE jelek, problem ada di mana?
-
-### Q2
-
-Bedanya DVC dan MLflow?
-
-### Q3
-
-Kenapa Airflow dan GitHub Actions dua-duanya automation tapi nggak redundant?
-
-### Q4
-
-Kenapa challenger nggak langsung champion?
-
-Kalau mereka bisa jawab, workshop story berhasil.
+Kalau audience bisa explain causal flow, session berhasil.

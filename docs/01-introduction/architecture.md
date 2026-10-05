@@ -1,544 +1,296 @@
-# Architecture — How Everything Connects
+# Architecture — Gimana Semua Komponen Ini Nyambung?
 
-## Jangan takut dulu sama diagramnya
+Kalau lihat architecture full dari awal, reaction pertama mungkin:
 
-Kalau kalian lihat architecture MLOps dari awal dalam satu gambar, reaksinya kadang:
+> “Wah banyak banget.”
 
-> “Lah kok banyak banget service?”
+Fair.
 
-Santai.
-
-Architecture kita sebenarnya cuma gabungan dari beberapa simple flow yang saling connect.
-
-Daripada lihat sebagai satu monster besar, kita pecah jadi:
+Jadi kita pecah jadi tiga perspective:
 
 ~~~text
-Data Flow
-Model Lifecycle
-Serving Flow
-Monitoring Flow
-Software Delivery Flow
+1. Data Flow
+2. Model Lifecycle
+3. Operations Flow
 ~~~
 
-Baru setelah ngerti masing-masing, kita gabungkan.
+Kalau tiga ini sudah kebayang, architecture keseluruhan jadi jauh lebih masuk akal.
 
 ---
 
-# 1. Data Flow
+## 1. Data Flow
 
-Semua dimulai dari official NYC TLC data.
+Data flow jawab:
+
+> “Data dari mana dan berubah jadi apa sebelum model belajar?”
 
 ~~~text
-NYC TLC monthly parquet
+NYC TLC Trip Records
         ↓
-bootstrap
+Filter Manhattan
         ↓
-compact replay source
+Historical Replay Source
         ↓
-daily raw batch
+Daily Raw Batch
         ↓
-hourly demand
+Hourly Zone Demand
         ↓
-feature engineering
+Feature Engineering
         ↓
-training-ready dataset
+Training Snapshot
 ~~~
 
-Raw TLC punya:
+Raw data itu one row per trip.
+
+Model tidak train langsung dari trip rows. Kita aggregate menjadi:
 
 ~~~text
-1 row = 1 trip
+one row
+=
+one zone × one hour
 ~~~
 
-Setelah aggregation:
+Lalu dari history demand kita buat lag dan rolling features.
+
+Folder data juga mengikuti lifecycle:
 
 ~~~text
-1 row = 1 zone × 1 hour
-~~~
+source
+→ external/original input
 
-Setelah feature engineering:
+raw
+→ released daily batch
 
-~~~text
-zone_id
-hour
-day_of_week
-lag_1h
-lag_24h
-lag_168h
-rolling_mean_3h
-...
-target_trip_count
-~~~
+processed
+→ hourly demand
 
-Ini jalur data kita.
-
----
-
-# 2. Training Flow
-
-Training flow dimulai dari model-ready features.
-
-~~~text
 features
-   ↓
-training snapshot
-   ↓
-DVC
-   ↓
-time-based split
-   ↓
-naive baseline
-   +
-HistGradientBoosting
-   ↓
-MAE / RMSE
-   ↓
+→ model-ready table
+
+snapshots
+→ frozen training input
+~~~
+
+Jadi nama folder bukan sekadar estetika. Dia merepresentasikan data lifecycle.
+
+---
+
+## 2. Model Lifecycle
+
+Model lifecycle jawab:
+
+> “Dari training data sampai model yang live, prosesnya bagaimana?”
+
+~~~text
+Training Snapshot
+       ↓
+Train Baseline
+       ↓
+Train Main Model
+       ↓
+Evaluate
+       ↓
 MLflow Tracking
+       ↓
+Model Registry
+       ↓
+Challenger
+       ↓
+Review
+       ↓
+Champion
+       ↓
+Serving
 ~~~
 
-Kenapa ada snapshot?
+Kenapa ada baseline? Karena complex model harus earn complexity-nya.
 
-Supaya training nggak bergantung ke file features yang terus berubah.
+Kenapa ada Registry? Karena experiment bagus belum otomatis production model.
 
-Kita freeze dataset sampai cutoff tertentu.
-
-Misalnya:
-
-~~~text
-taxi_demand_2025-01-26.parquet
-~~~
-
-Sekarang experiment punya stable input.
+Kenapa ada challenger dan champion? Supaya promotion explicit dan traceable.
 
 ---
 
-# 3. Model Lifecycle
+## 3. Operations Flow
 
-Setelah training, belum otomatis production.
+Operations flow jawab:
 
-~~~text
-MLflow run
-   ↓
-register model version
-   ↓
-challenger
-   ↓
-review
-   ↓
-champion
-~~~
-
-Model Registry memisahkan dua konsep:
-
-> Model yang berhasil ditrain.
-
-dan:
-
-> Model yang sudah approved untuk serving.
-
-Itu beda.
-
----
-
-# 4. Serving Flow
-
-Client nggak perlu tahu feature engineering internal.
-
-Dia cuma kirim:
-
-~~~json
-{
-  "zone_id": 161,
-  "target_datetime": "2025-01-28T18:00:00"
-}
-~~~
-
-Lalu:
+> “Setelah model diserve, kita tahu system-nya sehat dari mana?”
 
 ~~~text
+Client Request
+      ↓
 FastAPI
-   ↓
-validate request
-   ↓
-load history
-   ↓
-build online features
-   ↓
-load MLflow champion
-   ↓
-predict
-   ↓
-log prediction
-   ↓
-response
-~~~
-
-Important point:
-
-> Client nggak kirim lag_168h.
-
-Kenapa?
-
-Karena lag feature adalah implementation detail model.
-
-Kalau external client harus tahu semua feature internals, serving contract jadi terlalu coupled ke model.
-
----
-
-# 5. Monitoring Flow
-
-Prediction langsung kita log.
-
-Tapi saat prediction dibuat, actual target belum tersedia.
-
-Misalnya:
-
-~~~text
-17:00
-predict demand for 18:00
-
-18:00–18:59
-actual taxi trips happen
-
-afterward
-actual 18:00 demand becomes available
-~~~
-
-Jadi evaluation terjadi delayed.
-
-~~~text
-prediction log
-     +
-actual demand later
-     ↓
-absolute error
-     ↓
-recent MAE
-     ↓
-performance summary
-~~~
-
-Di sisi operational:
-
-~~~text
-FastAPI /metrics
+      ↓
+Prediction
+      ↓
+Operational Metrics
       ↓
 Prometheus
       ↓
 Grafana
 ~~~
 
-Jadi ada dua jalur monitoring.
+Tapi itu baru system health.
+
+Untuk model health:
+
+~~~text
+Prediction
+      ↓
+Prediction Log
+      ↓
+Ground Truth Arrives
+      ↓
+Join Prediction + Actual
+      ↓
+MAE / RMSE
+      ↓
+Retrain Decision
+~~~
+
+Dua loop ini jalan paralel.
 
 ---
 
-# 6. Retraining Flow
+## Mapping ke repository
 
-Kalau recent MAE melewati threshold:
+### src/
 
-~~~text
-recent MAE
->
-champion validation MAE × multiplier
-~~~
+Reusable business logic.
 
-dan jumlah sample cukup:
+Contoh:
 
 ~~~text
-monitoring
-   ↓
-create newer snapshot
-   ↓
-retrain
-   ↓
-validate
-   ↓
-log to MLflow
-   ↓
-register challenger
+src/ingestion/
+src/features/
+src/training/
+src/serving/
+src/monitoring/
 ~~~
 
-Tapi:
+Rule penting:
+
+> Logic yang bisa dipakai ulang jangan ditaruh hanya di script atau DAG.
+
+### scripts/
+
+Human-friendly entry points.
+
+Script mostly call reusable function dari src.
+
+### dags/
+
+Airflow orchestration.
+
+Rule:
 
 ~~~text
-challenger
-≠
-automatically champion
+dags
+→ WHEN + IN WHAT ORDER
+
+src
+→ HOW
 ~~~
 
-Promotion masih explicit.
+Kalau business logic numpuk di DAG, testing jadi susah.
+
+### api/
+
+HTTP layer.
+
+Responsibility-nya request, response, status code, dependency wiring. Feature construction dan model loading tetap reusable di serving layer.
+
+### monitoring/
+
+Prometheus dan Grafana configuration.
+
+Ini infrastructure concern, bukan training logic.
 
 ---
 
-# 7. Orchestration Flow
+## Kenapa boundaries penting?
 
-Airflow mengatur kapan dan urutan beberapa flow.
+Bayangin semua logic ditaruh di satu main.py 3000 lines.
 
-Kita punya tiga DAG utama.
+Ada data download, feature engineering, training, serving, monitoring, orchestration.
 
-## Daily replay
+Technically mungkin jalan, tapi maintainability jelek.
 
-~~~text
-get_replay_date
-      ↓
-release_batch
-      ↓
-validate_batch
-      ↓
-aggregate_demand
-      ↓
-rebuild_features
-~~~
+Boundary membantu jawab:
 
-## Initial training
+> “Kalau feature engineering berubah, concern mana yang kita sentuh?”
 
-~~~text
-create_snapshot
-      ↓
-train_model
-      ↓
-register_candidate
-~~~
+> “Kalau API response berubah, apa yang seharusnya nggak ikut berubah?”
 
-## Monitoring
+> “Kalau orchestration berubah tapi domain logic sama, file mana yang relevan?”
 
-~~~text
-evaluate_model
-      ↓
-maybe_retrain
-~~~
-
-Airflow tidak replace Python logic.
-
-Dia orchestrate Python logic.
+Architecture bagus bukan karena folder-nya banyak. Architecture bagus karena responsibility jelas.
 
 ---
 
-# 8. Container Architecture
+## Local vs Container Network
 
-Docker Compose nyalain service:
+Ini sering bikin newbie bingung.
 
-~~~text
-MLflow
-Airflow
-FastAPI
-Prometheus
-Grafana
-~~~
-
-Mereka hidup sebagai container terpisah.
-
-Kenapa terpisah?
-
-Karena responsibility-nya beda.
-
-~~~text
-FastAPI
-→ serve prediction
-
-MLflow
-→ experiment + registry
-
-Airflow
-→ orchestration
-
-Prometheus
-→ collect metrics
-
-Grafana
-→ visualize metrics
-~~~
-
-Ini namanya separation of concerns.
-
----
-
-# 9. Networking antar service
-
-Dari browser laptop kalian:
+Dari browser host:
 
 ~~~text
 MLflow
 http://localhost:5000
-
-FastAPI
-http://localhost:8000
 ~~~
 
-Tapi dari dalam container API:
+Dari API container:
 
 ~~~text
 http://mlflow:5000
 ~~~
 
-Bukan localhost.
+Kenapa beda?
 
-Kenapa?
+Karena localhost artinya “machine/container saya sendiri”.
 
-Karena:
+Di API container, localhost:5000 berarti port 5000 di API container, bukan MLflow container.
 
-> localhost di dalam container berarti container itu sendiri.
-
-Docker Compose menyediakan internal DNS berdasarkan service name.
+Docker Compose kasih internal DNS berdasarkan service name.
 
 Jadi:
 
 ~~~text
-api → mlflow:5000
-prometheus → api:8000
-grafana → prometheus:9090
+api
+→ mlflow:5000
+
+prometheus
+→ api:8000
+
+grafana
+→ prometheus:9090
 ~~~
+
+Ini concept networking yang bakal sering muncul.
 
 ---
 
-# 10. Software Delivery Flow
+## Simplification vs real production
 
-MLOps project tetap software project.
+Production platform bisa jauh lebih kompleks.
 
-Ada source code lifecycle juga.
-
-~~~text
-feat/*
-   ↓
-Pull Request
-   ↓
-develop
-   ↓
-CI
-   ↓
-develop → main
-   ↓
-CI
-   ↓
-Container Delivery
-   ↓
-GHCR
-~~~
-
-GitHub Actions mengurus repository-level automation.
-
-Ini beda dengan Airflow.
-
----
-
-# Airflow vs GitHub Actions
-
-Biar nggak ketuker:
-
-## Airflow
-
-Trigger karena data / ML workflow.
-
-Contoh:
+Tapi yang berubah biasanya scale dan infrastructure.
 
 ~~~text
-new daily taxi batch
-↓
-run processing pipeline
+local filesystem
+→ object storage
+
+single Docker host
+→ Kubernetes
+
+SQLite
+→ managed database
+
+standalone Airflow
+→ distributed/managed Airflow
 ~~~
 
-## GitHub Actions
+Pattern lifecycle tetap sama.
 
-Trigger karena repository event.
-
-Contoh:
-
-~~~text
-pull request opened
-↓
-run tests
-~~~
-
-Jadi:
-
-~~~text
-Airflow
-→ data lifecycle
-
-GitHub Actions
-→ code lifecycle
-~~~
-
----
-
-# Big picture akhirnya
-
-Kalau digabung:
-
-~~~text
-                    ┌──────────────────┐
-                    │   NYC TLC Data   │
-                    └────────┬─────────┘
-                             │
-                             v
-                    Data Preparation
-                             │
-                             v
-                    Feature Engineering
-                             │
-                             v
-                       DVC Snapshot
-                             │
-                             v
-                         Training
-                             │
-                             v
-                    MLflow Tracking
-                             │
-                             v
-                     Model Registry
-                             │
-                       champion alias
-                             │
-                             v
-                         FastAPI
-                             │
-                  ┌──────────┴──────────┐
-                  │                     │
-                  v                     v
-          prediction response     prediction log
-                                        │
-                                        v
-                                  ground truth
-                                        │
-                                        v
-                                   recent MAE
-                                        │
-                                        v
-                                    Airflow
-                                        │
-                                  retrain?
-                                        │
-                                        v
-                                    challenger
-~~~
-
-Di samping itu:
-
-~~~text
-FastAPI
-  ↓ metrics
-Prometheus
-  ↓
-Grafana
-~~~
-
-dan:
-
-~~~text
-Git Push
-  ↓
-GitHub Actions
-  ↓
-CI
-  ↓
-GHCR
-~~~
-
-Sekarang architecture-nya memang lebih banyak, tapi setiap bagian punya satu responsibility yang jelas.
-
-Kalau nanti kalian bingung satu service buat apa, jangan lihat full diagram.
-
-Tanya aja:
-
-> “Service ini sedang menyelesaikan problem yang mana?”
+Makanya kita belajar pattern dulu.

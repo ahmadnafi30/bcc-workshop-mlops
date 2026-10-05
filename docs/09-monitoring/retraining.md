@@ -1,56 +1,52 @@
-# Retraining — When Should We Create a New Model?
+# Retraining — Kapan Model Harus Belajar Lagi?
 
-## Retraining jangan jadi ritual
+“Retrain model setiap hari” kedengarannya automation banget.
 
-Sering ada pattern:
-
-> “Model ML harus retrain tiap malam.”
-
-Kenapa?
-
-> “Ya karena production.”
+Tapi apakah selalu masuk akal?
 
 Belum tentu.
 
 Retraining punya cost:
 
 - compute,
-- evaluation,
-- new artifact,
-- review,
-- possible regression.
+- time,
+- experiment noise,
+- validation effort,
+- governance risk.
 
-Kita sebaiknya punya reason.
+Jadi pertanyaan yang lebih sehat:
+
+> **Evidence apa yang bikin kita percaya model perlu candidate baru?**
+
+Workshop kita pakai performance degradation.
 
 ---
 
-# Trigger kita: performance degradation
+## Decision rule
 
-Kita compare:
+Default:
 
 ~~~text
 recent MAE
-vs
-champion validation MAE
-~~~
-
-Default threshold:
-
-~~~text
-recent_mae
 >
-reference_mae × 1.25
+champion validation MAE × 1.25
 ~~~
 
 dan:
 
 ~~~text
-evaluation_count >= 100
+evaluated predictions >= 100
 ~~~
+
+Dua condition.
+
+Kenapa?
+
+Karena threshold doang tanpa sample count bisa overreact.
 
 ---
 
-# Contoh
+## Example
 
 Champion validation:
 
@@ -73,53 +69,36 @@ Threshold:
 Recent MAE:
 
 ~~~text
-11.4
+13.4
 ~~~
 
-No retrain.
-
-Kalau:
+Evaluated predictions:
 
 ~~~text
-recent MAE = 14.0
-sample = 300
+350
 ~~~
 
-recommend retrain.
+Condition terpenuhi.
+
+Monitoring recommend retrain.
 
 ---
 
-# Kenapa minimum sample?
+## Kalau recent MAE 13.4 tapi sample cuma 5?
 
-Satu hour bisa extreme.
+No retraining recommendation.
 
-Event khusus.
+Kenapa?
 
-Weather weird.
+Five samples terlalu sedikit buat confident conclusion.
 
-Data issue.
+Automation yang mature nggak harus agresif.
 
-Kalau satu bad point langsung trigger training, system terlalu reactive.
-
-Minimum sample memberi evidence lebih stable.
+Kadang best action adalah wait for more evidence.
 
 ---
 
-# Why recent window?
-
-Suppose historical MAE selama enam bulan bagus.
-
-Minggu terakhir rusak.
-
-Kalau calculate all-time average, recent degradation bisa diluted.
-
-Kita care current performance.
-
-Jadi recent window more actionable.
-
----
-
-# Airflow monitoring DAG
+## Monitoring DAG
 
 ~~~text
 evaluate_model
@@ -127,180 +106,203 @@ evaluate_model
 maybe_retrain
 ~~~
 
-evaluate_model:
-
-1. load champion reference from MLflow;
-2. load prediction logs;
-3. join available ground truth;
-4. calculate recent metrics;
-5. save performance summary.
-
-maybe_retrain inspect summary.
-
----
-
-# Healthy path
+Kalau healthy:
 
 ~~~text
-retrain_recommended = false
-↓
-status = not_needed
+not_needed
 ~~~
 
-Ini bukan failure.
-
-Ini correct automation outcome.
-
-Automation tidak harus selalu melakukan sesuatu.
-
----
-
-# Degraded path
+Kalau degraded:
 
 ~~~text
-retrain recommended
-↓
-latest evaluated cutoff
+latest evaluated date
 ↓
 new snapshot
 ↓
 train
 ↓
-latest 5 days validation
+validation
 ↓
-MLflow run
+MLflow tracking
 ↓
-beat naive baseline?
+candidate evaluation
 ↓
 register challenger
 ~~~
 
 ---
 
-# Moving validation window
+## Kenapa snapshot baru?
 
-Initial:
+Karena retraining harus punya frozen dataset identity.
+
+Kita nggak mau run training dari moving “latest” file lalu kehilangan context.
+
+Snapshot baru punya cutoff date dan fingerprint.
+
+---
+
+## Validation window ikut maju
+
+Ini penting.
+
+Initial model:
 
 ~~~text
-Jan 8–21 train
-Jan 22–26 validation
+older period
+→ train
+
+latest 5 days
+→ validation
 ~~~
 
-Later snapshot sampai Feb 10:
-
-~~~text
-older rows through Feb 5
-train
-
-Feb 6–10
-validation
-~~~
-
-Validation moves with data.
+Saat snapshot maju ke February, validation juga maju.
 
 Kenapa?
 
-Karena kita ingin test model on latest unseen-ish period.
+Kalau validation tetap stuck di January, kita cuma tahu model baru bagus di old period.
 
-Kalau validation tetap Jan forever, retraining evaluation nggak represent current temporal behavior.
+Retraining harus evaluate pada more recent holdout.
 
 ---
 
-# Auto retrain vs auto promote
+## Kenapa beat baseline dulu?
 
-Ini boundary penting.
+Candidate baru harus minimal justify complexity-nya terhadap naive rule.
+
+Kalau retrained model kalah dari naive lag_24h:
+
+> Kenapa kita register sebagai candidate?
+
+Nggak ada alasan kuat.
+
+---
+
+## Automatic retraining ≠ automatic promotion
+
+Ini governance boundary paling penting.
+
+Project allow:
 
 ~~~text
-automatic:
-monitor
-retrain
-register challenger
-
-manual:
-promote challenger to champion
+monitoring
+→ automatic retraining
+→ automatic challenger
 ~~~
 
-Kenapa manual?
+Tapi stop sebelum:
 
-Karena model baru mungkin:
+~~~text
+challenger
+→ champion
+~~~
 
-- beat naive baseline,
-- tapi masih worse than champion,
-- punya weird segment behavior,
-- butuh human/business review.
+Kenapa?
 
-Jadi production promotion lebih sensitive.
+Karena candidate bisa beat baseline tapi belum tentu better than current champion on every relevant dimension.
+
+Kita mungkin mau inspect:
+
+- validation MAE,
+- recent production-like MAE,
+- data period,
+- anomaly,
+- business constraint,
+- regression risk.
 
 ---
 
-# Continual learning beda
+## Manual promotion bukan anti-automation
 
-Project kita batch retraining.
+Kadang orang mikir:
+
+> “Kalau masih manual berarti belum MLOps.”
+
+No.
+
+Automation level harus sesuai risk dan governance.
+
+High-risk action bisa intentionally require approval.
+
+MLOps bukan goal “semua harus auto”.
+
+Goal-nya reliable lifecycle.
+
+---
+
+## Retraining vs continual learning
+
+Retraining workshop kita adalah batch retraining.
 
 ~~~text
-collect newer dataset
+new snapshot
 ↓
 train new model
 ~~~
 
-Ini bukan continual/online learning yang update model weights incrementally setiap stream data datang.
+Continual/online learning beda.
 
-Terminology penting.
+Model parameter update incrementally seiring data datang.
 
----
-
-# What if ground truth unavailable?
-
-No evaluation.
-
-No evidence.
-
-No retraining decision.
-
-System harus tolerate delayed/missing ground truth.
-
-Workshop skip predictions yang actual belum available.
+Jangan pakai istilah interchangeable.
 
 ---
 
-# What if recent MAE good?
+## Setelah champion berubah
 
-Do nothing.
+Serving layer resolve champion alias.
 
-Ini actually healthy.
+Loader akan detect version change setelah refresh interval.
 
-Jangan force retraining hanya supaya demo terlihat “aktif”.
-
-Presenter bisa explain both branch.
-
----
-
-# Final lifecycle
+Jadi lifecycle:
 
 ~~~text
-Champion serves
+new champion
 ↓
-Predictions logged
+serving detects alias change
 ↓
-Ground truth arrives
+reload model
 ↓
-Performance evaluated
-↓
-Degraded?
-├── no → keep champion
-└── yes
-     ↓
-   retrain
-     ↓
-   challenger
-     ↓
-   review
-     ↓
-   promote
-     ↓
-   new champion
+future predictions use new version
 ~~~
 
-Ini feedback loop yang kita bangun dari awal workshop.
+Application source code nggak perlu hard-code version baru.
 
-Dan ini point di mana semua tool akhirnya nyambung.
+---
+
+## Closed loop
+
+Sekarang lifecycle lengkap:
+
+~~~text
+serve
+↓
+observe
+↓
+evaluate
+↓
+degradation?
+↓
+retrain
+↓
+challenger
+↓
+review
+↓
+promote
+↓
+serve again
+~~~
+
+Ini salah satu core outcome workshop.
+
+---
+
+## Checkpoint
+
+1. Kenapa nggak retrain tiap hari aja?
+2. Kenapa minimum samples penting?
+3. Kenapa validation window harus ikut maju?
+4. Kenapa retrained model harus compare baseline?
+5. Automatic retraining beda apa dengan automatic promotion?
+6. Batch retraining beda apa dengan continual learning?

@@ -1,18 +1,8 @@
-# Data Pipeline Part 2 — Feature Engineering
+# Data Pipeline — Feature Engineering: Dari Hourly Demand Jadi Model Matrix
 
-## Dari hourly demand ke sesuatu yang bisa dimakan model
+Processed demand belum langsung ready buat model.
 
-Processed demand kita punya tiga core column:
-
-~~~text
-timestamp
-zone_id
-trip_count
-~~~
-
-Model belum cukup hanya dengan itu.
-
-Kita perlu encode temporal pattern.
+Kita perlu transform temporal history jadi numerical features.
 
 Command:
 
@@ -28,47 +18,42 @@ data/features/taxi_demand_features.parquet
 
 ---
 
-# Step 1 — Combine processed history
+## Input expectation
 
-Feature builder baca daily demand history.
-
-Kenapa perlu combine multiple days?
-
-Karena feature terjauh kita:
+Input minimum:
 
 ~~~text
-lag_168h
+timestamp
+zone_id
+trip_count
 ~~~
 
-yang berarti satu minggu ke belakang.
+Rows harus:
 
-Jadi per-day computation harus tetap punya akses historical context.
+- timestamp valid,
+- chronological,
+- complete enough per zone.
 
 ---
 
-# Step 2 — Sort correctly
-
-Sebelum shift atau rolling:
+## Step 1 — Sort
 
 ~~~text
-sort by
 zone_id
 timestamp
 ~~~
 
-Kenapa?
+Kenapa sorting first?
 
-Time-based operation depend on order.
+Shift/rolling rely on sequence.
 
-Kalau row random, shift satu row tidak berarti previous hour.
-
-Ini kelihatan sepele, tapi silent bug seperti ini bahaya karena code tetap jalan.
+Kalau row order random, lag jadi nonsense.
 
 ---
 
-# Step 3 — Calendar features
+## Step 2 — Calendar features
 
-Dari timestamp:
+From timestamp:
 
 ~~~text
 hour
@@ -76,247 +61,151 @@ day_of_week
 is_weekend
 ~~~
 
-Calendar features aman dipakai karena target timestamp diketahui saat prediction.
+Tidak perlu historical demand buat ini.
 
-Kalau kita predict:
-
-~~~text
-2025-01-28 18:00
-~~~
-
-kita already tahu:
-
-- hour = 18,
-- weekday apa,
-- weekend atau nggak.
+Target time itself known at prediction time, jadi safe.
 
 ---
 
-# Step 4 — Lag features
-
-Per zone:
+## Step 3 — Lag per zone
 
 ~~~text
-lag_1h
-lag_2h
-lag_3h
-lag_24h
-lag_168h
-~~~
-
-Per zone itu keyword penting.
-
-Kalau groupby zone tidak dilakukan, historical value zone lain bisa bocor.
-
-Jadi pattern:
-
-~~~text
-groupby(zone_id)
+group by zone
 ↓
-shift(...)
+shift 1,2,3,24,168
 ~~~
+
+Per-zone grouping critical.
+
+Kalau tidak, boundary antar zone contamination.
 
 ---
 
-# Step 5 — Rolling features
+## Step 4 — Rolling
 
-Kita pakai:
+Kita shift history dulu.
 
-~~~text
-rolling_mean_3h
-rolling_mean_6h
-rolling_mean_24h
-~~~
-
-Important implementation:
+Then rolling.
 
 ~~~text
-shift(1)
+previous demand
 ↓
-rolling(...)
+rolling 3h
+rolling 6h
+rolling 24h
 ~~~
 
-Kenapa shift dulu?
+Kenapa shift first?
 
-Karena current row adalah target.
-
-Kalau rolling include current trip_count, target bocor.
-
-Untuk target 18:00:
-
-~~~text
-valid 3h window:
-15:00
-16:00
-17:00
-~~~
-
-bukan:
-
-~~~text
-16:00
-17:00
-18:00 actual
-~~~
+Prevent target leakage.
 
 ---
 
-# Step 6 — Define target
+## Step 5 — Target
 
-Current:
-
-~~~text
-trip_count
-~~~
-
-menjadi:
+Target:
 
 ~~~text
 target_trip_count
+=
+current hour demand
 ~~~
 
-Jadi feature row punya historical inputs + target current.
+Feature lihat past.
+
+Target adalah current.
 
 ---
 
-# Step 7 — Drop incomplete rows
+## Step 6 — Drop incomplete warm-up
 
-Early history belum punya full lag.
+First week belum punya lag_168h.
 
-Misalnya Jan 2 belum punya lag_168h.
+Kalau model input butuh complete features, rows incomplete dropped.
 
-Row seperti itu incomplete untuk model.
-
-Mereka tidak masuk final model-ready dataset.
-
-Tapi historical source tetap berguna buat support future lags.
+Warm-up history tetap useful sebagai source lag.
 
 ---
 
-# Feature schema contract
+## Batch vs online feature path
 
-Model kita expect column tertentu:
+Training:
 
 ~~~text
-zone_id
-hour
-day_of_week
-is_weekend
-lag_1h
-lag_2h
-lag_3h
-lag_24h
-lag_168h
-rolling_mean_3h
-rolling_mean_6h
-rolling_mean_24h
+batch dataframe
+→ build many rows
 ~~~
 
-Urutan dan semantics harus consistent.
-
----
-
-# Batch vs online features
-
-Training uses batch feature builder.
-
-Serving uses online feature builder untuk satu request.
-
-Implementation beda, meaning harus sama.
-
-Contoh:
+Serving:
 
 ~~~text
-lag_24h in training
-must mean exactly same thing
-as lag_24h in serving
+one target request
+→ look up history
+→ build one feature row
 ~~~
 
-Kalau nggak, kita punya training-serving skew.
+Implementation path berbeda, semantics harus sama.
+
+Ini training-serving consistency problem.
 
 ---
 
-# Test semantics, not just execution
+## Tests penting
 
-Feature pipeline punya automated tests.
+Feature test seharusnya check exact expected value.
 
-Kenapa?
-
-Karena leakage bug tidak selalu crash.
-
-Contoh bug:
+Contoh synthetic sequence:
 
 ~~~text
-rolling includes target
-~~~
-
-Code jalan.
-
-Metric mungkin malah terlihat luar biasa.
-
-Justru itu berbahaya.
-
-Test synthetic sequence membantu verify exact values.
-
----
-
-# Example synthetic test
-
-Misalnya trip_count:
-
-~~~text
-0
-1
-2
-3
-...
+0,1,2,...,199
 ~~~
 
 Untuk hour 168:
 
 ~~~text
-lag_168h = 0
 lag_1h = 167
+lag_24h = 144
+lag_168h = 0
 ~~~
 
-Expected values gampang dihitung.
+Kenapa synthetic useful?
 
-Kalau result beda, logic salah.
+Karena expected result bisa dihitung manual.
 
 ---
 
-# Rebuild after each replay
+## Leakage test
 
-Jan 27 masuk.
-
-~~~text
-processed demand extends
-↓
-rebuild features
-~~~
-
-Jan 28 masuk.
+Rolling 3h target 168 expected average dari:
 
 ~~~text
-rebuild again
+165
+166
+167
 ~~~
 
-Feature file represent latest available state.
+bukan include 168.
 
-Kalau mau train reproducibly, kita tidak langsung rely on mutable latest file.
-
-Kita freeze snapshot lewat DVC.
+Kalau test dapat different, implementation suspicious.
 
 ---
 
-# Checkpoint
+## Feature schema contract
 
-Sebelum lanjut, kalian harus bisa explain:
+Model expected column order disimpan sebagai constant.
 
-> Kenapa rolling mean dibuat setelah shift?
+Kenapa?
 
-Kalau jawabannya:
+DataFrame column order/type bisa matter.
 
-> “Supaya current target tidak ikut masuk historical feature.”
+Serving harus produce compatible input.
 
-berarti leakage concept sudah masuk.
+---
+
+## Checkpoint
+
+1. Sorting kenapa first?
+2. Lag kenapa group by zone?
+3. Rolling kenapa shift?
+4. Warm-up rows kenapa drop?
+5. Batch feature vs online feature beda implementation tapi harus sama semantics — kenapa?

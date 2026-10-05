@@ -1,298 +1,194 @@
-# Data Pipeline Part 3 — Airflow in Our Project
+# Data Pipeline — Airflow Orchestration: Menaruh Manual Steps ke Workflow yang Observable
 
-## Dari manual scripts menjadi orchestrated workflow
+Sekarang kita punya manual data pipeline yang sudah jelas.
 
-Sampai titik ini, kita sudah bisa:
+Baru sekarang kita orchestrate.
+
+Ini urutan belajar yang sengaja dipilih.
+
+Kalau underlying command belum dipahami, Airflow UI jadi magic box.
+
+---
+
+## Daily DAG mapping
+
+Manual conceptual flow:
 
 ~~~text
-release date
+choose date
+↓
+release daily data
+↓
 validate
+↓
 aggregate
+↓
 build features
 ~~~
 
-semua manual.
-
-Sekarang Airflow masuk bukan untuk mengganti logic, tapi untuk mengatur lifecycle execution.
-
----
-
-# Daily replay DAG
-
-File:
-
-~~~text
-dags/taxi_daily_replay.py
-~~~
-
-Flow:
+Airflow:
 
 ~~~text
 get_replay_date
-      ↓
+↓
 release_batch
-      ↓
+↓
 validate_batch
-      ↓
+↓
 aggregate_demand
-      ↓
+↓
 rebuild_features
 ~~~
 
-Mari kita mapping ke business meaning.
+One-to-one enough buat gampang trace.
 
 ---
 
-# get_replay_date
+## Task boundaries
 
-Resolve runtime param:
+Kenapa validate separate dari aggregate?
+
+Kalau validation fail, kita tahu data quality problem.
+
+Kalau digabung:
 
 ~~~text
-2025-01-27
+validate + aggregate
 ~~~
 
-Ini membuat satu run punya explicit logical input.
+error location less clear.
 
-Kenapa nggak hard-code date?
-
-Karena workflow definition harus reusable.
+Task boundary adalah observability decision juga.
 
 ---
 
-# release_batch
+## Metadata passing
 
-Memanggil historical replay logic.
-
-Hasil actual data ditulis ke file.
-
-Return value kecil seperti:
+Release task return:
 
 ~~~text
 date
-rows
 path
+rows
 ~~~
 
-bisa lewat XCom.
+Downstream use metadata.
+
+Large data tetap di Parquet.
+
+Kenapa?
+
+Workflow engine coordinate.
+
+Storage stores data.
+
+Jangan campur responsibility.
 
 ---
 
-# validate_batch
-
-Check batch contract.
-
-Kalau fail:
-
-~~~text
-downstream tidak lanjut
-~~~
-
-Ini exactly why task separation berguna.
-
-Failure boundary terlihat jelas di UI.
-
----
-
-# aggregate_demand
-
-Trip-level data menjadi hourly zone demand.
-
-Ini reuse function dari src.
-
-DAG tidak implement ulang groupby logic.
-
----
-
-# rebuild_features
-
-Setelah processed date baru available, feature dataset update.
-
-Sekarang historical features include latest date.
-
----
-
-# Initial training DAG
-
-File:
-
-~~~text
-dags/taxi_initial_training.py
-~~~
-
-Flow:
+## Training DAG
 
 ~~~text
 create_snapshot
-      ↓
+↓
 train_model
-      ↓
+↓
 register_candidate
 ~~~
 
-Kenapa dipisah dari daily replay?
+Snapshot task separate supaya training input explicit.
 
-Karena arrival data tidak selalu berarti harus retrain.
+Training return metrics/run IDs small enough buat task metadata.
 
-Kalau tiap daily batch auto-train tanpa condition, system boros dan governance-nya jelek.
+Registration consume result.
 
 ---
 
-# Monitoring DAG
-
-File:
-
-~~~text
-dags/taxi_model_monitoring.py
-~~~
-
-Flow sederhana:
+## Monitoring DAG
 
 ~~~text
 evaluate_model
-      ↓
+↓
 maybe_retrain
 ~~~
 
-Di dalam maybe_retrain ada branching logic conceptual:
+maybe_retrain conditional.
+
+Kalau no retrain:
 
 ~~~text
-performance okay
-→ no-op
-
-performance degraded
-→ create snapshot
-→ train
-→ register challenger
+status = not_needed
 ~~~
 
----
-
-# Why no automatic champion promotion?
-
-Karena retraining adalah technical action.
-
-Promotion adalah governance decision.
-
-Mereka related tapi nggak identik.
-
-System boleh otomatis create candidate baru.
-
-Tapi approval production tetap explicit.
+This is expected success.
 
 ---
 
-# Runtime retraining snapshot
+## Runtime retraining snapshot vs DVC stage
 
-Initial DVC snapshot punya versioned workflow.
+Initial snapshot punya DVC reproducibility flow.
 
-Saat runtime Airflow retraining, kita tidak menjalankan DVC add yang mengubah repo state.
+Runtime Airflow retraining create newer snapshot and log fingerprint to MLflow.
 
-Instead:
+Kenapa Airflow nggak otomatis dvc add + commit repository?
 
-- create deterministic snapshot file,
-- calculate SHA256,
-- log fingerprint ke MLflow.
+Karena runtime pipeline modifying source repository metadata is different concern and can create race/permission complexity.
 
-Ini membuat runtime automation tidak mutate Git repository.
+Workshop keep runtime lineage via snapshot name + SHA in MLflow.
+
+Ini intentional simplification.
 
 ---
 
-# XCom design
+## Retry
 
-Yang lewat XCom:
+Airflow can retry task.
+
+Makanya task harus idempotent.
+
+Kalau retry release_batch produce duplicate data, orchestration reliability rusak.
+
+---
+
+## Scheduling future extension
+
+Workshop manual.
+
+Production design bisa:
 
 ~~~text
-path
-date
-row count
-metric summary
-run ID
+daily data DAG
+→ every day
+
+monitoring DAG
+→ after ground truth available
+
+training
+→ condition triggered
 ~~~
 
-Yang tidak:
-
-~~~text
-DataFrame besar
-Parquet content
-model binary
-~~~
-
-File storage tetap tempat large artifacts.
+Jangan schedule retraining blindly kalau business logic condition-based.
 
 ---
 
-# Why this architecture matters
+## Failure propagation
 
-Kalau DAG terlalu banyak logic:
+Upstream fail biasanya downstream blocked.
 
-- sulit test,
-- sulit reuse,
-- parse heavy,
-- Airflow jadi dependency untuk semua.
+Ini good.
 
-Kalau DAG tipis:
+Bad input tidak lanjut.
 
-~~~text
-src function
-↓
-test directly
-↓
-wrap in task
-~~~
+But sometimes cleanup task might need trigger rule different.
 
-much cleaner.
+Workshop keep default dependency simple.
 
 ---
 
-# What should participants inspect in UI?
+## Checkpoint
 
-## Graph View
-
-Lihat dependency.
-
-## Task Logs
-
-Lihat actual command/function outcome.
-
-## Params
-
-Pastikan replay date sesuai.
-
-## Run History
-
-Bandingkan Jan 27 dan Jan 28.
-
-## Failure State
-
-Kalau ada task gagal, lihat downstream behavior.
-
----
-
-# Airflow is not the data store
-
-Airflow coordinate.
-
-Data ada di:
-
-~~~text
-data/raw
-data/processed
-data/features
-data/snapshots
-~~~
-
-MLflow punya model artifacts.
-
-Prometheus punya metrics.
-
-Airflow sendiri bukan central place untuk menyimpan semua data.
-
----
-
-# Takeaway
-
-Kalau kalian lihat DAG file dan bisa bilang:
-
-> “Oh ini cuma orchestration wrapper dari reusable functions.”
-
-itu exactly design yang kita mau.
+1. Manual script dan Airflow task relationship?
+2. Task boundary bantu observability bagaimana?
+3. Metadata vs large data?
+4. Kenapa runtime Airflow nggak commit DVC metadata?
+5. Retry relation ke idempotency?

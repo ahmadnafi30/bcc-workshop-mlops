@@ -1,30 +1,32 @@
-# Data Pipeline Part 1 — Bootstrap and Historical Replay
+# Data Pipeline — Bootstrap & Replay: Dari Official Data ke Production-like Daily Batch
 
-## Kita mulai dari data source yang real
+Bagian ini connect dataset concept dengan actual implementation.
 
-Core dataset kita datang dari NYC TLC Yellow Taxi Trip Records.
+Kita punya official monthly TLC data.
 
-Kalau langsung pakai raw monthly file di setiap workshop step, prosesnya berat dan berulang-ulang. Jadi kita pecah data lifecycle-nya.
+Tapi production-like pipeline kita ingin menerima data gradually.
 
-Mental model:
+Jadi kita butuh beberapa phase:
 
 ~~~text
-official monthly source
-        ↓
-bootstrap
-        ↓
+download
+↓
 compact replay source
-        ↓
-daily release
-        ↓
-processed hourly demand
+↓
+release one logical day
+↓
+validate
+↓
+aggregate
 ~~~
-
-Jadi bootstrap dan replay itu dua concern berbeda.
 
 ---
 
-# Bootstrap: preparing the playground
+## Bootstrap bukan production ingestion
+
+Bootstrap adalah initial preparation.
+
+Kita download historical dataset upfront karena workshop tidak bisa menunggu data real datang selama berminggu-minggu.
 
 Command:
 
@@ -32,298 +34,192 @@ Command:
 uv run python scripts/bootstrap_data.py
 ~~~
 
-Secara high-level, script ini:
-
-1. download taxi zone lookup;
-2. download monthly Yellow Taxi Parquet;
-3. validate month;
-4. select column yang kita butuh;
-5. filter pickup zones ke Manhattan;
-6. save compact replay source.
-
-Kenapa kita bikin compact replay source?
-
-Karena downstream pipeline nggak butuh seluruh original schema.
-
-Semakin kecil data yang dibawa, semakin ringan workshop.
-
----
-
-# Kenapa zone lookup penting?
-
-PULocationID hanyalah angka.
-
-Contoh:
+Output source:
 
 ~~~text
-161
+data/source/tlc/
 ~~~
 
-Tanpa metadata, kita nggak tahu itu Manhattan atau borough lain.
-
-Zone lookup menghubungkan:
+Output compact:
 
 ~~~text
-LocationID
-→ Borough
-→ Zone
-~~~
-
-Sehingga kita bisa filter:
-
-~~~text
-Borough == Manhattan
+data/source/replay/
 ~~~
 
 ---
 
-# Kenapa raw dan replay source dipisah?
+## Kenapa replay source compact?
 
-Folder:
+Official monthly TLC punya banyak columns.
+
+Core use case cuma perlu:
 
 ~~~text
-data/source/tlc
-data/source/replay
+pickup datetime
+pickup location
 ~~~
 
-Keduanya bukan duplicate tanpa alasan.
+Kalau setiap daily simulation harus scan full source dengan semua columns, wasteful.
 
-## tlc
+Jadi replay preparation:
 
-Closer to original downloaded source.
-
-## replay
-
-Sudah workshop-friendly:
-
-- relevant columns only,
-- Manhattan only,
-- month validated.
-
-Jadi daily simulator baca replay, bukan raw source besar lagi.
+~~~text
+official file
+↓
+select fields
+↓
+filter Manhattan
+↓
+validate month
+↓
+compact parquet
+~~~
 
 ---
 
-# Initial historical demand
+## Release daily batch
 
-Sebelum production-like replay mulai, model perlu history.
+Script:
 
-Command:
+~~~bash
+uv run python scripts/simulate_daily_data.py --date 2025-01-27
+~~~
+
+Concept:
+
+~~~text
+monthly replay source
+↓
+filter one date
+↓
+data/raw/trips/2025-01-27.parquet
+~~~
+
+Sekarang downstream cuma melihat logical day tersebut.
+
+---
+
+## Validation
+
+Daily batch harus dicek sebelum processing.
+
+Kita validate:
+
+- file tidak empty,
+- timestamp parseable,
+- date sesuai requested logical date,
+- pickup location available.
+
+Kenapa validate date?
+
+Bayangin file Jan 27 accidentally berisi Jan 28.
+
+Kalau langsung aggregate, future data leak masuk history.
+
+Data quality issue bisa berubah jadi modeling issue.
+
+---
+
+## Aggregate
+
+Daily trip events jadi demand grid.
+
+~~~text
+trip rows
+↓
+group by hour + zone
+↓
+fill zero-demand combinations
+↓
+processed demand parquet
+~~~
+
+Output:
+
+~~~text
+data/processed/demand/YYYY-MM-DD.parquet
+~~~
+
+---
+
+## Initial historical demand
+
+Kita punya special initial preparation:
 
 ~~~bash
 uv run python scripts/prepare_historical_demand.py
 ~~~
 
-Default:
+Kenapa nggak replay Jan 1 sampai 26 manual satu-satu?
 
-~~~text
-Jan 1–26
-~~~
+Bisa.
 
-Kenapa range itu?
+Tapi workshop bakal habis waktu click run 26 kali.
 
-~~~text
-Jan 1–7
-warm-up
+Initial history adalah bootstrap state.
 
-Jan 8–21
-training
-
-Jan 22–26
-validation
-
-Jan 27 onward
-production replay
-~~~
-
-Timeline ini sengaja dibuat clean supaya peserta gampang membedakan initial model period dan post-training simulation period.
+Production simulation mulai setelah model established.
 
 ---
 
-# Daily replay
+## Daily replay dan idempotency
 
-Misalnya kita mau release Jan 27.
+Suppose Jan 27 task run dua kali.
 
-~~~bash
-uv run python scripts/simulate_daily_data.py   --date 2025-01-27
-~~~
+Ideal outcome sama.
 
-Output:
+Kalau second run append duplicate trips, monitoring dan features rusak.
 
-~~~text
-data/raw/trips/2025-01-27.parquet
-~~~
+Makanya output generated deterministically per logical date.
 
-Sekarang downstream pipeline berpikir:
-
-> “Today’s available batch is Jan 27.”
-
-Padahal kita sebenarnya baca historical data.
+Idempotency bikin retries safe.
 
 ---
 
-# Why this is useful
+## Why file partition per day?
 
-Workshop bisa mensimulasikan beberapa hari dalam waktu singkat.
+Per-day file bikin:
 
-~~~text
-Jan 27
-↓
-Jan 28
-↓
-Jan 29
-~~~
+- logical boundaries jelas,
+- replay mudah,
+- ground truth lookup mudah,
+- task input/output mudah dijelaskan.
 
-Tanpa harus menunggu real calendar.
-
-Tapi chronological rule tetap dijaga.
+Production could use partitioned object store/table, tapi concept sama.
 
 ---
 
-# Validate before transform
+## Common failure
 
-Daily raw batch tidak langsung dipercaya.
+### Missing replay source
 
-Kita check hal seperti:
+Bootstrap belum selesai.
 
-- file tidak kosong,
-- timestamp parseable,
-- row memang berasal dari requested date,
-- pickup location tidak missing.
+### Date out of source range
 
-Kenapa validation step separate?
+Requested date nggak ada.
 
-Karena bad input harus fail early.
+### Empty Manhattan batch
 
-~~~text
-bad source
-↓
-validation fails
-↓
-STOP
-~~~
+Could indicate source/filter bug.
 
-Lebih baik daripada corruption baru ketahuan setelah model training.
+### Wrong schema
+
+External source changed atau corrupt.
+
+Fail early.
 
 ---
 
-# Aggregate raw trips
+## Checkpoint
 
-Raw daily batch:
-
-~~~text
-1 row = 1 trip
-~~~
-
-Kita aggregate jadi:
+Coba trace Jan 27:
 
 ~~~text
-1 row = 1 zone × 1 hour
+official monthly file
+→ replay monthly file
+→ raw daily trip
+→ processed daily demand
 ~~~
 
-Command manual:
-
-~~~bash
-uv run python scripts/prepare_daily_demand.py   --date 2025-01-27
-~~~
-
-Output:
-
-~~~text
-data/processed/demand/2025-01-27.parquet
-~~~
-
----
-
-# Zero demand is still data
-
-Misalnya zone 161 jam 03:00 tidak punya trip.
-
-Kalau hanya groupby trip yang exist, row itu tidak ada.
-
-Tapi model perlu distinguish:
-
-~~~text
-missing
-vs
-zero
-~~~
-
-Makanya kita create full grid:
-
-~~~text
-24 hours × all Manhattan zones
-~~~
-
-dan fill missing count menjadi zero.
-
-Ini bikin time series continuous.
-
----
-
-# Folder lifecycle
-
-Biar gampang:
-
-~~~text
-data/source
-→ source artifacts
-
-data/raw
-→ released production-like batch
-
-data/processed
-→ cleaned / aggregated demand
-
-data/features
-→ model-ready feature table
-
-data/snapshots
-→ frozen training inputs
-
-data/monitoring
-→ predictions + evaluations
-~~~
-
-Folder structure kita reflect lifecycle, bukan random organization.
-
----
-
-# Manual dulu, Airflow nanti
-
-Kita sengaja punya scripts manual.
-
-Kenapa?
-
-Karena peserta harus ngerti logic:
-
-~~~text
-release
-validate
-aggregate
-feature
-~~~
-
-sebelum lihat Airflow.
-
-Kalau belum ngerti underlying step, Airflow graph hanya terlihat seperti kotak-kotak hijau.
-
----
-
-# Checkpoint
-
-Sebelum lanjut, kalian harus bisa jawab:
-
-> Kenapa replay source berbeda dari raw daily batch?
-
-Jawaban sederhananya:
-
-~~~text
-replay source
-= historical pool
-
-raw daily batch
-= data yang "dirilis" untuk logical day tertentu
-~~~
-
-Kalau itu clear, orchestration nanti jauh lebih gampang dipahami.
+Kalau masing-masing role jelas, next feature pipeline gampang.

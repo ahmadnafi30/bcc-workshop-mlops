@@ -1,28 +1,22 @@
-# Troubleshooting — Jangan Debug “Seluruh MLOps” Sekaligus
+# Troubleshooting — Jangan Debug Seluruh MLOps Stack Sekaligus
 
-Kalau whole system fail, reaction pertama sering:
+Kalau system banyak komponen, instinct beginner sering:
 
-> “Waduh semuanya rusak.”
+> “Semuanya error.”
 
-Padahal biasanya satu boundary saja.
+Padahal debugging lebih efektif kalau kita identify **boundary paling kecil yang fail**.
 
-Mindset debugging kita:
-
-~~~text
-Find the smallest failing layer.
-~~~
+Use checklist ini from bottom to top.
 
 ---
 
-# 1. Setup / Python
+## 1. Setup layer
 
-## uv not found
+### uv command not found
 
 uv belum installed / PATH belum update.
 
-Restart terminal setelah install kalau perlu.
-
-## Wrong Python
+### Wrong Python
 
 ~~~bash
 uv run python --version
@@ -30,7 +24,7 @@ uv run python --version
 
 Expected 3.11.x.
 
-## Module missing
+### Module missing
 
 ~~~bash
 uv sync
@@ -50,180 +44,124 @@ uv sync --group docs
 
 ---
 
-# 2. Data
+## 2. Data layer
 
-## TLC URL AccessDenied
+### TLC base URL AccessDenied
 
-Kalau yang dibuka directory base URL, expected.
+Normal kalau buka directory prefix.
 
-Gunakan bootstrap script.
+Use bootstrap script.
 
-## Bootstrap download slow
+### Historical file missing
 
-Monthly source besar.
+Check exact date under data folders.
 
-Presenter sebaiknya pre-download.
+### Feature build fail
 
-## Processed daily file missing
-
-Check:
-
-~~~text
-raw daily released?
-date correct?
-prepare daily demand run?
-~~~
+Check processed demand completeness.
 
 ---
 
-# 3. Features
+## 3. Model layer
 
-## Feature rows empty
+### Snapshot missing
 
-Possible:
+Run DVC repro or manual snapshot creation.
 
-- insufficient history,
-- wrong date range,
-- lag_168h warm-up not complete.
+### Model worse than baseline
 
-## Metric suspiciously amazing
+Not infrastructure bug.
 
-Check leakage.
+Inspect ML/features/model.
 
-Particularly rolling calculation and target inclusion.
+Do not manipulate metric.
 
 ---
 
-# 4. DVC
+## 4. MLflow layer
 
-## Snapshot missing
+### UI unreachable
 
-~~~bash
-uv run dvc repro create_training_snapshot
-~~~
+Is start_mlflow process running?
 
-Check feature dependency exists.
+Port 5000 free?
 
-## DVC says changed
+### Registry empty after Docker transition
 
-Inspect which dependency changed.
+Workshop local + Docker should share .mlflow.
 
-Jangan langsung delete cache.
+Pastikan kalian pakai helper project dan Compose current config.
 
----
+### Champion missing
 
-# 5. MLflow
-
-## UI empty
-
-Check tracking server yang sama.
-
-Use:
-
-~~~bash
-uv run python scripts/start_mlflow.py
-~~~
-
-## Model disappeared after Docker
-
-Local and Compose should share .mlflow.
-
-Pastikan earlier run juga use helper/state path itu.
-
-## Register fails
-
-Run ID valid?
-
-Model artifact exists?
+Promote registered version.
 
 ---
 
-# 6. Airflow
+## 5. Airflow layer
 
-## DAG missing
+### DAG missing
 
 ~~~bash
 uv run --group airflow airflow dags list
 ~~~
 
-Check parse/import error.
+Missing DAG usually parse/import error.
 
-## One task fail
+### Task failed
 
-Open exact task log.
-
-Do not restart everything first.
+Open task log.
 
 Ask:
 
-- input file?
-- param?
-- dependency service?
-- exception?
-
-## Airflow port conflict
-
-Local process / Docker Airflow mungkin sama-sama start.
-
-Stop salah satu.
-
----
-
-# 7. FastAPI
-
-## connection refused
-
-Uvicorn/API container not running.
-
-## /health 200 but /model-info 503
-
-API okay.
-
-MLflow/champion problem.
-
-## /predict 422
-
-Check:
-
-- exact hour?
-- zone valid?
-- history complete?
-- processed daily files exist?
-
----
-
-# 8. Docker
-
-## port already in use
-
-Check services yang sedang pakai:
-
 ~~~text
-3000
-5000
-8000
-8080
-9090
+input exists?
+service reachable?
+exception?
+upstream output?
 ~~~
+
+---
+
+## 6. API layer
+
+### Connection refused
+
+FastAPI process/container not listening.
+
+### /health 200, /model-info 503
+
+API alive, model dependency unavailable.
+
+### /predict 422
+
+Semantic input/history issue.
+
+Check target time and 168h history.
+
+---
+
+## 7. Docker layer
+
+### Port already in use
 
 Stop local process.
 
-## container unhealthy
+### API cannot reach MLflow
 
-~~~bash
-docker compose ps
-docker compose logs <service>
-~~~
+Check MLFLOW_TRACKING_URI.
 
-## build slow
+Inside Compose should point service hostname.
 
-First build Airflow especially memang heavy.
+### Data missing inside container
+
+Check bind mount.
 
 ---
 
-# 9. Prometheus
+## 8. Monitoring layer
 
-## target DOWN
+### Prometheus target DOWN
 
 Open:
 
@@ -231,109 +169,66 @@ Open:
 http://localhost:9090/targets
 ~~~
 
-Prometheus internal target harus:
+Check API metrics reachable.
 
-~~~text
-api:8000
-~~~
-
-not localhost.
-
-## metric missing
-
-Check /metrics first.
-
-Kalau source endpoint belum punya metric, Grafana obviously nggak bisa show.
-
----
-
-# 10. Grafana
-
-## dashboard empty
+### Grafana empty
 
 Debug chain:
 
 ~~~text
-API traffic generated?
+traffic?
 ↓
-/metrics contains values?
+API metric?
 ↓
-Prometheus target UP?
+Prometheus scrape?
 ↓
-PromQL returns data?
+query?
 ↓
-Grafana datasource healthy?
-↓
-panel query?
+Grafana datasource?
 ~~~
 
-Jangan edit dashboard dulu kalau Prometheus query kosong.
+### MAE panel empty
 
----
-
-# 11. CI
-
-## Ruff fail
-
-Read exact file + line.
-
-Usually simple style/import issue.
-
-## pytest fail
-
-Open traceback.
-
-Identify test domain.
-
-## docs strict fail
-
-Likely nav/reference/warning.
-
-## branch policy fail
-
-Correct flow:
+Need:
 
 ~~~text
-feat/fix/docs/chore
-→ develop
-
-develop
-→ main
+prediction log
++
+ground truth
++
+evaluate_predictions
 ~~~
 
 ---
 
-# 12. Monitoring / retraining
+## 9. CI layer
 
-## evaluation_count = 0
+### Branch policy fail
 
-Ground truth for logged predictions belum available / target date processed data missing.
+Check PR direction.
 
-## retrain false
+### Ruff fail
 
-Could be healthy model.
+Read exact file/line.
 
-Not a bug.
+### Docker build fail
 
-## retrain expected but not happening
+Python tests green does not imply image build green.
 
-Check:
-
-- sample count >= min?
-- recent MAE > threshold?
-- champion reference MAE available?
-- logs use champion model version?
+Read build logs.
 
 ---
 
-# Golden debugging rule
+## Golden rule
 
-Jangan tanya:
+Jangan random restart semua service setiap error.
 
-> “Kenapa MLOps saya error?”
+Itu bisa hide root cause.
 
 Tanya:
 
-> “Kenapa task aggregate_demand untuk Jan 28 tidak menemukan expected input file?”
+> “Apa boundary pertama yang menghasilkan output yang salah?”
 
-Semakin specific pertanyaannya, semakin cepat fix-nya.
+Then debug there.
+
+MLOps stack besar jadi manageable kalau kalian treat sebagai chain of smaller systems.

@@ -1,40 +1,28 @@
-# Step 8 — CI/CD: Let GitHub Check Our Work Automatically
+# Step 8 — CI/CD: Sekarang Kita Simulasikan Cara Kerja Team
 
-Sampai sini project sudah cukup kompleks.
+Local project sudah works.
 
-Kalau setiap perubahan harus ingat manual:
+Sekarang pertanyaan:
 
-~~~text
-ruff
-pytest
-mkdocs
-docker build api
-docker build mlflow
-docker build airflow
-~~~
+> “Kalau ada orang ubah code, siapa yang memastikan semuanya masih sehat?”
 
-lama-lama pasti ada yang lupa.
-
-Jadi kita automate.
+Kita pakai GitHub workflow.
 
 ---
 
-# Target step
+## Goal
 
-Di step ini kita tidak coding feature besar.
+Setelah step ini:
 
-Kita belajar workflow repository.
-
-Kalian harus ngerti:
-
-- branch strategy,
-- Pull Request flow,
-- CI jobs,
-- container delivery.
+- ngerti branch flow,
+- bisa baca CI run,
+- ngerti setiap quality check,
+- ngerti delivery ke GHCR,
+- ngerti kenapa feature nggak langsung main.
 
 ---
 
-# Branch flow
+## 1. Review branch flow
 
 ~~~text
 feat/* / fix/* / docs/* / chore/*
@@ -44,131 +32,92 @@ feat/* / fix/* / docs/* / chore/*
             main
 ~~~
 
-Main = stable.
+Question:
 
-Develop = integration.
+> “Kenapa nggak feature langsung main?”
 
-Feature branch = work in progress.
+Karena develop jadi integration zone.
 
 ---
 
-# 1. Practice branch
-
-Pastikan local develop up-to-date:
+## 2. Create practice docs branch
 
 ~~~bash
 git switch develop
 git pull
-~~~
-
-Create docs branch:
-
-~~~bash
 git switch -c docs/workshop-practice
 ~~~
 
-Edit harmless docs text.
+Edit satu docs line harmless.
 
----
-
-# 2. Commit
+Commit:
 
 ~~~bash
 git add .
 git commit -m "docs: practice contribution flow"
-~~~
-
-Message sudah menjelaskan intent.
-
-Jangan:
-
-~~~text
-update
-changes
-fix
-~~~
-
----
-
-# 3. Push
-
-~~~bash
 git push -u origin docs/workshop-practice
 ~~~
 
-Open GitHub.
+---
 
-Create PR:
+## 3. Open PR to develop
+
+Base:
 
 ~~~text
-docs/workshop-practice
-→
 develop
 ~~~
 
----
-
-# 4. Observe checks
-
-CI akan mulai.
-
-Jobs:
+Head:
 
 ~~~text
-Branch policy
-Python + docs quality
-Docker build - api
-Docker build - mlflow
-Docker build - airflow
+docs/workshop-practice
 ~~~
+
+Jangan ke main.
+
+Lihat CI start.
 
 ---
 
-# 5. Open quality job
+## 4. Open Branch Policy job
 
-Lihat step.
+Apa yang dia check?
+
+PR direction.
+
+Coba imagine kalau base main tapi head docs/workshop-practice.
+
+Expected fail.
+
+Ini governance process encoded di CI.
+
+---
+
+## 5. Open Python + docs quality
+
+Steps:
 
 ~~~text
 checkout
 setup uv
-install Python
 sync
-Ruff
+ruff
 pytest
-MkDocs strict
+mkdocs strict
 ~~~
 
-Kalian bisa lihat logs masing-masing.
+Click satu step.
 
-Kalau Ruff fail, PR bukan “GitHub rusak”.
+Read log.
 
-Ada exact code style issue.
+CI bukan black box.
 
 ---
 
-# 6. Why branch policy?
+## 6. Open Docker build jobs
 
-Coba bayangin kalian accidentally PR:
-
-~~~text
-docs/workshop-practice
-→
-main
-~~~
-
-Policy job fail.
-
-Karena main release harus lewat develop.
-
-Ini membantu enforce team flow.
-
----
-
-# 7. Docker matrix
-
-Open Docker jobs.
-
-Masing-masing target:
+Ada matrix:
 
 ~~~text
 api
@@ -176,47 +125,55 @@ mlflow
 airflow
 ~~~
 
-Parallel-ish independent build.
+Pertanyaan:
 
-Matrix membuat YAML nggak duplicate full job.
+> “Kenapa tests green belum cukup?”
 
----
+Karena packaging bisa fail.
 
-# 8. Merge ke develop
-
-Kalau PR checks green, feature dapat merge ke develop.
-
-Biasanya squash merge useful buat clean history.
-
-Jadi 10 WIP commits bisa masuk sebagai satu logical commit.
+Docker build is separate validation.
 
 ---
 
-# 9. Release develop → main
+## 7. Merge to develop
 
-Saat develop stable:
+Kalau practice, kalian nggak harus benar-benar merge kalau repo workshop shared.
+
+Presenter bisa demo dari existing PR.
+
+Concept:
+
+~~~text
+feature
+↓
+develop
+↓
+integration CI
+~~~
+
+---
+
+## 8. Release PR
+
+Stable release:
 
 ~~~text
 develop
-→
+↓
 main
 ~~~
 
-PR baru.
-
-Branch policy memastikan source-nya develop.
+Branch policy expect direction ini.
 
 ---
 
-# 10. Setelah main CI success
+## 9. After main CI
 
-Container Delivery trigger.
+Container Delivery triggers.
 
-Dia publish images ke GHCR.
+Open workflow.
 
-Open Packages / workflow run.
-
-Lihat:
+Observe jobs:
 
 ~~~text
 Publish api
@@ -226,9 +183,11 @@ Publish airflow
 
 ---
 
-# 11. Tag
+## 10. GHCR
 
-Image punya:
+Published image punya tags.
+
+Cari:
 
 ~~~text
 latest
@@ -237,58 +196,30 @@ sha-...
 
 Question:
 
-> Kalau mau rollback exact application version, pakai latest atau SHA?
+> “Untuk exact rollback, kalian lebih percaya latest atau SHA?”
 
-Better:
-
-~~~text
-SHA tag
-~~~
-
-karena immutable-ish exact revision reference.
+SHA.
 
 ---
 
-# 12. Why no deployment server?
+## Mini challenge
 
-Karena workshop belum punya actual target infrastructure.
+Kalau model champion berubah tapi code nggak berubah, apakah GitHub Actions necessarily harus run?
 
-Jadi CD kita honest:
+Tidak.
 
-~~~text
-tested
-↓
-packaged
-↓
-published
-~~~
+Model lifecycle bisa move lewat Registry.
 
-Tidak pretend production deployment.
+Ini perbedaan code lifecycle vs model lifecycle.
 
 ---
 
-# Mini challenge
+## Checkpoint
 
-> Kalau model champion berubah dari v1 ke v2 tapi API source code nggak berubah, apakah perlu build Docker image baru?
-
-Tidak necessarily.
-
-Model Registry alias selection independent dari application image.
-
-Ini salah satu unique ML system concern.
-
----
-
-# Checkpoint
-
-Kalian harus bisa explain:
-
-~~~text
-Git branch lifecycle
-vs
-Airflow data lifecycle
-vs
-MLflow model lifecycle
-~~~
-
-Tiga lifecycle berbeda, tapi hidup dalam satu project.
+1. Kenapa develop ada?
+2. Branch policy check apa?
+3. Ruff vs pytest?
+4. Kenapa MkDocs build di CI?
+5. Docker matrix buat apa?
+6. GHCR role?
+7. latest vs SHA?
