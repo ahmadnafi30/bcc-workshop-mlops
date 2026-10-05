@@ -14,7 +14,20 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "reqps",
+          "noValue": "Belum ada traffic",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum ada traffic",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -31,7 +44,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "last"
+          ],
           "fields": "",
           "values": false
         },
@@ -40,12 +55,14 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(taxi_api_requests_total[1m]))",
-          "refId": "A"
+          "expr": "sum(rate(taxi_api_requests_total{path=\"/predict\"}[1m]))",
+          "refId": "A",
+          "instant": true
         }
       ],
-      "title": "API Request Rate",
-      "type": "stat"
+      "title": "Prediction Request Rate",
+      "type": "stat",
+      "description": "Request per detik ke /predict dalam 1 menit terakhir. Scrape /metrics dan health check tidak ikut dihitung. Termasuk request yang gagal."
     },
     {
       "datasource": {
@@ -54,7 +71,20 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "noValue": "Belum ada traffic",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum ada traffic",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -71,7 +101,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "last"
+          ],
           "fields": "",
           "values": false
         },
@@ -80,12 +112,14 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(taxi_api_request_duration_seconds_bucket[5m])))",
-          "refId": "A"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(taxi_api_request_duration_seconds_bucket{path=\"/predict\"}[5m])))",
+          "refId": "A",
+          "instant": true
         }
       ],
-      "title": "API p95 Latency",
-      "type": "stat"
+      "title": "Prediction p95 Latency",
+      "type": "stat",
+      "description": "Estimasi p95 durasi HTTP /predict selama 5 menit terakhir: sekitar 95% request selesai di bawah angka ini. Termasuk feature loading dan request yang gagal."
     },
     {
       "datasource": {
@@ -94,7 +128,20 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none"
+          "unit": "none",
+          "noValue": "Belum ada traffic",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum ada traffic",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -111,7 +158,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "last"
+          ],
           "fields": "",
           "values": false
         },
@@ -121,11 +170,13 @@
       "targets": [
         {
           "expr": "sum(increase(taxi_predictions_total[5m]))",
-          "refId": "A"
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Predictions in 5m",
-      "type": "stat"
+      "type": "stat",
+      "description": "Estimasi jumlah prediction yang berhasil lewat API dalam 5 menit terakhir. Request gagal tidak menambah counter ini; direct replay tidak menambah counter API."
     },
     {
       "datasource": {
@@ -134,7 +185,41 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Belum dievaluasi",
+                  "color": "gray"
+                },
+                "1": {
+                  "text": "Sampel belum cukup",
+                  "color": "orange"
+                },
+                "2": {
+                  "text": "Dalam batas",
+                  "color": "green"
+                },
+                "3": {
+                  "text": "Perlu retrain",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
@@ -151,7 +236,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "last"
+          ],
           "fields": "",
           "values": false
         },
@@ -160,12 +247,14 @@
       },
       "targets": [
         {
-          "expr": "taxi_model_retrain_recommended",
-          "refId": "A"
+          "expr": "taxi_model_evaluation_status",
+          "refId": "A",
+          "instant": true
         }
       ],
-      "title": "Retrain Recommended",
-      "type": "stat"
+      "title": "Model Evaluation Status",
+      "type": "stat",
+      "description": "Belum dievaluasi = belum ada prediction dengan actual yang cocok, atau summary tidak tersedia. Sampel belum cukup = jumlah match masih di bawah minimum. Dalam batas = sample cukup dan MAE tidak melewati threshold. Perlu retrain = sample cukup dan MAE melewati threshold."
     },
     {
       "datasource": {
@@ -174,15 +263,304 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "percentunit",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ],
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
         },
         "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(taxi_api_requests_total{path=\"/predict\",status=~\"5..\"}[5m])) or vector(0)) / sum(rate(taxi_api_requests_total{path=\"/predict\"}[5m]))) and (sum(rate(taxi_api_requests_total{path=\"/predict\"}[5m])) > 0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Prediction 5xx Error Rate",
+      "type": "stat",
+      "description": "Persentase request /predict dalam 5 menit terakhir. 5xx menunjukkan kegagalan layanan, misalnya registry belum tersedia. Belum tersedia saat tidak ada traffic."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ],
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(taxi_api_requests_total{path=\"/predict\",status=~\"4..\"}[5m])) or vector(0)) / sum(rate(taxi_api_requests_total{path=\"/predict\"}[5m]))) and (sum(rate(taxi_api_requests_total{path=\"/predict\"}[5m])) > 0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Prediction 4xx Rejection Rate",
+      "type": "stat",
+      "description": "Persentase request /predict dalam 5 menit terakhir. 4xx menunjukkan request ditolak, misalnya format target atau history tidak lengkap. Periksa response untuk penyebabnya. Belum tersedia saat tidak ada traffic."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ],
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "taxi_model_evaluated_predictions",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "Matched"
+        },
+        {
+          "expr": "taxi_model_min_evaluation_samples",
+          "refId": "B",
+          "instant": true,
+          "legendFormat": "Minimum"
+        }
+      ],
+      "title": "Evaluation Samples",
+      "type": "stat",
+      "description": "Matched = prediction unik yang sudah dipasangkan dengan actual dalam recent window. Minimum = jumlah match yang dibutuhkan sebelum rekomendasi retraining. MAE dengan sample kurang masih boleh dilihat, tetapi belum cukup untuk keputusan."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "clamp_min(time() - taxi_model_last_evaluation_timestamp_seconds, 0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Evaluation Age",
+      "type": "stat",
+      "description": "Waktu sejak job evaluasi terakhir, mengikuti clock nyata. Scrape Prometheus tidak memperbarui waktu job ini. Angka ini berbeda dari umur tanggal replay historical."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "noValue": "Belum dievaluasi",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "retraining threshold"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 6
+        "y": 12
       },
       "id": 5,
       "options": {
@@ -200,17 +578,26 @@
       "targets": [
         {
           "expr": "taxi_model_recent_mae",
-          "legendFormat": "recent MAE",
-          "refId": "A"
+          "refId": "A",
+          "instant": false,
+          "legendFormat": "recent MAE"
         },
         {
           "expr": "taxi_model_reference_mae",
-          "legendFormat": "reference MAE",
-          "refId": "B"
+          "refId": "B",
+          "instant": false,
+          "legendFormat": "reference MAE"
+        },
+        {
+          "expr": "taxi_model_threshold_mae",
+          "refId": "C",
+          "instant": false,
+          "legendFormat": "retraining threshold"
         }
       ],
       "title": "Model MAE",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "MAE dihitung setelah actual demand tersedia. Reference berasal dari validation model yang dievaluasi. Threshold = reference MAE \u00d7 multiplier. Rekomendasi retraining juga membutuhkan sample minimum. No data berarti kualitas model belum diketahui."
     },
     {
       "datasource": {
@@ -227,7 +614,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 6
+        "y": 12
       },
       "id": 6,
       "options": {
@@ -244,18 +631,19 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(taxi_api_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(taxi_api_request_duration_seconds_bucket{path=\"/predict\"}[5m])))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(taxi_api_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(taxi_api_request_duration_seconds_bucket{path=\"/predict\"}[5m])))",
           "legendFormat": "p95",
           "refId": "B"
         }
       ],
-      "title": "API Latency",
-      "type": "timeseries"
+      "title": "Prediction Latency",
+      "type": "timeseries",
+      "description": "p50 menggambarkan request tipikal; p95 membantu melihat tail latency. Keduanya hanya mengukur HTTP /predict dalam 5 menit terakhir, termasuk feature loading dan request gagal."
     },
     {
       "datasource": {
@@ -263,14 +651,130 @@
         "uid": "prometheus"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "taxi_model_last_evaluation_timestamp_seconds * 1000",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Last Evaluation (NYC)",
+      "type": "stat",
+      "description": "Waktu nyata saat job menghitung summary, ditampilkan dalam timezone America/New_York. Angka ini tetap sama sampai evaluasi dijalankan lagi."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Belum tersedia",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "text": "Belum tersedia",
+                  "color": "gray"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "taxi_model_latest_target_timestamp_seconds * 1000",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Latest Evaluated Replay Target (NYC)",
+      "type": "stat",
+      "description": "Jam target historical terakhir yang sudah dipasangkan dengan actual. Tanggal 2025 memang expected untuk replay workshop, meskipun job dijalankan sekarang. Ini bukan timestamp saat scrape."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Belum ada prediction"
+        },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 14
+        "y": 26
       },
       "id": 7,
       "options": {
@@ -278,19 +782,95 @@
       },
       "targets": [
         {
-          "expr": "taxi_model_version_info",
+          "expr": "taxi_model_version_info == 1",
           "format": "table",
           "instant": true,
           "refId": "A"
         }
       ],
-      "title": "Current Model Version",
-      "type": "table"
+      "title": "Serving Model (Last Prediction)",
+      "type": "table",
+      "description": "Model yang dipakai prediction API terakhir. Setelah promotion, kirim prediction baru untuk melihat pergantian versi. Hanya indikator aktif bernilai 1 yang ditampilkan. Bandingkan dengan Evaluated Model sebelum membaca MAE.",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "renameByName": {
+              "model_name": "Model",
+              "model_version": "Version",
+              "model_alias": "Alias"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Belum dievaluasi"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 14,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "expr": "taxi_model_evaluated_version_info == 1",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Evaluated Model",
+      "type": "table",
+      "description": "Model sumber reference MAE dan summary evaluasi terakhir. Sesudah promotion, jalankan evaluasi lagi untuk model baru. Summary lama tetap memiliki identitas modelnya sendiri.",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "renameByName": {
+              "model_name": "Model",
+              "model_version": "Version",
+              "run_id": "MLflow Run"
+            }
+          }
+        }
+      ]
     }
   ],
   "refresh": "5s",
   "schemaVersion": 42,
-  "tags": ["bcc", "mlops", "taxi"],
+  "tags": [
+    "bcc",
+    "mlops",
+    "taxi"
+  ],
   "templating": {
     "list": []
   },
@@ -298,8 +878,9 @@
     "from": "now-30m",
     "to": "now"
   },
-  "timezone": "browser",
+  "timezone": "America/New_York",
   "title": "Taxi Demand MLOps",
   "uid": "taxi-demand-mlops",
-  "version": 1
+  "version": 2,
+  "description": "Workshop Bringing Machine Learning into Production: amati traffic prediction, kegagalan layanan, kualitas model setelah actual tersedia, dan lineage versi model."
 }

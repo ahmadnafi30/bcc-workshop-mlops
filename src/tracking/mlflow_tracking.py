@@ -7,6 +7,12 @@ import pandas as pd
 DEFAULT_TRACKING_URI = "http://127.0.0.1:5000"
 DEFAULT_EXPERIMENT_NAME = "taxi-demand-forecasting"
 MODEL_ARTIFACT_NAME = "model"
+# tipe internal yang dipakai HistGradientBoostingRegressor workshop ini
+HIST_GRADIENT_BOOSTING_TRUSTED_TYPES = [
+    "functools.partial",
+    "sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor",
+    "sklearn.utils.validation.check_array",
+]
 
 
 # set tracking server dan experiment yang bakal dipakai semua training run
@@ -124,6 +130,8 @@ def log_sklearn_run(
             sk_model=model,
             name=MODEL_ARTIFACT_NAME,
             input_example=example,
+            serialization_format="skops",
+            skops_trusted_types=HIST_GRADIENT_BOOSTING_TRUSTED_TYPES,
         )
 
         return {

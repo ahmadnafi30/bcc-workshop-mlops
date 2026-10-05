@@ -80,7 +80,10 @@ def main() -> None:
 
     print("\nmodel performance")
     print(f"model version: {summary['model_version']}")
+    print(f"evaluation status: {summary['evaluation_status']}")
+    print(f"evaluated at (UTC): {summary['evaluated_at']}")
     print(f"evaluated: {summary['evaluation_count']}")
+    print(f"minimum samples: {summary['min_samples']}")
     print(f"reference MAE: {summary['reference_mae']:.3f}")
 
     if summary["recent_mae"] is None:
@@ -90,6 +93,7 @@ def main() -> None:
         print(f"threshold MAE: {summary['threshold_mae']:.3f}")
 
     print(f"retrain recommended: {summary['retrain_recommended']}")
+    print(f"latest replay target (NYC): {summary['latest_target_datetime']}")
     print(summary_path)
 
 

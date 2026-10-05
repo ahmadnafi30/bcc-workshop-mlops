@@ -171,14 +171,51 @@ taxi_api_requests_total
 Rate:
 
 ~~~text
-sum(rate(taxi_api_requests_total[1m]))
+sum(rate(taxi_api_requests_total{path="/predict"}[1m]))
 ~~~
 
 Yang satu jawab cumulative.
 
 Yang satu jawab recent request rate.
 
+Filter `path="/predict"` membuat panel fokus pada prediction traffic. Counter
+mentah tetap memuat `/health`, `/metrics`, dan endpoint lainnya.
+
+Error rate 5xx adalah proporsi kegagalan server dari seluruh request prediction:
+
+~~~text
+(sum(rate(taxi_api_requests_total{path="/predict",status=~"5.."}[5m])) or vector(0))
+/
+sum(rate(taxi_api_requests_total{path="/predict"}[5m]))
+~~~
+
+`or vector(0)` menyediakan numerator nol ketika ada traffic tetapi belum pernah
+ada response 5xx. Dashboard juga mengecek denominator positif, sehingga error
+rate belum tersedia saat tidak ada traffic. Query 4xx memakai pola `4..`.
+
+Histogram latency di dashboard memakai filter path yang sama sebelum bucket
+digabung. Health check yang cepat tidak ikut menurunkan p95 prediction.
+
 PromQL memungkinkan transform time-series.
+
+---
+
+## Metric model tambahan
+
+| Metric | Yang dibaca |
+| --- | --- |
+| `taxi_model_evaluation_status` | 0 belum dievaluasi, 1 sample kurang, 2 dalam batas, 3 perlu retrain. |
+| `taxi_model_evaluated_predictions` | Jumlah prediction unik dengan actual dalam recent window. |
+| `taxi_model_min_evaluation_samples` | Minimum sample untuk keputusan retraining. |
+| `taxi_model_threshold_mae` | Reference MAE × multiplier dari job evaluasi. |
+| `taxi_model_last_evaluation_timestamp_seconds` | Waktu nyata job evaluasi terakhir. |
+| `taxi_model_latest_target_timestamp_seconds` | Target historical terakhir yang sudah dievaluasi. |
+| `taxi_model_evaluated_version_info` | Identitas model sumber summary evaluasi. |
+
+Metric MAE yang belum diketahui diekspos sebagai `NaN`. Saat summary kosong,
+hilang, atau invalid, exporter menghapus nilai lama dan operational metrics tetap
+bisa discrape. Summary ditulis lewat file sementara lalu diganti secara atomik
+agar scrape tidak membaca JSON setengah jadi.
 
 ---
 

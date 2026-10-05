@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from api.dependencies import get_predictor
@@ -94,3 +95,20 @@ def test_predict_rejects_non_hour_target() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+# summary yang belum tersedia tidak boleh menghentikan scrape operational metrics
+@pytest.mark.parametrize("summary_content", [None, '{"recent_mae":'])
+def test_metrics_endpoint_survives_unavailable_summary(tmp_path, monkeypatch, summary_content):
+    summary_path = tmp_path / "summary.json"
+    if summary_content is not None:
+        summary_path.write_text(summary_content)
+
+    monkeypatch.setattr("api.main.PERFORMANCE_SUMMARY_PATH", summary_path)
+    with TestClient(app) as client:
+        response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "taxi_api_requests_total" in response.text
+    assert "taxi_model_evaluation_status 0.0" in response.text
+    assert "taxi_model_recent_mae NaN" in response.text

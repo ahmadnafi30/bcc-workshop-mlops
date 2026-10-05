@@ -4,6 +4,13 @@ Hi peers 👋
 
 Welcome to **BCC Workshop — MLOps**.
 
+Materi yang bisa langsung dipakai:
+
+- [Modul workshop lengkap](docs/workshop-module.md): rancangan 6 jam dengan konsep,
+  praktik, checkpoint, tugas peserta, rubrik, dan panduan fasilitator.
+- [Step-by-step mengisi Grafana](docs/10-hands-on/dashboard-quickstart.md): dari data
+  kosong sampai training, champion, HTTP traffic, dan evaluasi terlihat di dashboard.
+
 Repo ini bukan sekadar kumpulan contoh Docker, Airflow, atau MLflow. Kita pakai satu use case yang sama dari awal sampai akhir supaya kalian bisa lihat **gimana sebuah Machine Learning model pelan-pelan berubah dari experiment biasa menjadi production-like ML system**.
 
 Use case kita:
@@ -150,16 +157,18 @@ Kalau fresh clone sudah green, kita punya starting point yang jelas.
 
 ~~~bash
 uv sync --group docs
-uv run --group docs mkdocs serve
+uv run --group docs mkdocs serve --dev-addr 127.0.0.1:8002
 ~~~
 
 Open:
 
 ~~~text
-http://127.0.0.1:8000
+http://127.0.0.1:8002
 ~~~
 
 Kalau kalian masih newbie di MLOps, **recommended banget mulai dari docs**, jangan langsung lompat ke docker compose up.
+
+Port docs 8002 dipakai supaya tidak bentrok dengan FastAPI di port 8000.
 
 ---
 

@@ -208,16 +208,18 @@ Baseline test state menghilangkan ambiguity.
 
 ~~~bash
 uv sync --group docs
-uv run --group docs mkdocs serve
+uv run --group docs mkdocs serve --dev-addr 127.0.0.1:8002
 ~~~
 
 Open:
 
 ~~~text
-http://127.0.0.1:8000
+http://127.0.0.1:8002
 ~~~
 
 Kalian bisa keep tab docs ini selama workshop.
+
+Port 8002 dipakai agar docs tidak bentrok dengan prediction API di port 8000.
 
 ---
 

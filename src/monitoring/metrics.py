@@ -1,5 +1,9 @@
 import json
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
+from threading import RLock
+from zoneinfo import ZoneInfo
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -50,6 +54,35 @@ EVALUATED_PREDICTIONS = Gauge(
     "taxi_model_evaluated_predictions",
     "jumlah prediction yang dipakai di performance window terbaru",
 )
+THRESHOLD_MAE = Gauge(
+    "taxi_model_threshold_mae",
+    "batas MAE untuk rekomendasi retraining",
+)
+MIN_EVALUATION_SAMPLES = Gauge(
+    "taxi_model_min_evaluation_samples",
+    "minimum sample sebelum keputusan retraining boleh dibuat",
+)
+EVALUATION_STATUS = Gauge(
+    "taxi_model_evaluation_status",
+    "0 belum dievaluasi, 1 sample kurang, 2 dalam batas, 3 perlu retrain",
+)
+LAST_EVALUATION_TIMESTAMP = Gauge(
+    "taxi_model_last_evaluation_timestamp_seconds",
+    "waktu UTC saat job terakhir menghitung evaluasi",
+)
+LATEST_TARGET_TIMESTAMP = Gauge(
+    "taxi_model_latest_target_timestamp_seconds",
+    "target historical terakhir yang actual-nya sudah dievaluasi",
+)
+EVALUATED_MODEL_VERSION = Gauge(
+    "taxi_model_evaluated_version_info",
+    "model yang menjadi sumber summary evaluasi terbaru",
+    ["model_name", "model_version", "run_id"],
+)
+
+LOGGER = logging.getLogger(__name__)
+METRICS_LOCK = RLock()
+_active_model_labels: tuple[str, str, str] | None = None
 
 KNOWN_PATHS = {
     "/health",
@@ -71,43 +104,116 @@ def normalize_request_path(path: str) -> str:
 
 # catat satu prediction yang berhasil dibuat
 def observe_prediction(result: dict) -> None:
+    global _active_model_labels
+
     # model version cukup kecil cardinality-nya dan useful buat lihat rollout model
     model_version = str(result["model_version"])
     PREDICTIONS.labels(model_version=model_version).inc()
     PREDICTION_VALUE.observe(float(result["predicted_trip_count"]))
 
-    MODEL_VERSION.labels(
-        model_name=str(result["model_name"]),
-        model_version=model_version,
-        model_alias=str(result["model_alias"]),
-    ).set(1)
+    labels = (str(result["model_name"]), model_version, str(result["model_alias"]))
+    with METRICS_LOCK:
+        if _active_model_labels is not None and _active_model_labels != labels:
+            MODEL_VERSION.labels(*_active_model_labels).set(0)
+
+        MODEL_VERSION.labels(*labels).set(1)
+        _active_model_labels = labels
+
+
+# unknown harus terlihat sebagai N/A, bukan MAE nol yang seolah-olah sempurna
+def _reset_performance_metrics() -> None:
+    for metric in (
+        RECENT_MAE,
+        REFERENCE_MAE,
+        THRESHOLD_MAE,
+        MIN_EVALUATION_SAMPLES,
+        LAST_EVALUATION_TIMESTAMP,
+        LATEST_TARGET_TIMESTAMP,
+    ):
+        metric.set(float("nan"))
+
+    EVALUATION_STATUS.set(0)
+    EVALUATED_PREDICTIONS.set(0)
+    RETRAIN_RECOMMENDED.set(0)
+    EVALUATED_MODEL_VERSION.clear()
+
+
+# timestamp replay adalah waktu NYC, sedangkan evaluated_at adalah waktu job UTC
+def _timestamp_seconds(value: str | None, default_timezone) -> float:
+    if value is None:
+        return float("nan")
+
+    timestamp = datetime.fromisoformat(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=default_timezone)
+
+    return timestamp.timestamp()
 
 
 # refresh gauge model performance dari summary file hasil evaluation job
 def refresh_performance_metrics(summary_path: Path) -> None:
-    # file summary boleh belum ada saat API baru pertama kali start
     summary_path = Path(summary_path)
+    with METRICS_LOCK:
+        # reset juga saat summary hilang, supaya metric lama tidak tertinggal
+        _reset_performance_metrics()
+        if not summary_path.exists():
+            return
 
-    if not summary_path.exists():
-        return
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            count = int(summary.get("evaluation_count", 0))
+            minimum = int(summary.get("min_samples", 100))
+            recent_mae = float(
+                summary["recent_mae"] if summary.get("recent_mae") is not None else "nan"
+            )
+            reference_mae = float(summary.get("reference_mae", "nan"))
+            threshold_mae = float(summary.get("threshold_mae", "nan"))
+            evaluated_at = (
+                _timestamp_seconds(summary["evaluated_at"], timezone.utc)
+                if summary.get("evaluated_at")
+                else summary_path.stat().st_mtime
+            )
+            latest_target = _timestamp_seconds(
+                summary.get("latest_target_datetime"), ZoneInfo("America/New_York")
+            )
+        except (OSError, ValueError, TypeError, AttributeError) as error:
+            # summary invalid tidak boleh membuat scrape operational metrics ikut gagal
+            LOGGER.warning("summary monitoring belum bisa dibaca: %s", error)
+            return
 
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        REFERENCE_MAE.set(reference_mae)
+        THRESHOLD_MAE.set(threshold_mae)
+        MIN_EVALUATION_SAMPLES.set(minimum)
+        EVALUATED_PREDICTIONS.set(count)
+        LAST_EVALUATION_TIMESTAMP.set(evaluated_at)
+        LATEST_TARGET_TIMESTAMP.set(latest_target)
 
-    if summary.get("recent_mae") is not None:
-        RECENT_MAE.set(float(summary["recent_mae"]))
+        if summary.get("model_name") and summary.get("model_version"):
+            EVALUATED_MODEL_VERSION.labels(
+                model_name=str(summary["model_name"]),
+                model_version=str(summary["model_version"]),
+                run_id=str(summary.get("run_id", "")),
+            ).set(1)
 
-    if summary.get("reference_mae") is not None:
-        REFERENCE_MAE.set(float(summary["reference_mae"]))
+        if count == 0 or summary.get("recent_mae") is None:
+            return
 
-    RETRAIN_RECOMMENDED.set(
-        1 if summary.get("retrain_recommended", False) else 0
-    )
-    EVALUATED_PREDICTIONS.set(int(summary.get("evaluation_count", 0)))
+        RECENT_MAE.set(recent_mae)
+        if count < minimum:
+            EVALUATION_STATUS.set(1)
+        elif summary.get("retrain_recommended", False):
+            EVALUATION_STATUS.set(3)
+            RETRAIN_RECOMMENDED.set(1)
+        else:
+            EVALUATION_STATUS.set(2)
 
 
 # render semua metric dalam prometheus exposition format
 def render_metrics(summary_path: Path) -> tuple[bytes, str]:
     # model performance gauge direfresh tepat sebelum prometheus scrape endpoint
-    refresh_performance_metrics(summary_path)
+    with METRICS_LOCK:
+        refresh_performance_metrics(summary_path)
+        return generate_latest(), CONTENT_TYPE_LATEST
 
-    return generate_latest(), CONTENT_TYPE_LATEST
+
+_reset_performance_metrics()

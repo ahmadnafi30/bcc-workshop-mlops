@@ -43,6 +43,10 @@ http://127.0.0.1:5000
 
 Keep terminal running.
 
+Kalau service MLflow sudah berjalan melalui Docker di port 5000, gunakan server
+tersebut dan langsung lanjut ke training. Set
+`MLFLOW_TRACKING_URI=http://127.0.0.1:5000` pada terminal script manual.
+
 ### Kenapa bukan raw mlflow server command?
 
 Helper project ensure state tersimpan di:
@@ -64,6 +68,11 @@ Terminal lain:
 ~~~bash
 uv run python scripts/train_with_mlflow.py
 ~~~
+
+Model HGB disimpan menggunakan format `skops`. Daftar trusted types di
+`src/tracking/mlflow_tracking.py` berisi tipe internal yang diperlukan model
+workshop, supaya artifact bisa dimuat kembali. Dependency MLflow minimal 3.16.1
+menyediakan konfigurasi ini.
 
 Observe output.
 

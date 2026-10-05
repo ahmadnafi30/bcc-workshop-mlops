@@ -24,6 +24,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Modul Workshop: workshop-module.md
   - Mulai di Sini:
       - Workshop Overview: 01-introduction/workshop-overview.md
       - MLOps from Zero: 01-introduction/mlops-from-zero.md
@@ -63,6 +64,7 @@ nav:
       - Retraining: 09-monitoring/retraining.md
   - Hands-on Workshop:
       - Step 0 - Setup: 10-hands-on/setup.md
+      - Quickstart Grafana: 10-hands-on/dashboard-quickstart.md
       - Step 1 - Data: 10-hands-on/step-01-data.md
       - Step 2 - Baseline: 10-hands-on/step-02-baseline.md
       - Step 3 - DVC: 10-hands-on/step-03-dvc.md

@@ -1,5 +1,7 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 import pandas as pd
@@ -130,9 +132,26 @@ def summarize_performance(
     min_samples: int = 100,
     recent_limit: int = 500,
 ) -> dict[str, float | int | bool | str | None]:
+    if min_samples < 1 or recent_limit < 1:
+        raise ValueError("min_samples dan recent_limit harus positif")
+    if not np.isfinite(reference_mae) or reference_mae < 0:
+        raise ValueError("reference_mae harus finite dan tidak negatif")
+    if not np.isfinite(degradation_multiplier) or degradation_multiplier < 1:
+        raise ValueError("degradation_multiplier harus finite dan minimal 1")
+
+    # waktu job berbeda dari target historical yang sedang direplay
+    metadata = {
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "min_samples": min_samples,
+        "recent_limit": recent_limit,
+        "degradation_multiplier": float(degradation_multiplier),
+    }
+
     # belum cukup sample berarti belum boleh ambil keputusan retraining
     if evaluations.empty:
         return {
+            **metadata,
+            "evaluation_status": "not_evaluated",
             "evaluation_count": 0,
             "recent_mae": None,
             "recent_rmse": None,
@@ -151,17 +170,25 @@ def summarize_performance(
     recent_mae = float(recent["absolute_error"].mean())
     recent_rmse = float(np.sqrt(recent["squared_error"].mean()))
     threshold_mae = float(reference_mae * degradation_multiplier)
+    enough_samples = len(recent) >= min_samples
+    retrain_recommended = enough_samples and recent_mae > threshold_mae
+
+    if not enough_samples:
+        evaluation_status = "insufficient_samples"
+    elif retrain_recommended:
+        evaluation_status = "retrain_recommended"
+    else:
+        evaluation_status = "within_threshold"
 
     return {
+        **metadata,
+        "evaluation_status": evaluation_status,
         "evaluation_count": len(recent),
         "recent_mae": recent_mae,
         "recent_rmse": recent_rmse,
         "reference_mae": float(reference_mae),
         "threshold_mae": threshold_mae,
-        "retrain_recommended": (
-            len(recent) >= min_samples
-            and recent_mae > threshold_mae
-        ),
+        "retrain_recommended": retrain_recommended,
         "latest_target_datetime": (
             recent["target_datetime"].max().isoformat()
         ),
@@ -199,7 +226,23 @@ def save_performance_artifacts(
     else:
         evaluations.to_parquet(evaluation_path, index=False)
 
-    summary_path.write_text(
-        json.dumps(summary, indent=2),
-        encoding="utf-8",
-    )
+    # /metrics selalu membaca summary lengkap, termasuk saat job sedang menulis
+    temporary_path = None
+    try:
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=summary_path.parent,
+            prefix=f".{summary_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            json.dump(summary, temporary_file, indent=2, allow_nan=False)
+
+        # summary aggregate tetap bisa dibaca service lain melalui shared data mount
+        temporary_path.chmod(0o644)
+        temporary_path.replace(summary_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)

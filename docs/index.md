@@ -7,6 +7,11 @@ Workshop ini dibawakan oleh:
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
+Untuk mengikuti satu modul yang utuh, buka [Modul Workshop](workshop-module.md).
+Modul memuat agenda, konsep, praktik, checkpoint, tugas, dan panduan fasilitator.
+Untuk menjalankan demo monitoring terlebih dahulu, gunakan
+[Quickstart Grafana](10-hands-on/dashboard-quickstart.md).
+
 Kalau sekarang kalian masih bingung bedanya **MLflow, Airflow, DVC, Docker, CI/CD, Prometheus, Grafana**, itu sangat normal. Bahkan salah satu tujuan utama workshop ini justru supaya setelah selesai kalian nggak cuma tahu nama tools-nya, tapi ngerti:
 
 > “Oh, tool ini masuk karena sebelumnya kita punya problem ini.”
