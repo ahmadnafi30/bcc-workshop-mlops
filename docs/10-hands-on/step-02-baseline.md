@@ -74,7 +74,7 @@ target_trip_count
 
 ---
 
-# 3. Jangan cuma lihat nama column — derive satu row manual
+## 3. Jangan cuma lihat nama column — derive satu row manual
 
 Ambil target:
 
@@ -111,7 +111,7 @@ Kalau manual derivation match, feature semantics lebih tangible.
 
 ---
 
-# 4. Leakage check
+## 4. Leakage check
 
 Pertanyaan untuk setiap feature:
 
@@ -137,7 +137,7 @@ Ini rule sederhana yang harus terus dibawa sampai serving.
 
 ---
 
-# 5. Kenapa rolling shift dulu?
+## 5. Kenapa rolling shift dulu?
 
 Target 18:00.
 
@@ -159,7 +159,7 @@ Itu leakage.
 
 ---
 
-# 6. Warm-up rows hilang setelah build features
+## 6. Warm-up rows hilang setelah build features
 
 Karena lag_168h perlu one-week history.
 
@@ -173,7 +173,7 @@ History Jan 1–7 dipakai sebagai context.
 
 ---
 
-# 7. Kenapa zone_id category?
+## 7. Kenapa zone_id category?
 
 ID:
 
@@ -190,7 +190,7 @@ Ini modeling semantics, bukan formatting.
 
 ---
 
-# 8. Create initial training snapshot
+## 8. Create initial training snapshot
 
 Run:
 
@@ -212,7 +212,7 @@ Step 3 nanti DVC formalize reproducibility-nya.
 
 ---
 
-# 9. Inspect snapshot range
+## 9. Inspect snapshot range
 
 ~~~bash
 uv run python -c "import pandas as pd; df=pd.read_parquet('data/snapshots/training/taxi_demand_2025-01-26.parquet'); print(df['timestamp'].min()); print(df['timestamp'].max()); print(df.shape)"
@@ -228,7 +228,7 @@ Initial model cutoff Jan 26.
 
 ---
 
-# 10. Time split
+## 10. Time split
 
 Training code secara dynamic mengambil last 5 days snapshot sebagai validation.
 
@@ -258,7 +258,7 @@ Random split kurang realistic untuk forecasting.
 
 ---
 
-# 11. Baseline prediction
+## 11. Baseline prediction
 
 Naive baseline:
 
@@ -278,7 +278,7 @@ Simple.
 
 ---
 
-# 12. Sebelum train main model, predict expectation
+## 12. Sebelum train main model, predict expectation
 
 Question:
 
@@ -294,7 +294,7 @@ Jangan assume ML selalu menang.
 
 ---
 
-# 13. Run manual training
+## 13. Run manual training
 
 ~~~bash
 uv run python scripts/train_model.py
@@ -317,7 +317,7 @@ Docs tidak akan claim exact metric karena result harus berasal dari run kalian.
 
 ---
 
-# 14. MAE
+## 14. MAE
 
 Suppose hypothetical:
 
@@ -333,7 +333,7 @@ Gampang communicate.
 
 ---
 
-# 15. RMSE
+## 15. RMSE
 
 RMSE lebih punish big misses.
 
@@ -356,7 +356,7 @@ Jadi RMSE bantu lihat tail error severity.
 
 ---
 
-# 16. Model vs baseline decision
+## 16. Model vs baseline decision
 
 Case hypothetical:
 
@@ -391,7 +391,7 @@ Jangan manipulate validation supaya model menang.
 
 ---
 
-# 17. Local artifacts
+## 17. Local artifacts
 
 Manual script save:
 
@@ -416,7 +416,7 @@ MLflow nanti solve ini.
 
 ---
 
-# 18. Inspect metrics JSON
+## 18. Inspect metrics JSON
 
 Open:
 
@@ -436,7 +436,7 @@ Nah, itu salah satu motivation experiment tracking.
 
 ---
 
-# 19. Why HistGradientBoosting?
+## 19. Why HistGradientBoosting?
 
 Bukan karena objectively best taxi model di dunia.
 
@@ -454,7 +454,7 @@ Model choice dipengaruhi learning objective dan operational constraints.
 
 ---
 
-# 20. Kenapa bukan LSTM/Chronos core?
+## 20. Kenapa bukan LSTM/Chronos core?
 
 Advanced forecasting model bisa dicoba.
 
@@ -466,7 +466,7 @@ Model sophistication adalah extension.
 
 ---
 
-# 21. Mini exercise: compare metrics
+## 21. Mini exercise: compare metrics
 
 Suppose:
 
@@ -492,7 +492,7 @@ Workshop gate utama MAE, reviewer tetap inspect RMSE.
 
 ---
 
-# 22. Run tests
+## 22. Run tests
 
 ~~~bash
 uv run pytest
@@ -506,7 +506,7 @@ Testing target harus include known failure modes.
 
 ---
 
-# 23. What if actual model loses?
+## 23. What if actual model loses?
 
 Workshop tetap valid.
 
@@ -520,7 +520,7 @@ Itu normal science.
 
 ---
 
-# 24. Checkpoint
+## 24. Checkpoint
 
 Pastikan ada:
 

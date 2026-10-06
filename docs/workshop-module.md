@@ -360,7 +360,7 @@ untuk memeriksa versi yang benar-benar dipakai.
 
 ## 8. Sesi 6 — Serving dan kontrak API
 
-### Konsep inti
+### Alur request prediction
 
 Client mengirim zone dan target hour. API membangun feature dari processed
 demand, memuat champion melalui registry, menghasilkan prediksi, lalu mencatat
@@ -537,16 +537,16 @@ XCom membawa metadata dan path, bukan seluruh DataFrame. Logic berada di
 ```bash
 docker compose up -d --build airflow
 docker compose logs --tail=100 airflow
+docker compose ps airflow
 ```
 
-Buka <http://localhost:8080>. Gunakan credential yang dihasilkan standalone dan
-ditampilkan pada log. Jika perlu memeriksa file credential di container:
+Pada kolom `PORTS`, buka host port di sisi kiri. Contoh `127.0.0.1:18081->8080/tcp` berarti gunakan `http://localhost:18081`. Port 8080 di kanan hanya berlaku di dalam container. Credential Compose dapat dibaca dari file di container:
 
 ```bash
 docker compose exec airflow cat /airflow/simple_auth_manager_passwords.json.generated
 ```
 
-Credential hanya dibaca untuk login lokal. Jangan memasukkannya ke laporan kelas.
+Jangan memasukkan credential ke laporan kelas. Pastikan browser membuka service dari project Compose ini; Airflow standalone lokal di `localhost:8080` memakai database/riwayat berbeda. DAG workshop memakai manual trigger, jadi Home belum memiliki run sampai DAG di-trigger.
 
 ### Praktik 8B: jalankan daily replay
 

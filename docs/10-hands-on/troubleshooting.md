@@ -100,13 +100,29 @@ Promote registered version.
 
 ## 5. Airflow layer
 
-### DAG missing
+### Home Airflow terlihat kosong atau semua angka 0
+
+Cek alamat dan instance dulu:
+
+~~~bash
+docker compose ps airflow
+~~~
+
+Buka host port di kiri `HOST:CONTAINER`. Misalnya `127.0.0.1:18081->8080/tcp` berarti gunakan `http://localhost:18081`. Jika membuka `localhost:8080` saat Compose memakai 18081, kamu mungkin sedang melihat instance lain dengan riwayat berbeda.
+
+DAG workshop memakai manual trigger. Pilih DAG yang inputnya siap lalu tekan **Trigger**; sebelum run pertama, angka 0 adalah normal. Jika DAG tidak muncul, cek daftar DAG di instance yang sama:
 
 ~~~bash
 uv run --group airflow airflow dags list
 ~~~
 
-Missing DAG usually parse/import error.
+Untuk instance Compose:
+
+~~~bash
+docker compose exec airflow airflow dags list
+~~~
+
+Jika DAG tetap hilang, periksa log scheduler dan error import.
 
 ### Task failed
 

@@ -26,7 +26,7 @@ Workshop kita pakai performance degradation sebagai trigger.
 
 ---
 
-# Default decision rule
+## Default decision rule
 
 ~~~text
 recent MAE
@@ -44,7 +44,7 @@ Dua condition harus terpenuhi.
 
 ---
 
-# Example
+## Example
 
 Champion saat validation:
 
@@ -88,7 +88,7 @@ retrain recommended
 
 ---
 
-# Kenapa bukan fixed MAE 20?
+## Kenapa bukan fixed MAE 20?
 
 Karena metric scale tergantung problem.
 
@@ -102,7 +102,7 @@ Ini belum perfect, tapi jauh lebih reasonable daripada random hard-coded univers
 
 ---
 
-# Kenapa minimum samples?
+## Kenapa minimum samples?
 
 Case:
 
@@ -123,7 +123,7 @@ Minimum samples menambah evidence requirement.
 
 ---
 
-# Apa yang terjadi kalau ground truth belum cukup?
+## Apa yang terjadi kalau ground truth belum cukup?
 
 Correct action:
 
@@ -150,7 +150,7 @@ Sistem tidak harus melakukan action setiap kali workflow jalan.
 
 ---
 
-# Monitoring DAG
+## Monitoring DAG
 
 ~~~text
 evaluate_model
@@ -192,7 +192,7 @@ register challenger
 
 ---
 
-# Kenapa new snapshot?
+## Kenapa new snapshot?
 
 Kalau retraining read moving latest feature file tanpa freeze:
 
@@ -211,7 +211,7 @@ Lineage tetap kuat.
 
 ---
 
-# Cutoff date dari latest evaluated target
+## Cutoff date dari latest evaluated target
 
 Monitoring tahu ground truth available sampai kapan.
 
@@ -223,7 +223,7 @@ Historical replay harus tetap preserve temporal dependency.
 
 ---
 
-# Validation window ikut maju
+## Validation window ikut maju
 
 Initial training:
 
@@ -255,7 +255,7 @@ Kalau validation selalu old period, retraining evaluation kurang relevant ke cur
 
 ---
 
-# Baseline tetap ada saat retraining
+## Baseline tetap ada saat retraining
 
 Setiap new candidate harus tetap dibandingkan dengan naive baseline.
 
@@ -273,7 +273,7 @@ Dia guardrail.
 
 ---
 
-# Candidate vs current champion
+## Candidate vs current champion
 
 Ada nuance.
 
@@ -299,7 +299,7 @@ Makanya promotion tetap explicit.
 
 ---
 
-# Automatic retraining ≠ automatic promotion
+## Automatic retraining ≠ automatic promotion
 
 Ini salah satu governance concept paling penting.
 
@@ -333,7 +333,7 @@ Risk-nya lebih tinggi.
 
 ---
 
-# Manual approval bukan berarti MLOps-nya gagal
+## Manual approval bukan berarti MLOps-nya gagal
 
 Ada misconception:
 
@@ -357,7 +357,7 @@ Goal-nya reliable lifecycle, bukan automation demi automation.
 
 ---
 
-# Retraining vs continual learning
+## Retraining vs continual learning
 
 Project kita:
 
@@ -388,7 +388,7 @@ Jangan interchangeable.
 
 ---
 
-# Setelah promotion
+## Setelah promotion
 
 Suppose challenger version 5 approved.
 
@@ -419,7 +419,7 @@ Ini close loop antara Registry dan Serving.
 
 ---
 
-# Full Closed Loop
+## Full Closed Loop
 
 Sekarang lifecycle kita:
 
@@ -449,7 +449,7 @@ Nah, ini salah satu bentuk paling tangible dari MLOps feedback loop.
 
 ---
 
-# Kapan rule ini belum cukup?
+## Kapan rule ini belum cukup?
 
 Production system bisa butuh lebih dari:
 
@@ -473,7 +473,7 @@ Workshop memakai simple rule supaya reasoning-nya bisa dilihat jelas.
 
 ---
 
-# Failure mode: retraining loop terlalu sensitif
+## Failure mode: retraining loop terlalu sensitif
 
 Bayangin threshold terlalu kecil:
 
@@ -496,7 +496,7 @@ Threshold adalah control-policy decision, bukan sekadar angka teknis.
 
 ---
 
-# Failure mode: retraining loop terlalu lambat
+## Failure mode: retraining loop terlalu lambat
 
 Sebaliknya, threshold terlalu longgar:
 
@@ -518,7 +518,7 @@ Real production perlu tune policy berdasarkan business cost.
 
 ---
 
-# Retraining bukan obat semua masalah
+## Retraining bukan obat semua masalah
 
 Kalau MAE naik karena input pipeline corrupt, retraining pada corrupt data malah memperburuk.
 
@@ -534,7 +534,7 @@ Jadi retrain recommendation itu signal, bukan excuse untuk skip diagnosis.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Kenapa retrain tiap hari belum tentu bagus?
 2. Kenapa threshold relative?

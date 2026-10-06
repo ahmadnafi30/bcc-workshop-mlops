@@ -36,7 +36,7 @@ Setelah selesai kalian harus bisa menjelaskan:
 
 ---
 
-# 1. Start shared MLflow server
+## 1. Start shared MLflow server
 
 Run:
 
@@ -59,7 +59,7 @@ http://127.0.0.1:5000
 
 ---
 
-# 2. Kenapa pakai scripts/start_mlflow.py, bukan asal mlflow server?
+## 2. Kenapa pakai scripts/start_mlflow.py, bukan asal mlflow server?
 
 Helper ini sengaja set:
 
@@ -96,7 +96,7 @@ Tanpa shared state, participant akan bingung karena model seolah hilang saat pin
 
 ---
 
-# 3. Tracking URI
+## 3. Tracking URI
 
 Training code perlu tahu MLflow server.
 
@@ -118,7 +118,7 @@ Tracking URI adalah configuration, bukan model logic.
 
 ---
 
-# 4. Sebelum train, buka MLflow UI
+## 4. Sebelum train, buka MLflow UI
 
 Lihat kondisi kosong atau experiment lama.
 
@@ -144,7 +144,7 @@ Jadi expect minimal dua run.
 
 ---
 
-# 5. Run tracked training
+## 5. Run tracked training
 
 ~~~bash
 uv run python scripts/train_with_mlflow.py
@@ -180,7 +180,7 @@ Read semua relation-nya.
 
 ---
 
-# 6. Experiment vs Run
+## 6. Experiment vs Run
 
 MLflow Experiment = logical grouping.
 
@@ -200,7 +200,7 @@ Project taxi demand punya experiment logical yang sama, tapi banyak runs dari ba
 
 ---
 
-# 7. Buka baseline run
+## 7. Buka baseline run
 
 Cari run naive-24h.
 
@@ -226,7 +226,7 @@ Kalau baseline cuma print terminal lalu hilang, future reviewer kehilangan conte
 
 ---
 
-# 8. Buka main model run
+## 8. Buka main model run
 
 Cari hist-gradient-boosting.
 
@@ -259,7 +259,7 @@ mae
 
 ---
 
-# 9. Dataset metadata
+## 9. Dataset metadata
 
 Cari fields seperti:
 
@@ -284,7 +284,7 @@ Ini lineage nyata.
 
 ---
 
-# 10. Artifact
+## 10. Artifact
 
 Model run punya model artifact.
 
@@ -303,7 +303,7 @@ Jadi model file nggak orphan.
 
 ---
 
-# 11. Input example dan signature
+## 11. Input example dan signature
 
 Inspect model metadata kalau tersedia.
 
@@ -317,7 +317,7 @@ Signature bukan guarantee semua semantics benar, tapi membantu contract visibili
 
 ---
 
-# 12. Compare runs
+## 12. Compare runs
 
 Pakai MLflow compare UI.
 
@@ -334,7 +334,7 @@ Comparison UI baru meaningful kalau logging metadata konsisten.
 
 ---
 
-# 13. Jangan otomatis percaya run terbaru
+## 13. Jangan otomatis percaya run terbaru
 
 Newest run bukan necessarily best run.
 
@@ -346,7 +346,7 @@ Ini pattern yang nanti sama di Model Registry.
 
 ---
 
-# 14. Copy model run ID
+## 14. Copy model run ID
 
 Terminal atau UI punya model run ID.
 
@@ -381,7 +381,7 @@ Registry membuat **model version reference** ke run artifact.
 
 ---
 
-# 15. Tracking vs Registry secara visual
+## 15. Tracking vs Registry secara visual
 
 ~~~text
 MLflow Tracking
@@ -400,7 +400,7 @@ Ini relation penting banget.
 
 ---
 
-# 16. Kenapa alias awal challenger?
+## 16. Kenapa alias awal challenger?
 
 Karena new registered model belum automatically production-approved.
 
@@ -414,7 +414,7 @@ Alias challenger berarti:
 
 ---
 
-# 17. Inspect Model Registry
+## 17. Inspect Model Registry
 
 Open registered model.
 
@@ -444,7 +444,7 @@ Kalau bisa, lineage berhasil.
 
 ---
 
-# 18. Promotion
+## 18. Promotion
 
 Setelah review, run:
 
@@ -467,7 +467,7 @@ champion
 
 ---
 
-# 19. Kenapa promotion bukan rename file?
+## 19. Kenapa promotion bukan rename file?
 
 Tanpa registry, mungkin flow:
 
@@ -486,7 +486,7 @@ Alias memberi semantic pointer yang explicit dan queryable.
 
 ---
 
-# 20. Champion dan challenger bisa point ke version yang sama?
+## 20. Champion dan challenger bisa point ke version yang sama?
 
 Pada initial setup, bisa saja newly registered version punya challenger lalu juga dipromote champion.
 
@@ -503,7 +503,7 @@ lebih typical.
 
 ---
 
-# 21. Rollback thought experiment
+## 21. Rollback thought experiment
 
 Suppose:
 
@@ -530,7 +530,7 @@ Ini benefit alias-driven serving.
 
 ---
 
-# 22. Apa yang tidak otomatis dilakukan Registry?
+## 22. Apa yang tidak otomatis dilakukan Registry?
 
 Registry tidak otomatis tahu:
 
@@ -545,7 +545,7 @@ Decision governance tetap kita design.
 
 ---
 
-# 23. Run naming dan tags
+## 23. Run naming dan tags
 
 Good run naming membantu UI readable.
 
@@ -569,7 +569,7 @@ Naming bukan core correctness, tapi operational usability matters.
 
 ---
 
-# 24. Experiment failure scenario
+## 24. Experiment failure scenario
 
 Suppose baseline run logged, model training fail.
 
@@ -585,7 +585,7 @@ Failed runs bisa useful buat debugging.
 
 ---
 
-# 25. MLflow state dan Git
+## 25. MLflow state dan Git
 
 Folder:
 
@@ -607,7 +607,7 @@ Again, different responsibility.
 
 ---
 
-# 26. Mini challenge
+## 26. Mini challenge
 
 Tanpa lihat docs, trace prediction model production:
 
@@ -631,7 +631,7 @@ Kalau chain ini natural, Model Registry concept sudah masuk.
 
 ---
 
-# 27. What if model kalah baseline?
+## 27. What if model kalah baseline?
 
 Tracked run tetap valuable.
 
@@ -651,7 +651,7 @@ Tracking dan promotion adalah separate stages.
 
 ---
 
-# 28. Checkpoint
+## 28. Checkpoint
 
 1. Kenapa start_mlflow helper dibuat?
 2. Tracking URI buat apa?
@@ -674,6 +674,6 @@ Next kita orchestrate workflow-nya di Airflow.
 
 ---
 
-## Kebutuhan format model di versi project saat ini
+### Kebutuhan format model di versi project saat ini
 
 Project menetapkan `mlflow>=3.16.1,<4.0`. Training melog model sklearn memakai format `skops`; `src/tracking/mlflow_tracking.py` juga mengizinkan trusted types internal yang diperlukan `HistGradientBoostingRegressor` saat artifact dimuat kembali. Pertahankan versi minimum project saat menyiapkan environment agar model yang diregister dapat diload oleh serving API.

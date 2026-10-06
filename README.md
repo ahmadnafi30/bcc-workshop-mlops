@@ -266,11 +266,13 @@ Service:
 | Service | URL |
 | --- | --- |
 | MLflow | http://localhost:5000 |
-| Airflow | http://localhost:8080 |
+| Airflow | host port pada `docker compose ps airflow` |
 | FastAPI | http://localhost:8000 |
 | Swagger | http://localhost:8000/docs |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3000 |
+
+Port Airflow dapat berbeda dari 8080. Jalankan `docker compose ps airflow` dan buka host port di sisi kiri pemetaan; contoh `127.0.0.1:18081->8080/tcp` berarti `http://localhost:18081`.
 
 ---
 

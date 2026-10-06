@@ -24,7 +24,7 @@ Sekarang kita punya context.
 
 ---
 
-## Goal step ini
+## Cara berpikir setelah step ini
 
 Setelah selesai, kalian bukan cuma bisa click Trigger DAG.
 
@@ -51,7 +51,7 @@ Target kita:
 
 ---
 
-## Goal
+## Hasil yang perlu terlihat di laptop
 
 Setelah step ini:
 
@@ -65,6 +65,8 @@ Setelah step ini:
 ---
 
 ## 1. Install Airflow group
+
+Bagian ini hanya diperlukan untuk mode standalone lokal. Jika kamu memakai Airflow Docker Compose, skip instalasi group ini dan lanjut ke catatan Compose di bagian start.
 
 Core environment kita sengaja nggak langsung install Airflow karena dependency-nya cukup berat.
 
@@ -94,25 +96,29 @@ Karena tidak semua task di repo butuh Airflow. Participant yang cuma mau run fea
 
 ---
 
-## 2. Start Airflow
+## 2. Start Airflow lokal (standalone)
 
-Run:
+Panduan langkah ini memakai Airflow lokal. Start:
 
 ~~~bash
 uv run --group airflow python scripts/start_airflow.py
 ~~~
 
-Lalu open:
+Buka `http://localhost:8080`. Password awal muncul di terminal saat pertama kali Airflow dijalankan. Jika terlewat, cek file `.airflow/simple_auth_manager_passwords.json.generated` di root repo.
 
-~~~text
-http://localhost:8080
-~~~
+!!! info "Kalau workshop-mu memakai Docker Compose"
+    Jangan start standalone lokal bersamaan. Compose dan standalone menyimpan metadata serta run history di tempat berbeda, sehingga UI-nya bisa tampak seperti dua Airflow yang berbeda.
 
-Jangan langsung click semua menu.
+    Start service Compose lalu cek port host:
 
-Pause sebentar.
+    ~~~bash
+    docker compose up -d --build airflow
+    docker compose ps airflow
+    ~~~
 
-Pertanyaan pertama:
+    Buka port di sisi kiri pemetaan `PORTS`. Jika output menunjukkan `127.0.0.1:18081->8080/tcp`, gunakan `http://localhost:18081`. Untuk melihat credential Compose, jalankan `docker compose exec airflow cat /airflow/simple_auth_manager_passwords.json.generated`.
+
+Jangan langsung click semua menu. Pause sebentar. Pertanyaan pertama:
 
 > “Airflow sekarang sebenarnya tahu DAG kita dari mana?”
 
@@ -137,7 +143,7 @@ Itu berarti ada kemungkinan:
 
 ---
 
-# 3. Kenapa ada tiga DAG, bukan satu DAG super panjang?
+## 3. Kenapa ada tiga DAG, bukan satu DAG super panjang?
 
 Coba bayangin satu mega DAG:
 
@@ -235,7 +241,7 @@ Nah, ini moment penting:
 
 ---
 
-# 5. Buka source DAG sambil lihat Graph
+## 5. Buka source DAG sambil lihat Graph
 
 File:
 
@@ -277,7 +283,7 @@ Historical replay mempercepat clock, bukan mengubah dependency logic.
 
 ---
 
-# 6. Param replay_date
+## 6. Param replay_date
 
 DAG punya param:
 
@@ -316,7 +322,7 @@ Parameter memisahkan workflow definition dari runtime value.
 
 ---
 
-# 7. Task get_replay_date
+## 7. Task get_replay_date
 
 Actual logic membaca Airflow context:
 
@@ -338,7 +344,7 @@ Karena dia membuat runtime input visible dalam graph dan bisa menjadi upstream d
 
 ---
 
-# 8. Task release_batch
+## 8. Task release_batch
 
 Task ini call reusable function:
 
@@ -372,7 +378,7 @@ Dia delegate.
 
 ---
 
-# 9. Sebelum trigger: predict dulu apa yang akan terjadi
+## 9. Sebelum trigger: predict dulu apa yang akan terjadi
 
 Kita trigger:
 
@@ -409,7 +415,7 @@ Learning lebih meaningful kalau kalian punya hypothesis sebelum lihat result.
 
 ---
 
-# 10. Observe task states
+## 10. Observe task states
 
 Saat DAG run, task bisa berada di state seperti:
 
@@ -432,7 +438,7 @@ Airflow persist run/task state.
 
 ---
 
-# 11. Buka release_batch logs
+## 11. Buka release_batch logs
 
 Click task.
 
@@ -453,7 +459,7 @@ Green task state dan actual artifact sebaiknya correlate.
 
 ---
 
-# 12. validate_batch dan fail-fast thinking
+## 12. validate_batch dan fail-fast thinking
 
 Task berikutnya validate raw batch.
 
@@ -482,7 +488,7 @@ Fail early memberi error lebih dekat ke root cause.
 
 ---
 
-# 13. Detail actual code: dependency metadata yang nggak dibaca
+## 13. Detail actual code: dependency metadata yang nggak dibaca
 
 Di DAG kalian akan lihat validate_batch menerima release_info.
 
@@ -514,7 +520,7 @@ Ini subtle, tapi bagus banget buat memahami orchestration.
 
 ---
 
-# 14. XCom — apa yang sebenarnya berpindah?
+## 14. XCom — apa yang sebenarnya berpindah?
 
 Task return dictionary kecil.
 
@@ -554,7 +560,7 @@ Sticky note bukan tempat menaruh isi seluruh gudang.
 
 ---
 
-# 15. aggregate_demand
+## 15. aggregate_demand
 
 Task membaca daily trip parquet + zone lookup lalu reuse aggregate_hourly_demand.
 
@@ -576,7 +582,7 @@ preprocessing module
 
 ---
 
-# 16. rebuild_features
+## 16. rebuild_features
 
 Setelah daily demand baru tersedia, feature dataset dibangun ulang dari history start sampai replay_date.
 
@@ -592,7 +598,7 @@ Correctness dulu, optimization nanti.
 
 ---
 
-# 17. Trigger Jan 28
+## 17. Trigger Jan 28
 
 Setelah Jan 27 green, trigger Jan 28.
 
@@ -612,7 +618,7 @@ Ini reusable workflow definition.
 
 ---
 
-# 18. Idempotency experiment
+## 18. Idempotency experiment
 
 Apa yang terjadi kalau Jan 28 di-trigger lagi?
 
@@ -628,7 +634,7 @@ Idempotency principle:
 
 ---
 
-# 19. Buka taxi_initial_training
+## 19. Buka taxi_initial_training
 
 Graph:
 
@@ -658,7 +664,7 @@ Jadi Airflow meng-orchestrate model lifecycle policy, bukan sekadar train.py.
 
 ---
 
-# 20. Kenapa register_candidate task terpisah?
+## 20. Kenapa register_candidate task terpisah?
 
 Kalau training success tapi Registry unreachable, failure-nya beda dari model training failure.
 
@@ -676,7 +682,7 @@ Kita jadi tahu layer mana yang perlu di-debug.
 
 ---
 
-# 21. Buka taxi_model_monitoring
+## 21. Buka taxi_model_monitoring
 
 Graph:
 
@@ -702,7 +708,7 @@ Dalam production, policy change tetap sebaiknya governed.
 
 ---
 
-# 22. No-op adalah valid automation result
+## 22. No-op adalah valid automation result
 
 Kalau result:
 
@@ -724,7 +730,7 @@ Automation yang selalu harus menghasilkan action justru suspicious.
 
 ---
 
-# 23. Airflow vs script — value tambahannya apa?
+## 23. Airflow vs script — value tambahannya apa?
 
 Manual script sudah bisa melakukan operation.
 
@@ -744,7 +750,7 @@ Airflow meng-orchestrate Python work.
 
 ---
 
-# 24. Controlled failure exercise
+## 24. Controlled failure exercise
 
 Kalau workshop time cukup, lakukan safe failure.
 
@@ -763,7 +769,7 @@ Pastikan state dipulihkan setelah demo.
 
 ---
 
-# 25. Debugging checklist
+## 25. Debugging checklist
 
 Kalau DAG nggak muncul:
 
@@ -796,7 +802,7 @@ Problem task tidak selalu berarti problem Airflow.
 
 ---
 
-# Mini discussion
+## Mini discussion
 
 ### Scenario A
 
@@ -826,7 +832,7 @@ Boundary thinking ini inti architecture.
 
 ---
 
-## Checkpoint
+### Checkpoint
 
 Coba explain tanpa lihat docs:
 

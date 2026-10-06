@@ -20,7 +20,7 @@ CI masuk supaya quality gate menjadi **repeatable automation**, bukan checklist 
 
 ---
 
-# Continuous Integration — integrate apa?
+## Continuous Integration — integrate apa?
 
 Kata Integration penting.
 
@@ -38,7 +38,7 @@ Jadi CI lebih luas dari sekadar pytest.
 
 ---
 
-# Quality flow project kita
+## Quality flow project kita
 
 ~~~text
 Push / Pull Request
@@ -66,7 +66,7 @@ Workshop docs dan container setup juga deliverable.
 
 ---
 
-# Ruff
+## Ruff
 
 Saat audit sebelumnya, CI kita benar-benar menemukan import-order issue.
 
@@ -80,7 +80,7 @@ Benefit:
 
 ---
 
-# pytest
+## pytest
 
 Test menjaga behavior yang sudah kita expect.
 
@@ -97,7 +97,7 @@ Dia safety net terhadap regression yang kita tahu.
 
 ---
 
-# Kenapa MkDocs strict build masuk CI?
+## Kenapa MkDocs strict build masuk CI?
 
 Karena docs adalah product.
 
@@ -115,7 +115,7 @@ Ini especially penting karena repository ini memang ditujukan untuk teaching, bu
 
 ---
 
-# Kenapa Docker image build masuk CI?
+## Kenapa Docker image build masuk CI?
 
 Python test bisa green tapi Dockerfile fail.
 
@@ -133,7 +133,7 @@ CI build image lebih awal.
 
 ---
 
-# Branch strategy
+## Branch strategy
 
 ~~~text
 feat/* / fix/* / docs/* / chore/*
@@ -143,17 +143,17 @@ feat/* / fix/* / docs/* / chore/*
             main
 ~~~
 
-## Feature/docs/fix branch
+### Feature/docs/fix branch
 
 Tempat iterate.
 
-## Develop
+### Develop
 
 Integration branch.
 
 Beberapa changes yang individually green ketemu di sini.
 
-## Main
+### Main
 
 Stable workshop release.
 
@@ -161,7 +161,7 @@ Branch yang harus nyaman dipakai presenter dan participant.
 
 ---
 
-# Kenapa tidak langsung feat → main?
+## Kenapa tidak langsung feat → main?
 
 Bayangin feature A mengubah API schema.
 
@@ -175,7 +175,7 @@ Develop memberi integration boundary sebelum stable release.
 
 ---
 
-# Branch policy as code
+## Branch policy as code
 
 CI check arah PR.
 
@@ -202,7 +202,7 @@ Workflow tidak cuma ditulis di README. Ada automated check.
 
 ---
 
-# CI check vs GitHub branch protection
+## CI check vs GitHub branch protection
 
 CI bisa bilang:
 
@@ -228,7 +228,7 @@ Dua-duanya complement.
 
 ---
 
-# CD — satu singkatan dua arti
+## CD — satu singkatan dua arti
 
 ### Continuous Delivery
 
@@ -264,7 +264,7 @@ Lebih baik jujur berhenti di GHCR daripada menambahkan command deployment palsu 
 
 ---
 
-# GHCR sebagai artifact registry
+## GHCR sebagai artifact registry
 
 Container image adalah deployable software artifact.
 
@@ -282,7 +282,7 @@ Nanti deployment platform tinggal pull exact image.
 
 ---
 
-# latest vs SHA tag
+## latest vs SHA tag
 
 ### latest
 
@@ -311,7 +311,7 @@ SHA tag jauh lebih useful.
 
 ---
 
-# Code version vs model version
+## Code version vs model version
 
 Ini sangat penting di MLOps.
 
@@ -349,7 +349,7 @@ Dua lifecycle ini related tapi independent.
 
 ---
 
-# Rollback juga ada dua
+## Rollback juga ada dua
 
 ### Application rollback
 
@@ -365,7 +365,7 @@ Jangan rollback semuanya tanpa diagnosis.
 
 ---
 
-# GitHub Actions vs Airflow
+## GitHub Actions vs Airflow
 
 Dua-duanya automation, tapi trigger domain berbeda.
 
@@ -391,7 +391,7 @@ Mereka bukan duplicate tool.
 
 ---
 
-# Fresh runner itu justru bagus
+## Fresh runner itu justru bagus
 
 GitHub Actions runner mulai dari environment fresh.
 
@@ -401,7 +401,7 @@ Fresh environment adalah reproducibility pressure test.
 
 ---
 
-# Secrets
+## Secrets
 
 Registry publishing butuh auth.
 
@@ -415,7 +415,7 @@ Project pakai GitHub-provided token dengan permission yang dibutuhkan.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 

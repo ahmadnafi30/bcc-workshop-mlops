@@ -1,10 +1,10 @@
 # Apache Airflow — Dari Run Script Satu-Satu ke Workflow yang Bisa Diatur
 !!! tip "Airflow UI: first tour"
-    Buka [Airflow](http://localhost:8080), lalu pilih DAG **taxi_daily_replay**, **taxi_initial_training**, atau **taxi_model_monitoring**. Workshop ini menggunakan manual trigger, jadi DAG yang terlihat belum tentu pernah berjalan.
+    Buka host port yang ditampilkan `docker compose ps airflow`. Contoh `127.0.0.1:18081->8080/tcp` berarti buka [Airflow](http://localhost:18081); angka 8080 di kanan adalah port container. Pilih DAG **taxi_daily_replay**, **taxi_initial_training**, atau **taxi_model_monitoring**.
 
-    Buka **Grid** atau **Graph** untuk melihat urutan task. Setelah trigger, klik task lalu **Logs** untuk memahami hasilnya. Hijau berarti sukses; merah berarti ada task yang perlu diselidiki. Pada daily replay, cek parameter tanggal sebelum trigger. Pada monitoring, pastikan prediction dan actual sudah ada karena DAG ini dapat memulai retraining bila syaratnya terpenuhi.
+    Home dengan angka 0 bukan otomatis error. DAG workshop memakai manual trigger (`schedule=None`), jadi run baru muncul setelah kamu memilih DAG, memastikan input siap, lalu menekan **Trigger**. Buka **Grid** atau **Graph** untuk melihat urutan task. Setelah trigger, klik task lalu **Logs**. Hijau berarti sukses; merah berarti ada task yang perlu diselidiki.
 
-    Mulai dari [panduan UI ramah pemula](../00-start-here.md#airflow-ui) atau lanjutkan ke [Step 5 — Airflow](../10-hands-on/step-05-airflow.md).
+    Gunakan satu instance Airflow saja. Mode standalone lokal dan Docker Compose punya database/riwayat run terpisah. Mulai dari [panduan UI ramah pemula](../00-start-here.md#airflow-ui) atau lanjutkan ke [Step 5 — Airflow](../10-hands-on/step-05-airflow.md).
 
 
 Airflow sering kelihatan intimidating buat newbie karena istilahnya banyak: DAG, task, scheduler, XCom, run, state, trigger, operator.

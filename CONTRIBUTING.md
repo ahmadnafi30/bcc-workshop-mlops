@@ -86,31 +86,30 @@ Di dalam function, comment per logical block. Nggak perlu comment setiap literal
 
 ## Documentation style
 
-Ini penting karena docs adalah bagian utama workshop.
+Docs are part of the workshop product. A learner should always know **where they are, why this topic matters, what to do, and how to recognize success**.
 
-Docs **jangan ditulis seperti API reference full-English yang kaku**.
+### Page structure
 
-Target tone:
+- Keep exactly one H1 title per file. Use H2 for main sections and H3 for subsections. Do not skip heading levels.
+- Start with a short paragraph that says who the page is for and what the reader will learn.
+- For a how-to page, use this order: goal → prerequisites → numbered steps → expected result → troubleshooting → next page.
+- For a concept page, explain the problem first, introduce the mental model, then connect it to this repository.
+- Put optional deep dives under a clearly named section so a first-time reader can keep moving.
 
-- natural mix Indonesian + English technical terms,
-- conversational tapi tetap technical,
-- boleh panjang kalau memang memberi context,
-- gunakan pertanyaan retoris,
-- gunakan analogi kalau membantu,
-- explain “why” sebelum “how”,
-- selalu connect tool ke problem project,
-- jangan terlalu banyak emoji,
-- jangan terlalu banyak bullet tanpa penjelasan.
+### Writing and examples
 
-Contoh tone yang kita mau:
+- Use conversational Indonesian with English technical terms where they are clearer. Explain a new term the first time it appears.
+- Keep paragraphs focused on one idea. Prefer short steps over long command dumps.
+- Label fenced code blocks with their language. Say which shell a command uses when Bash and PowerShell differ.
+- After an important command, state what successful output or UI state should look like.
+- Use tables for comparisons and short callouts for important tips, warnings, or expected behavior.
+- Use emoji sparingly, and use relative links to pages inside this repository.
 
-> “Sebelum Airflow, sebenarnya script kita sudah jalan. Problem-nya bukan Python nggak bisa execute command. Problem-nya kita mulai butuh dependency, retry, dan execution history. Nah, di sinilah orchestration mulai masuk.”
+Example of the intended tone:
 
-Bukan:
+> “Sebelum Airflow, sebenarnya script kita sudah jalan. Problem-nya bukan Python nggak bisa execute command. Kita mulai butuh dependency, retry, dan execution history. Di sinilah orchestration berguna.”
 
-> “Airflow is a workflow orchestration platform. It uses DAGs.”
-
-Technical term English tetap boleh dan justru sering lebih natural:
+Technical terms may remain in English:
 
 ~~~text
 workflow
@@ -122,7 +121,6 @@ ground truth
 feature engineering
 ~~~
 
-Yang penting explanation-nya approachable.
 
 ## Definition of done
 

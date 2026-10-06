@@ -50,7 +50,7 @@ Dua-duanya penting.
 
 ---
 
-# Kenapa harus dipisah?
+## Kenapa harus dipisah?
 
 Bayangin dashboard:
 
@@ -92,7 +92,7 @@ Keduanya harus dipantau.
 
 ---
 
-# Analogi restoran
+## Analogi restoran
 
 Restaurant bisa serve sangat cepat, pelayan ramah, order masuk lancar, tapi kualitas makanannya menurun.
 
@@ -106,7 +106,7 @@ Monitoring ML kurang lebih punya dua perspektif ini.
 
 ---
 
-# Delayed ground truth — challenge unik ML
+## Delayed ground truth — challenge unik ML
 
 Kalau API biasa menerima request, kita langsung tahu response sukses atau gagal.
 
@@ -147,7 +147,7 @@ Ini alasan prediction logging sangat penting.
 
 ---
 
-## Prediction log
+### Prediction log
 
 Project simpan prediction ke:
 
@@ -174,7 +174,7 @@ Kalau hanya simpan angka prediction tanpa lineage, monitoring analysis jadi ambi
 
 ---
 
-# Ground truth
+## Ground truth
 
 Actual demand diambil dari processed hourly demand.
 
@@ -207,7 +207,7 @@ Jadi summary MAE bukan black box. Kita masih punya row-level evidence.
 
 ---
 
-# Kenapa MAE dan RMSE lagi?
+## Kenapa MAE dan RMSE lagi?
 
 Monitoring pakai metric yang sama dengan validation supaya comparison meaningful.
 
@@ -229,7 +229,7 @@ Keduanya memberi perspective berbeda.
 
 ---
 
-# Recent window
+## Recent window
 
 Kenapa kita nggak hitung MAE dari seluruh history sejak hari pertama?
 
@@ -255,7 +255,7 @@ recent window
 
 ---
 
-## Reference MAE
+### Reference MAE
 
 Kita butuh pembanding.
 
@@ -300,7 +300,7 @@ Ini relative threshold.
 
 ---
 
-# Kenapa validation MAE jadi reference?
+## Kenapa validation MAE jadi reference?
 
 Validation metric adalah expectation quality model saat approved.
 
@@ -322,7 +322,7 @@ Workshop mulai dari rule yang mudah dipahami.
 
 ---
 
-# Minimum sample — jangan panik karena satu outlier
+## Minimum sample — jangan panik karena satu outlier
 
 Misalnya prediction pertama error-nya besar banget.
 
@@ -354,7 +354,7 @@ Automation yang bagus juga tahu kapan evidence belum cukup.
 
 ---
 
-# Performance summary
+## Performance summary
 
 Project save summary:
 
@@ -379,7 +379,7 @@ File ini jadi bridge antara evaluation logic dan metrics/orchestration.
 
 ---
 
-# Monitoring pipeline vs dashboard
+## Monitoring pipeline vs dashboard
 
 Jangan taruh decision logic di Grafana.
 
@@ -405,11 +405,11 @@ Kalau retraining logic ditaruh di dashboard query, governance dan testing jadi l
 
 ---
 
-# Data drift vs performance degradation
+## Data drift vs performance degradation
 
 Ini sering disamakan.
 
-## Data Drift
+### Data Drift
 
 Distribution input berubah.
 
@@ -421,7 +421,7 @@ zone tertentu jadi jauh lebih sibuk
 lag distribution berubah
 ~~~
 
-## Performance Degradation
+### Performance Degradation
 
 Error prediction memburuk.
 
@@ -440,7 +440,7 @@ Future extension bisa tambah Evidently atau custom drift analysis.
 
 ---
 
-# Kenapa belum pakai Evidently?
+## Kenapa belum pakai Evidently?
 
 Bukan karena tool-nya jelek.
 
@@ -468,7 +468,7 @@ Concept first, tool later.
 
 ---
 
-# Monitoring harus lead to action
+## Monitoring harus lead to action
 
 Dashboard cantik saja belum close the loop.
 
@@ -496,9 +496,9 @@ Itu feedback loop.
 
 ---
 
-# What could go wrong?
+## What could go wrong?
 
-## Ground truth belum datang
+### Ground truth belum datang
 
 Recent MAE belum bisa dihitung.
 
@@ -510,19 +510,19 @@ wait
 
 Bukan assume zero error.
 
-## Prediction log missing
+### Prediction log missing
 
 Kita nggak bisa evaluate past prediction.
 
 Observability gap.
 
-## Model version campur
+### Model version campur
 
 Kalau evaluation combine prediction dari v1 dan v2 tanpa filter, MAE summary misleading.
 
 Makanya model version penting.
 
-## Too-small sample
+### Too-small sample
 
 Noise bisa trigger retraining.
 
@@ -530,7 +530,7 @@ Makanya minimum sample.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 

@@ -66,7 +66,7 @@ Karena latency bisa diketahui langsung saat request selesai, tapi prediction acc
 
 ---
 
-# 1. Buka Grafana sebelum generate traffic
+## 1. Buka Grafana sebelum generate traffic
 
 Open:
 
@@ -104,7 +104,7 @@ Monitoring yang bagus tidak mengarang data supaya dashboard terlihat cantik.
 
 ---
 
-# 2. Sebelum Grafana, cek Prometheus target
+## 2. Sebelum Grafana, cek Prometheus target
 
 Open:
 
@@ -140,7 +140,7 @@ Ini recurring debugging principle:
 
 ---
 
-# 3. Buka raw /metrics
+## 3. Buka raw /metrics
 
 Open:
 
@@ -180,7 +180,7 @@ Prometheus series
 
 ---
 
-# 4. Predict dulu apa yang akan terjadi sebelum generate traffic
+## 4. Predict dulu apa yang akan terjadi sebelum generate traffic
 
 Kita akan run:
 
@@ -210,7 +210,7 @@ Baru run.
 
 ---
 
-# 5. Apa yang dilakukan generate_api_traffic.py?
+## 5. Apa yang dilakukan generate_api_traffic.py?
 
 Actual script:
 
@@ -238,7 +238,7 @@ Kita benar-benar exercise FastAPI serving path.
 
 ---
 
-# 6. Watch success dan failed
+## 6. Watch success dan failed
 
 Terminal akan report:
 
@@ -264,11 +264,11 @@ Operational monitoring demo harus mulai dari request yang memang berhasil.
 
 ---
 
-# 7. Kenapa script ini berbeda dari replay_predictions.py?
+## 7. Kenapa script ini berbeda dari replay_predictions.py?
 
 Ini penting.
 
-## generate_api_traffic.py
+### generate_api_traffic.py
 
 ~~~text
 script
@@ -287,7 +287,7 @@ prediction counter ✅
 prediction log ✅
 ~~~
 
-## replay_predictions.py
+### replay_predictions.py
 
 ~~~text
 script
@@ -321,7 +321,7 @@ Satu project bisa punya dua path yang sengaja berbeda.
 
 ---
 
-# 8. Query raw counter
+## 8. Query raw counter
 
 Di Prometheus query:
 
@@ -345,7 +345,7 @@ Makanya counter sendiri belum jawab current traffic speed.
 
 ---
 
-# 9. Query rate
+## 9. Query rate
 
 Try:
 
@@ -373,7 +373,7 @@ Ini salah satu mental model Prometheus paling useful.
 
 ---
 
-# 10. Latency dan p95
+## 10. Latency dan p95
 
 Dashboard punya p95 latency.
 
@@ -396,7 +396,7 @@ Tail latency penting karena user yang unlucky tetap merasakan slow response.
 
 ---
 
-# 11. Refresh Grafana
+## 11. Refresh Grafana
 
 Wait beberapa detik buat:
 
@@ -428,7 +428,7 @@ Jangan random restart seluruh stack.
 
 ---
 
-# 12. Sekarang pindah ke model monitoring
+## 12. Sekarang pindah ke model monitoring
 
 Operational metric bergerak.
 
@@ -457,7 +457,7 @@ run_id
 
 ---
 
-# 13. Kenapa model_version harus ikut di prediction log?
+## 13. Kenapa model_version harus ikut di prediction log?
 
 Bayangin setengah hari pertama champion v1.
 
@@ -476,7 +476,7 @@ Model version adalah bagian dari prediction lineage.
 
 ---
 
-# 14. Ground truth harus tersedia
+## 14. Ground truth harus tersedia
 
 Prediction untuk Jan 28 hanya bisa dievaluate kalau processed actual demand Jan 28 tersedia.
 
@@ -500,7 +500,7 @@ Kalau actual belum ada, kita belum tahu model benar atau salah.
 
 ---
 
-# 15. Run evaluate_predictions.py
+## 15. Run evaluate_predictions.py
 
 ~~~bash
 uv run python scripts/evaluate_predictions.py
@@ -536,7 +536,7 @@ Makanya model monitoring bukan sekadar satu Prometheus query.
 
 ---
 
-# 16. Kenapa filter by model version?
+## 16. Kenapa filter by model version?
 
 Suppose:
 
@@ -559,7 +559,7 @@ Lineage membantu monitoring tetap model-specific.
 
 ---
 
-# 17. Baca terminal output
+## 17. Baca terminal output
 
 Output punya bentuk seperti:
 
@@ -594,7 +594,7 @@ min_samples
 
 ---
 
-# 18. Buka evaluations.parquet
+## 18. Buka evaluations.parquet
 
 Path:
 
@@ -623,7 +623,7 @@ Kalau MAE terlihat aneh, kita bisa inspect individual errors.
 
 ---
 
-# 19. Buka performance_summary.json
+## 19. Buka performance_summary.json
 
 ~~~text
 data/monitoring/performance_summary.json
@@ -654,7 +654,7 @@ No action adalah valid outcome.
 
 ---
 
-# 20. Bagaimana summary masuk ke Prometheus?
+## 20. Bagaimana summary masuk ke Prometheus?
 
 FastAPI metrics endpoint refresh model-performance gauge dari summary file saat scrape.
 
@@ -678,7 +678,7 @@ Ini dependency chain penting.
 
 ---
 
-# 21. Refresh Grafana lagi
+## 21. Refresh Grafana lagi
 
 Setelah evaluation dan next scrape, panel recent MAE/reference MAE seharusnya mulai muncul kalau ada evaluated samples.
 
@@ -698,9 +698,9 @@ Debug step by step.
 
 ---
 
-# 22. Scenario game — diagnose layer-nya
+## 22. Scenario game — diagnose layer-nya
 
-## Scenario A
+### Scenario A
 
 ~~~text
 p95 latency = 60 ms
@@ -727,7 +727,7 @@ Potential investigation:
 
 Restart Grafana bukan solution.
 
-## Scenario B
+### Scenario B
 
 ~~~text
 recent MAE normal
@@ -747,7 +747,7 @@ service performance
 
 Retraining model bukan first action.
 
-## Scenario C
+### Scenario C
 
 ~~~text
 request rate zero
@@ -758,7 +758,7 @@ Mungkin memang nggak ada traffic.
 
 Zero traffic bukan otomatis incident.
 
-## Scenario D
+### Scenario D
 
 ~~~text
 Prometheus target DOWN
@@ -769,7 +769,7 @@ Investigate API/network/scrape config before dashboard.
 
 ---
 
-# 23. Cardinality thought experiment
+## 23. Cardinality thought experiment
 
 Bayangin kita tambahkan label:
 
@@ -808,7 +808,7 @@ Detailed individual info cocok di logs/events, bukan metric labels.
 
 ---
 
-# 24. Unknown vs zero
+## 24. Unknown vs zero
 
 Ini subtle tapi penting.
 
@@ -836,7 +836,7 @@ Kalau kita salah represent missing sebagai zero, monitoring terlihat lebih bagus
 
 ---
 
-# 25. Monitoring detects symptom, not necessarily root cause
+## 25. Monitoring detects symptom, not necessarily root cause
 
 MAE naik adalah symptom.
 
@@ -861,7 +861,7 @@ Ini kenapa Step 10 masih punya governance boundary.
 
 ---
 
-# 26. Experiment dengan policy
+## 26. Experiment dengan policy
 
 Script support:
 
@@ -893,7 +893,7 @@ Workshop goal-nya memahami sensitivity.
 
 ---
 
-# 27. Propagation delay
+## 27. Propagation delay
 
 Suppose performance_summary baru diupdate.
 
@@ -921,7 +921,7 @@ Observability system juga punya latency.
 
 ---
 
-# 28. Monitoring chain recap
+## 28. Monitoring chain recap
 
 Operational:
 
@@ -961,7 +961,7 @@ Model chain lebih panjang karena ground truth delayed.
 
 ---
 
-## 10. Direct replay distinction
+### Direct replay: apa bedanya
 
 Coba jawab tanpa lihat docs:
 
@@ -987,7 +987,7 @@ Next kita tutup loop dengan retraining.
 
 ---
 
-## Urutan demo untuk dashboard repository ini
+### Urutan demo untuk dashboard repository ini
 
 Kalau data, model, dan service belum disiapkan, mulai dari [Quickstart Grafana dari kondisi kosong](dashboard-quickstart.md). Quickstart menyiapkan training, champion, HTTP traffic, dan evaluasi.
 

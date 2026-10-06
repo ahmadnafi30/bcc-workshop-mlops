@@ -37,7 +37,7 @@ Feature engineering mengubah historical demand menjadi **informasi yang bisa dip
 
 ---
 
-# Goal akhir
+## Goal akhir
 
 Command:
 
@@ -75,7 +75,7 @@ Masing-masing punya intuition.
 
 ---
 
-# Feature engineering bukan “buat column sebanyak mungkin”
+## Feature engineering bukan “buat column sebanyak mungkin”
 
 Ada misconception:
 
@@ -99,7 +99,7 @@ Workshop ini sengaja pakai feature yang mudah dijelaskan dan bisa tersedia saat 
 
 ---
 
-# Step 1 — Sorting: kenapa urutan row matters?
+## Step 1 — Sorting: kenapa urutan row matters?
 
 Time-series operation sangat bergantung sequence.
 
@@ -148,7 +148,7 @@ Rule:
 
 ---
 
-# Step 2 — Calendar features
+## Step 2 — Calendar features
 
 Dari timestamp kita derive:
 
@@ -184,7 +184,7 @@ Calendar feature expose structure.
 
 ---
 
-# Apakah calendar feature leakage?
+## Apakah calendar feature leakage?
 
 Target time sendiri known sebelum prediction.
 
@@ -216,7 +216,7 @@ Feature availability adalah question utama:
 
 ---
 
-# Step 3 — Lag features
+## Step 3 — Lag features
 
 Lag berarti historical value beberapa step ke belakang.
 
@@ -258,7 +258,7 @@ Kalau tidak, boundary antar zone contamination.
 
 ---
 
-# Kenapa lag ini masuk akal buat taxi demand?
+## Kenapa lag ini masuk akal buat taxi demand?
 
 Demand punya temporal pattern.
 
@@ -294,7 +294,7 @@ Feature design harus connect ke domain intuition.
 
 ---
 
-# Kenapa lag harus per zone?
+## Kenapa lag harus per zone?
 
 Ini critical.
 
@@ -334,7 +334,7 @@ Ini contoh bug yang test harus catch.
 
 ---
 
-# Step 4 — Rolling features
+## Step 4 — Rolling features
 
 Lag memberi exact historical point.
 
@@ -362,7 +362,7 @@ bukan include 18:00.
 
 ---
 
-# Kenapa shift sebelum rolling?
+## Kenapa shift sebelum rolling?
 
 Kalau kita langsung:
 
@@ -392,7 +392,7 @@ Ini satu line implementation yang punya impact besar ke validity model.
 
 ---
 
-# Analogi leakage
+## Analogi leakage
 
 Bayangin ujian.
 
@@ -418,7 +418,7 @@ Time-series leakage sering lebih subtle karena current/future values bisa masuk 
 
 ---
 
-# Step 5 — Target
+## Step 5 — Target
 
 Target kita:
 
@@ -452,7 +452,7 @@ Model belajar mapping history → current target.
 
 ---
 
-# Step 6 — Warm-up period
+## Step 6 — Warm-up period
 
 Feature terpanjang:
 
@@ -482,7 +482,7 @@ Walaupun tidak dipakai sebagai training target, mereka menyediakan historical co
 
 ---
 
-# Kenapa incomplete rows di-drop?
+## Kenapa incomplete rows di-drop?
 
 Model input contract mengharapkan semua required lag/rolling features tersedia.
 
@@ -508,7 +508,7 @@ Missing dan zero beda semantics.
 
 ---
 
-# Batch feature engineering vs online feature engineering
+## Batch feature engineering vs online feature engineering
 
 Training:
 
@@ -541,7 +541,7 @@ Kalau batch lag_24h berarti yesterday same hour, online lag_24h juga harus persi
 
 ---
 
-# Kenapa nggak reuse satu function exactly untuk batch dan online?
+## Kenapa nggak reuse satu function exactly untuk batch dan online?
 
 Kadang bisa.
 
@@ -565,7 +565,7 @@ Same meaning, same types, same ordering.
 
 ---
 
-## Batch vs online feature path
+### Batch vs online feature path
 
 Model expected columns disimpan sebagai constant.
 
@@ -595,7 +595,7 @@ Explicit feature list membuat input deterministic.
 
 ---
 
-# zone_id sebagai categorical
+## zone_id sebagai categorical
 
 Zone ID itu identifier.
 
@@ -613,7 +613,7 @@ Ini juga harus konsisten saat serving.
 
 ---
 
-# Testing feature engineering — kenapa synthetic data powerful?
+## Testing feature engineering — kenapa synthetic data powerful?
 
 Real TLC data kompleks.
 
@@ -648,7 +648,7 @@ Test jadi interpretable.
 
 ---
 
-# Leakage test rolling mean
+## Leakage test rolling mean
 
 Synthetic sequence sama.
 
@@ -674,7 +674,7 @@ Test langsung expose leakage.
 
 ---
 
-# Cross-zone contamination test
+## Cross-zone contamination test
 
 Buat dua zones dengan scale beda.
 
@@ -692,7 +692,7 @@ Ini example bagus bagaimana test design berasal dari failure mode.
 
 ---
 
-# Feature engineering dan retraining
+## Feature engineering dan retraining
 
 Saat new daily demand masuk:
 
@@ -718,7 +718,7 @@ Makanya feature code adalah core business logic, bukan utility kecil.
 
 ---
 
-# Feature availability checklist
+## Feature availability checklist
 
 Sebelum tambah feature baru, tanya:
 
@@ -740,7 +740,7 @@ Kalau tidak, jangan tambah cuma karena mudah.
 
 ---
 
-# Optional weather features
+## Optional weather features
 
 Future extension:
 
@@ -777,35 +777,35 @@ Ini alasan weather tetap optional.
 
 ---
 
-# Common failure modes
+## Common failure modes
 
-## Lag salah karena sort salah
+### Lag salah karena sort salah
 
 Symptom: weird lag values.
 
-## Cross-zone contamination
+### Cross-zone contamination
 
 Symptom: historical value berasal dari zone lain.
 
-## Rolling include target
+### Rolling include target
 
 Symptom: suspiciously great validation performance.
 
-## Missing history dianggap zero
+### Missing history dianggap zero
 
 Symptom: artificial pattern di warm-up rows.
 
-## Batch vs online mismatch
+### Batch vs online mismatch
 
 Symptom: offline MAE bagus, serving prediction aneh.
 
-## Categorical dtype berubah
+### Categorical dtype berubah
 
 Symptom: model inference error atau semantics berubah.
 
 ---
 
-# Mini exercise
+## Mini exercise
 
 Target:
 
@@ -850,7 +850,7 @@ Kalau kalian bisa derive manual, feature semantics-nya clear.
 
 ---
 
-## Feature schema contract
+### Feature schema contract
 
 1. Kenapa sort harus sebelum lag?
 2. Calendar feature aman dari leakage kenapa?

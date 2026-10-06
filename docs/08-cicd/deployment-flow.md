@@ -23,7 +23,7 @@ Untuk application kita, artifact itu Docker image.
 
 ---
 
-# Analogi: source recipe vs packaged product
+## Analogi: source recipe vs packaged product
 
 Git repository seperti resep + bahan desain.
 
@@ -41,7 +41,7 @@ Ini membantu consistency antara environments.
 
 ---
 
-# Full delivery flow
+## Full delivery flow
 
 ~~~text
 develop
@@ -67,7 +67,7 @@ Anggap sebagai warehouse image.
 
 ---
 
-# Kenapa delivery hanya dari main?
+## Kenapa delivery hanya dari main?
 
 Branch lain masih development/integration.
 
@@ -95,7 +95,7 @@ push event
 
 ---
 
-# Kenapa PR tidak publish image?
+## Kenapa PR tidak publish image?
 
 Pull request code belum merged.
 
@@ -117,7 +117,7 @@ main
 
 ---
 
-# Exact tested commit
+## Exact tested commit
 
 Ini critical.
 
@@ -159,7 +159,7 @@ Jadi evidence CI match artifact.
 
 ---
 
-# Kenapa build lagi di delivery?
+## Kenapa build lagi di delivery?
 
 CI image build bisa hanya validation:
 
@@ -179,7 +179,7 @@ Workshop keep workflow understandable.
 
 ---
 
-# Image per service
+## Image per service
 
 Project punya:
 
@@ -204,7 +204,7 @@ Separate image memberi deployment flexibility.
 
 ---
 
-# Image naming
+## Image naming
 
 Pattern:
 
@@ -226,7 +226,7 @@ kita kehilangan clarity.
 
 ---
 
-# Tag latest
+## Tag latest
 
 ~~~text
 latest
@@ -250,7 +250,7 @@ Jadi latest bukan identity immutable.
 
 ---
 
-# Tag SHA
+## Tag SHA
 
 ~~~text
 sha-a1b2c3...
@@ -268,7 +268,7 @@ Ini software lineage.
 
 ---
 
-# Tag vs digest
+## Tag vs digest
 
 Tag adalah human-friendly pointer/name.
 
@@ -284,7 +284,7 @@ Workshop fokus SHA tag karena gampang connect source history.
 
 ---
 
-# Registry permissions
+## Registry permissions
 
 CD perlu push package.
 
@@ -298,7 +298,7 @@ Credential management adalah part delivery security.
 
 ---
 
-# Public vs private package
+## Public vs private package
 
 Container registry package visibility bisa public/private tergantung repo/org setup.
 
@@ -310,7 +310,7 @@ Workshop tidak deep ke IAM, tapi participant perlu tahu:
 
 ---
 
-# Delivery vs Deployment
+## Delivery vs Deployment
 
 Ini distinction utama.
 
@@ -340,7 +340,7 @@ Workshop selesai di Delivery.
 
 ---
 
-# Kenapa tidak fake deployment?
+## Kenapa tidak fake deployment?
 
 Karena target deployment nyata butuh decision:
 
@@ -369,7 +369,7 @@ Lebih baik boundary jujur.
 
 ---
 
-# Kalau nanti deploy ke VPS?
+## Kalau nanti deploy ke VPS?
 
 Possible future:
 
@@ -391,7 +391,7 @@ Masih perlu secret/network/rollback design.
 
 ---
 
-# Kalau deploy ke Kubernetes?
+## Kalau deploy ke Kubernetes?
 
 Flow concept sama:
 
@@ -415,7 +415,7 @@ Artifact lineage tetap penting.
 
 ---
 
-# Application rollback
+## Application rollback
 
 Suppose new API image bug.
 
@@ -447,7 +447,7 @@ Registry sudah punya artifact.
 
 ---
 
-# Model rollback beda
+## Model rollback beda
 
 Suppose application image sehat, tapi champion model v5 jelek.
 
@@ -471,7 +471,7 @@ Diagnosis harus menentukan layer.
 
 ---
 
-# Example incident reasoning
+## Example incident reasoning
 
 ### Incident A
 
@@ -505,7 +505,7 @@ This is why changing too many dimensions simultaneously makes diagnosis harder.
 
 ---
 
-# Release coupling
+## Release coupling
 
 Mature system kadang decouple app release dan model release.
 
@@ -526,7 +526,7 @@ Loose coupling.
 
 ---
 
-# Artifact retention
+## Artifact retention
 
 Kalau registry hanya menyimpan latest dan menghapus semua old SHA, rollback capability hilang.
 
@@ -541,7 +541,7 @@ Workshop registry kecil, tapi concept worth knowing.
 
 ---
 
-# Image vulnerability/security
+## Image vulnerability/security
 
 Built artifact juga perlu security.
 
@@ -559,7 +559,7 @@ Workshop belum implement semua, tapi architecture bisa berkembang ke sana.
 
 ---
 
-# Delivery evidence
+## Delivery evidence
 
 Idealnya kita bisa trace:
 
@@ -593,7 +593,7 @@ Dua lineage chain berjalan berdampingan.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Kenapa deployment target sebaiknya pull built artifact, bukan build improvisasi?
 2. Kenapa delivery hanya setelah main + CI?

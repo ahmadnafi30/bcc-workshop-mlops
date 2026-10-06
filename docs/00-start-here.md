@@ -65,13 +65,17 @@ Untuk Windows, ikuti panduan di WSL2 bila menggunakan command Bash pada quicksta
 | Buka halaman | Artinya | Yang diharapkan |
 | --- | --- | --- |
 | [MLflow](http://localhost:5000) | Tempat melihat training dan model | UI terbuka; daftar run terisi setelah training |
-| [Airflow](http://localhost:8080) | Tempat mengatur workflow | Halaman login, lalu DAG workshop |
+| [Airflow](http://localhost:18081) | Tempat mengatur workflow | Halaman login, lalu DAG workshop |
 | [API health](http://localhost:8000/health) | Cek API hidup | Status health menunjukkan service aktif |
 | [API Swagger](http://localhost:8000/docs) | Coba endpoint API | Daftar endpoint muncul |
 | [Prometheus targets](http://localhost:9090/targets) | Cek apakah metric berhasil di-scrape | Target taxi-api berstatus UP |
 | [Grafana dashboard](http://localhost:3000/d/taxi-demand-mlops/taxi-demand-mlops) | Ringkasan service dan model | Dashboard Taxi Demand MLOps terbuka |
 
-Local Grafana memakai user/password default `admin`/`admin` kecuali nilainya diganti di file `.env`. Airflow standalone membuat credential lokal saat pertama dijalankan; ikuti petunjuk di [modul workshop](workshop-module.md).
+Port Airflow mengikuti pemetaan Compose. Jalankan `docker compose ps airflow` dan baca kolom `PORTS`. Contoh `127.0.0.1:18081->8080/tcp` berarti buka `http://localhost:18081`; angka kiri adalah port laptop, angka kanan port container. Airflow standalone lokal memakai `http://localhost:8080`. Pilih satu instance untuk seluruh workshop karena riwayat run-nya terpisah.
+
+Untuk Airflow Docker Compose, credential dibuat di container. Baca dengan `docker compose exec airflow cat /airflow/simple_auth_manager_passwords.json.generated` dan jangan bagikan. Untuk mode standalone lokal, password awal tampil saat server pertama dijalankan.
+
+Local Grafana memakai user/password default `admin`/`admin` kecuali nilainya diganti di file `.env`.
 
 !!! warning "Halaman terbuka belum berarti semua datanya sudah ada"
     Aplikasi bisa hidup walaupun belum ada dataset, model, prediction traffic, atau hasil evaluasi. Isi dashboard muncul setelah langkah yang menghasilkan data dijalankan. Itu biasanya bukan error; cek tahap mana yang belum dikerjakan di tabel berikut.
@@ -114,7 +118,7 @@ Satu run bagus belum otomatis menjadi champion. Ikuti proses register/review/pro
 
 ### 3. Airflow — lihat workflow berjalan per task 🛠️ {#airflow-ui}
 
-Buka [Airflow](http://localhost:8080), login memakai credential lokal, lalu cari tiga DAG berikut:
+Buka [Airflow di port Compose saat ini](http://localhost:18081), login memakai credential untuk instance tersebut, lalu cari tiga DAG berikut. Kalau port di laptopmu berbeda, ikuti angka kiri pada `docker compose ps airflow`.
 
 | DAG | Gunanya | Sebelum di-trigger |
 | --- | --- | --- |
@@ -122,7 +126,7 @@ Buka [Airflow](http://localhost:8080), login memakai credential lokal, lalu cari
 | **taxi_initial_training** | Membuat snapshot, mencatat training runs, dan mendaftarkan candidate jika lolos gate | Data dan dependency training harus siap |
 | **taxi_model_monitoring** | Mengevaluasi champion dan menjalankan retraining bila memenuhi kondisi | Prediction log dan actual demand harus tersedia |
 
-Semua DAG workshop memakai **manual trigger**. Artinya, melihat DAG pada daftar tidak otomatis menjalankan proses.
+Semua DAG workshop memakai `schedule=None` dan **manual trigger**. Jadi halaman Home dapat menunjukkan angka 0 walaupun Airflow sehat dan DAG sudah muncul. Trigger DAG yang inputnya siap untuk membuat run pertama.
 
 Untuk belajar membaca Airflow, pilih satu DAG, buka tampilan **Grid** atau **Graph**, lalu ikuti urutannya:
 

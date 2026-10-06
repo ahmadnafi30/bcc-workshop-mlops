@@ -35,7 +35,7 @@ Setelah selesai kalian bisa explain:
 
 ---
 
-# 1. Check Docker
+## 1. Check Docker
 
 ~~~bash
 docker --version
@@ -48,7 +48,7 @@ Windows user biasanya lebih nyaman lewat WSL2 + Docker integration.
 
 ---
 
-# 2. Stop local processes dulu
+## 2. Stop local processes dulu
 
 Kalau local Uvicorn masih pakai 8000, MLflow 5000, Airflow 8080:
 
@@ -66,7 +66,7 @@ State ada di .mlflow folder.
 
 ---
 
-# 3. Inspect Dockerfile
+## 3. Inspect Dockerfile
 
 Open:
 
@@ -89,7 +89,7 @@ Shared base environment, different service runtime.
 
 ---
 
-# 4. Build one target manually — optional
+## 4. Build one target manually — optional
 
 ~~~bash
 docker build -f docker/Dockerfile --target api -t bcc-mlops-api .
@@ -113,7 +113,7 @@ docker images | grep bcc
 
 ---
 
-# 5. Image vs container
+## 5. Image vs container
 
 Image:
 
@@ -131,7 +131,7 @@ Lifecycle berbeda.
 
 ---
 
-# 6. Start full stack
+## 6. Start full stack
 
 ~~~bash
 docker compose up -d --build
@@ -145,7 +145,7 @@ Jangan interrupt hanya karena beberapa menit.
 
 ---
 
-# 7. docker compose ps
+## 7. docker compose ps
 
 ~~~bash
 docker compose ps
@@ -172,24 +172,26 @@ Workspace tidak long-running by default.
 
 ---
 
-# 8. Open all service URLs
+## 8. Open all service URLs
 
 | Service | URL |
 | --- | --- |
 | MLflow | http://localhost:5000 |
-| Airflow | http://localhost:8080 |
+| Airflow | host port pada `docker compose ps airflow` |
 | FastAPI | http://localhost:8000 |
 | Swagger | http://localhost:8000/docs |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3000 |
 
-Jangan langsung assume all ready kalau browser error pertama detik startup.
+Untuk Airflow, jalankan `docker compose ps airflow` lalu buka host port di sisi kiri pemetaan. Contoh `127.0.0.1:18081->8080/tcp` berarti alamat browser-nya `http://localhost:18081`. Jangan langsung assume all ready kalau browser error pertama detik startup.
 
 Healthchecks/startup bisa perlu waktu.
 
 ---
 
-# 9. Verify MLflow state continuity
+---
+
+## 9. Verify MLflow state continuity
 
 Open MLflow.
 
@@ -207,7 +209,7 @@ Local helper dan Docker service sama-sama use:
 
 ---
 
-# 10. Kalau champion hilang, apa yang dicek?
+## 10. Kalau champion hilang, apa yang dicek?
 
 Jangan retrain dulu.
 
@@ -223,7 +225,7 @@ Likely state-path issue, bukan model issue.
 
 ---
 
-# 11. Test FastAPI inside Compose
+## 11. Test FastAPI inside Compose
 
 ~~~bash
 curl http://localhost:8000/health
@@ -234,7 +236,7 @@ Kalau health works tapi model-info fail, same dependency reasoning berlaku.
 
 ---
 
-# 12. Host URL vs service URL
+## 12. Host URL vs service URL
 
 Browser:
 
@@ -256,7 +258,7 @@ Compose DNS resolve service name.
 
 ---
 
-# 13. Port mapping thought experiment
+## 13. Port mapping thought experiment
 
 Compose:
 
@@ -286,7 +288,7 @@ This distinction useful.
 
 ---
 
-# 14. Shared data bind mount
+## 14. Shared data bind mount
 
 Compose mount project data folder.
 
@@ -306,7 +308,7 @@ One simple shared filesystem for local workshop.
 
 ---
 
-# 15. Named volumes
+## 15. Named volumes
 
 Prometheus/Grafana/Airflow punya persistent service state.
 
@@ -318,7 +320,7 @@ Data state can persist.
 
 ---
 
-# 16. Check logs
+## 16. Check logs
 
 ~~~bash
 docker compose logs -f api
@@ -334,7 +336,7 @@ Container tetap running.
 
 ---
 
-# 17. Logs bukan same as metrics
+## 17. Logs bukan same as metrics
 
 Logs:
 
@@ -354,7 +356,7 @@ Jangan berharap Grafana menggantikan stack traces.
 
 ---
 
-# 18. Healthcheck
+## 18. Healthcheck
 
 Container status bisa:
 
@@ -374,7 +376,7 @@ Compose depends_on health behavior membantu startup ordering.
 
 ---
 
-# 19. Workspace one-shot container
+## 19. Workspace one-shot container
 
 Run:
 
@@ -392,7 +394,7 @@ Kita bisa run project tool dalam same containerized environment tanpa install lo
 
 ---
 
-# 20. Container inspect vs source changes
+## 20. Container inspect vs source changes
 
 Kalau code copied into image lalu source host berubah, running container tidak otomatis update unless bind-mounted source or rebuild.
 
@@ -408,7 +410,7 @@ may be needed.
 
 ---
 
-# 21. docker compose down
+## 21. docker compose down
 
 ~~~bash
 docker compose down
@@ -420,7 +422,7 @@ Named volumes remain.
 
 ---
 
-# 22. docker compose down -v
+## 22. docker compose down -v
 
 ~~~bash
 docker compose down -v
@@ -436,7 +438,7 @@ Shared .mlflow bind folder remains because it is host path.
 
 ---
 
-# 23. Full reset vs normal restart
+## 23. Full reset vs normal restart
 
 Normal:
 
@@ -461,7 +463,7 @@ Bisa menghapus evidence/state yang sebenarnya useful.
 
 ---
 
-# 24. Scenario: API cannot connect MLflow
+## 24. Scenario: API cannot connect MLflow
 
 Error:
 
@@ -481,7 +483,7 @@ This is classic container networking bug.
 
 ---
 
-# 25. Scenario: port already allocated
+## 25. Scenario: port already allocated
 
 Compose error host port 8000 used.
 
@@ -499,7 +501,7 @@ Problem host binding, bukan Dockerfile necessarily.
 
 ---
 
-# 26. Scenario: Prometheus starts before API healthy?
+## 26. Scenario: Prometheus starts before API healthy?
 
 depends_on + healthcheck design helps.
 
@@ -509,7 +511,7 @@ Distributed services have startup timing.
 
 ---
 
-# 27. Why not install everything one container?
+## 27. Why not install everything one container?
 
 Because service lifecycle different.
 
@@ -521,7 +523,7 @@ Separation creates flexibility.
 
 ---
 
-# 28. Docker image as delivery artifact
+## 28. Docker image as delivery artifact
 
 Step 8 GitHub Actions later build same service targets and push to GHCR.
 
@@ -541,7 +543,7 @@ One artifact definition across lifecycle.
 
 ---
 
-# 29. Checkpoint
+## 29. Checkpoint
 
 1. Image vs container?
 2. Build vs run?

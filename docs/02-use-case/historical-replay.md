@@ -51,7 +51,7 @@ Yang disimulasikan adalah **waktu availability**, bukan isi datanya.
 
 ---
 
-# Source yang lengkap vs data yang sudah released
+## Source yang lengkap vs data yang sudah released
 
 Bootstrap menyiapkan compact monthly replay source:
 
@@ -81,7 +81,7 @@ Padahal secara physical semua source month sudah ada.
 
 ---
 
-# Kenapa ada banyak layer folder?
+## Kenapa ada banyak layer folder?
 
 Kadang beginner lihat:
 
@@ -99,23 +99,23 @@ dan merasa:
 
 Karena setiap layer punya semantics beda.
 
-## source
+### source
 
 External/historical source yang kita prepare.
 
-## raw
+### raw
 
 Data yang sudah logically released ke production pipeline.
 
-## processed
+### processed
 
 Trip-level events sudah ditransform jadi hourly demand.
 
-## features
+### features
 
 Combined history yang sudah punya lag/calendar/rolling features.
 
-## snapshots
+### snapshots
 
 Frozen training input untuk specific training cycle.
 
@@ -123,7 +123,7 @@ Jadi folder structure sebenarnya merepresentasikan data lifecycle.
 
 ---
 
-# Simulate satu hari
+## Simulate satu hari
 
 Command:
 
@@ -155,7 +155,7 @@ Satu logical day sekarang tersedia buat downstream.
 
 ---
 
-# Kenapa raw daily batch masih trip-level?
+## Kenapa raw daily batch masih trip-level?
 
 Karena raw layer merepresentasikan event yang datang.
 
@@ -183,7 +183,7 @@ raw event
 
 ---
 
-# Aggregate ke hourly demand
+## Aggregate ke hourly demand
 
 Daily batch diproses:
 
@@ -215,7 +215,7 @@ one hour
 
 ---
 
-# Kenapa zero-demand combination harus ada?
+## Kenapa zero-demand combination harus ada?
 
 Suppose zone 161 jam 03:00 tidak punya satu pun trip.
 
@@ -237,7 +237,7 @@ Ini detail kecil dengan impact besar ke model.
 
 ---
 
-# Initial history — kenapa Jan 1 sampai Jan 26 sudah disiapkan?
+## Initial history — kenapa Jan 1 sampai Jan 26 sudah disiapkan?
 
 Sebelum simulation production dimulai, kita butuh initial model.
 
@@ -277,7 +277,7 @@ Ini mirip real deployment. Sebelum model diluncurkan, kita memang sudah punya hi
 
 ---
 
-# Kenapa initial history tidak direplay satu-satu?
+## Kenapa initial history tidak direplay satu-satu?
 
 Secara technical bisa trigger Jan 1 sampai Jan 26 satu per satu.
 
@@ -297,7 +297,7 @@ Concept temporal tetap terjaga di area yang ingin kita demo.
 
 ---
 
-# Prediction timing — bagian paling penting
+## Prediction timing — bagian paling penting
 
 Suppose target:
 
@@ -325,7 +325,7 @@ Tidak boleh jadi input.
 
 ---
 
-# “Tapi file Jan 28 full sudah ada di disk?”
+## “Tapi file Jan 28 full sudah ada di disk?”
 
 Good question.
 
@@ -353,7 +353,7 @@ Jadi temporal correctness punya beberapa layer:
 
 ---
 
-# Delayed ground truth
+## Delayed ground truth
 
 Setelah target hour selesai, actual baru bisa dinilai.
 
@@ -377,7 +377,7 @@ Prediction correctness delayed.
 
 ---
 
-# Replay mempercepat clock, bukan menghapus causality
+## Replay mempercepat clock, bukan menghapus causality
 
 Workshop bisa melakukan Jan 27, Jan 28, Jan 29 dalam satu session.
 
@@ -405,7 +405,7 @@ Ini alasan replay powerful buat teaching MLOps.
 
 ---
 
-# Daily orchestration vs hourly prediction
+## Daily orchestration vs hourly prediction
 
 Ada nuance:
 
@@ -433,7 +433,7 @@ Yang penting availability rules konsisten.
 
 ---
 
-# Idempotency
+## Idempotency
 
 Suppose Jan 27 release task fail halfway lalu di-retry.
 
@@ -461,7 +461,7 @@ Idempotency membuat retries lebih aman.
 
 ---
 
-# Logical time vs wall-clock time
+## Logical time vs wall-clock time
 
 Airflow run hari ini secara real-world mungkin tanggal 2026.
 
@@ -485,7 +485,7 @@ Dalam data engineering, logical time sering lebih important daripada machine clo
 
 ---
 
-# Potential production differences
+## Potential production differences
 
 Real production mungkin punya:
 
@@ -513,7 +513,7 @@ Concept-nya transferable.
 
 ---
 
-# Thought experiment: apa yang terjadi kalau kita cheat?
+## Thought experiment: apa yang terjadi kalau kita cheat?
 
 Misalnya target Jan 28 18:00.
 
@@ -533,7 +533,7 @@ Reminder:
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab dengan bahasa sendiri:
 

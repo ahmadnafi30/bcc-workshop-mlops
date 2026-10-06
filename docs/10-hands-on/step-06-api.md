@@ -44,7 +44,7 @@ Check champion alias.
 
 ---
 
-# 2. Pastikan champion alias ada
+## 2. Pastikan champion alias ada
 
 Model Registry harus punya:
 
@@ -67,7 +67,7 @@ No.
 
 ---
 
-# 3. Pastikan historical demand cukup
+## 3. Pastikan historical demand cukup
 
 Untuk target Jan 28 18:00, online feature provider perlu up to 168h history.
 
@@ -83,7 +83,7 @@ Kalau history incomplete, prediction seharusnya fail clearly.
 
 ---
 
-# 4. Start FastAPI
+## 4. Start FastAPI
 
 New terminal:
 
@@ -101,7 +101,7 @@ Ini Swagger UI.
 
 ---
 
-# 5. Sebelum click, lihat endpoint list
+## 5. Sebelum click, lihat endpoint list
 
 Expected:
 
@@ -123,7 +123,7 @@ Karena /metrics bukan business API participant/client utama.
 
 ---
 
-## 4. GET /health
+## 6. GET /health
 
 Swagger atau curl:
 
@@ -147,7 +147,7 @@ Bukan:
 
 ---
 
-# 7. Kenapa health tidak load champion?
+## 7. Kenapa health tidak load champion?
 
 Kalau /health tergantung MLflow:
 
@@ -165,7 +165,7 @@ Readiness probe production bisa dibuat lebih comprehensive separately.
 
 ---
 
-# 8. Test /model-info
+## 8. Test /model-info
 
 ~~~bash
 curl http://127.0.0.1:8000/model-info
@@ -187,7 +187,7 @@ Harus match champion alias.
 
 ---
 
-# 9. Prediction request — sebelum send, predict internal flow
+## 9. Prediction request — sebelum send, predict internal flow
 
 Request:
 
@@ -226,7 +226,7 @@ Baru send.
 
 ---
 
-# 10. Inspect response
+## 10. Inspect response
 
 Jangan cuma lihat:
 
@@ -251,7 +251,7 @@ Kalau output aneh, kita tahu model mana yang produce.
 
 ---
 
-# 11. Kenapa client tidak kirim lag feature?
+## 11. Kenapa client tidak kirim lag feature?
 
 Kalau request harus kirim:
 
@@ -277,7 +277,7 @@ serving layer menjaga feature semantics.
 
 ---
 
-# 12. Test invalid target time
+## 12. Test invalid target time
 
 Try:
 
@@ -298,7 +298,7 @@ Model contract hourly.
 
 ---
 
-# 13. Apa arti 422?
+## 13. Apa arti 422?
 
 Roughly:
 
@@ -314,7 +314,7 @@ Bukan server crash.
 
 ---
 
-# 14. Simulate champion missing conceptually
+## 14. Simulate champion missing conceptually
 
 Kalau champion alias tidak ada, /model-info atau /predict bisa return 503.
 
@@ -326,7 +326,7 @@ Ini beda dari 422.
 
 ---
 
-# 15. 422 vs 503 thought exercise
+## 15. 422 vs 503 thought exercise
 
 ### Request target 18:30
 
@@ -348,7 +348,7 @@ Different action.
 
 ---
 
-# 16. Model loader cache
+## 16. Model loader cache
 
 First request mungkin load champion model.
 
@@ -372,7 +372,7 @@ Tradeoff freshness vs overhead.
 
 ---
 
-# 17. Prediction log
+## 17. Prediction log
 
 Setelah successful request, inspect:
 
@@ -403,7 +403,7 @@ Prediction event sekarang siap untuk delayed evaluation nanti.
 
 ---
 
-# 18. Kenapa log setelah successful predict?
+## 18. Kenapa log setelah successful predict?
 
 Kalau request invalid dan tidak ada prediction, jangan tulis fake prediction event.
 
@@ -413,7 +413,7 @@ Event semantics harus clear.
 
 ---
 
-# 19. Negative output domain constraint
+## 19. Negative output domain constraint
 
 Regression theoretically bisa predict negative.
 
@@ -431,7 +431,7 @@ Post-processing boundary enforce valid business output.
 
 ---
 
-# 20. Open /metrics
+## 20. Open /metrics
 
 ~~~text
 http://127.0.0.1:8000/metrics
@@ -449,7 +449,7 @@ Sekarang kalian sudah mulai melihat connection FastAPI → Prometheus.
 
 ---
 
-# 21. Request middleware
+## 21. Request middleware
 
 Setiap HTTP request lewat middleware.
 
@@ -471,7 +471,7 @@ Kalau endpoint fail pun status code metric tetap useful.
 
 ---
 
-# 22. Test multiple requests
+## 22. Test multiple requests
 
 Send beberapa prediction.
 
@@ -483,7 +483,7 @@ Ini good prelude sebelum Step 9 monitoring.
 
 ---
 
-# 23. Swagger vs curl
+## 23. Swagger vs curl
 
 Swagger good buat learning.
 
@@ -497,7 +497,7 @@ Jangan confuse Swagger sebagai “FastAPI backend”. Swagger hanya interactive 
 
 ---
 
-# 24. API testing architecture
+## 24. API testing architecture
 
 Project tests override predictor dependency.
 
@@ -515,7 +515,7 @@ Integration flow tetap dites lewat workshop stack.
 
 ---
 
-# 25. Common error: /health works, /predict fails
+## 25. Common error: /health works, /predict fails
 
 Jangan bilang API broken.
 
@@ -541,7 +541,7 @@ Specific diagnosis.
 
 ---
 
-# 26. Common error: model info version unexpected
+## 26. Common error: model info version unexpected
 
 Check Registry alias.
 
@@ -559,7 +559,7 @@ API serve champion only.
 
 ---
 
-# 27. Common error: history missing
+## 27. Common error: history missing
 
 Online feature provider membaca processed daily demand files.
 
@@ -571,7 +571,7 @@ Jangan silently fill zero, karena zero means actual no demand, bukan missing his
 
 ---
 
-# 28. Checkpoint
+## 28. Checkpoint
 
 1. /health menjawab apa?
 2. /model-info menjawab apa?

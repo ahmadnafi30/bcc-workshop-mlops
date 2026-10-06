@@ -7,7 +7,9 @@ theme:
   name: material
   features:
     - navigation.sections
+    - navigation.path
     - navigation.top
+    - toc.follow
     - content.code.copy
     - search.suggest
     - search.highlight
@@ -17,6 +19,7 @@ markdown_extensions:
   - attr_list
   - toc:
       permalink: true
+      toc_depth: 3
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.tabbed:
@@ -25,57 +28,53 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Mulai di Sini: 00-start-here.md
-  - Modul Workshop: workshop-module.md
-  - Konsep & Konteks:
+  - MLOps & Use Case Taxi:
       - Workshop Overview: 01-introduction/workshop-overview.md
       - MLOps from Zero: 01-introduction/mlops-from-zero.md
       - Architecture: 01-introduction/architecture.md
-      - Git Workflow: 01-introduction/git-workflow.md
-  - Use Case:
       - Problem Statement: 02-use-case/problem-statement.md
       - Dataset: 02-use-case/dataset.md
       - Feature & Model Design: 02-use-case/feature-design.md
       - Historical Replay: 02-use-case/historical-replay.md
-  - Core Tools:
+      - Git Workflow: 01-introduction/git-workflow.md
+  - Tools & Data Pipeline:
       - uv: 03-tools/uv.md
+      - Docker: 03-tools/docker.md
+      - Docker Compose: 04-infrastructure/docker-compose.md
       - DVC: 03-tools/dvc.md
       - Airflow & DAG: 03-tools/airflow.md
-      - Docker: 03-tools/docker.md
-  - Infrastructure:
-      - Docker Compose: 04-infrastructure/docker-compose.md
-  - Data Pipeline:
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
       - Airflow Pipeline: 05-data-pipeline/airflow-pipeline.md
-  - Training & Tracking:
+  - Training & Model:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
       - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
       - Model Registry: 06-experiment-tracking/model-registry.md
-  - Model Serving:
-      - Serving Design: 07-model-serving/model-serving.md
+      - Model Serving: 07-model-serving/model-serving.md
       - FastAPI: 07-model-serving/fastapi.md
-  - CI/CD:
-      - Konsep CI/CD: 08-cicd/cicd-concepts.md
+  - CI/CD & Release:
+      - CI/CD Concepts: 08-cicd/cicd-concepts.md
       - GitHub Actions: 08-cicd/github-actions.md
       - Container Delivery: 08-cicd/deployment-flow.md
-  - Monitoring:
+  - Monitoring & Retraining:
       - Monitoring Concepts: 09-monitoring/monitoring-concepts.md
       - Prometheus: 09-monitoring/prometheus.md
       - Grafana: 09-monitoring/grafana.md
       - Retraining: 09-monitoring/retraining.md
   - Hands-on Workshop:
-      - Step 0 - Setup: 10-hands-on/setup.md
-      - Quickstart Grafana: 10-hands-on/dashboard-quickstart.md
-      - Step 1 - Data: 10-hands-on/step-01-data.md
-      - Step 2 - Baseline: 10-hands-on/step-02-baseline.md
-      - Step 3 - DVC: 10-hands-on/step-03-dvc.md
-      - Step 4 - MLflow: 10-hands-on/step-04-mlflow.md
-      - Step 5 - Airflow: 10-hands-on/step-05-airflow.md
-      - Step 6 - FastAPI: 10-hands-on/step-06-api.md
-      - Step 7 - Docker: 10-hands-on/step-07-docker.md
-      - Step 8 - CI/CD: 10-hands-on/step-08-cicd.md
-      - Step 9 - Monitoring: 10-hands-on/step-09-monitoring.md
-      - Step 10 - Retraining: 10-hands-on/step-10-retraining.md
+      - Step 0 — Setup: 10-hands-on/setup.md
+      - Quickstart — Grafana: 10-hands-on/dashboard-quickstart.md
+      - Step 1 — Data: 10-hands-on/step-01-data.md
+      - Step 2 — Baseline: 10-hands-on/step-02-baseline.md
+      - Step 3 — DVC: 10-hands-on/step-03-dvc.md
+      - Step 4 — MLflow: 10-hands-on/step-04-mlflow.md
+      - Step 5 — Airflow: 10-hands-on/step-05-airflow.md
+      - Step 6 — FastAPI: 10-hands-on/step-06-api.md
+      - Step 7 — Docker: 10-hands-on/step-07-docker.md
+      - Step 8 — CI/CD: 10-hands-on/step-08-cicd.md
+      - Step 9 — Monitoring: 10-hands-on/step-09-monitoring.md
+      - Step 10 — Retraining: 10-hands-on/step-10-retraining.md
       - Troubleshooting: 10-hands-on/troubleshooting.md
       - Presenter Checklist: 10-hands-on/demo-checklist.md
+  - Panduan Fasilitator: workshop-module.md
   - Glossary: glossary.md

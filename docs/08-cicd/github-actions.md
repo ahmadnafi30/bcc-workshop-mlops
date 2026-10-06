@@ -24,7 +24,7 @@ Setelah mental model ini jelas, expression detail jauh lebih gampang.
 
 ---
 
-# Workflow
+## Workflow
 
 File ada di:
 
@@ -43,7 +43,7 @@ Workflow = satu automation definition.
 
 ---
 
-# Trigger
+## Trigger
 
 Workflow CI bisa jalan karena:
 
@@ -59,7 +59,7 @@ Event-driven behavior ini beda dengan Airflow schedule/data pipeline trigger.
 
 ---
 
-# Job
+## Job
 
 Workflow punya jobs.
 
@@ -78,7 +78,7 @@ Kalau API image build lambat, MLflow build nggak harus menunggu selama dependenc
 
 ---
 
-# Step
+## Step
 
 Di dalam job ada steps.
 
@@ -98,7 +98,7 @@ Steps dalam satu job jalan berurutan.
 
 ---
 
-# Checkout
+## Checkout
 
 Runner fresh belum punya repository.
 
@@ -116,7 +116,7 @@ checks
 
 ---
 
-# Setup uv + Python
+## Setup uv + Python
 
 CI environment sebaiknya sedekat mungkin dengan local developer flow.
 
@@ -126,7 +126,7 @@ Goal bukan environment identical 100%, tapi setup path harus konsisten enough un
 
 ---
 
-# Branch Policy Job
+## Branch Policy Job
 
 Job ini cuma relevant pada pull request.
 
@@ -156,7 +156,7 @@ Ini contoh simple process-as-code.
 
 ---
 
-# Matrix build
+## Matrix build
 
 Daripada:
 
@@ -188,7 +188,7 @@ Benefit:
 
 ---
 
-# Cache
+## Cache
 
 CI bisa cache uv dependency atau Docker layer.
 
@@ -204,7 +204,7 @@ Kalau cache clear, build tetap harus bisa sukses.
 
 ---
 
-## Docker cache
+### Docker cache
 
 Suppose kalian push commit A.
 
@@ -223,7 +223,7 @@ Benefit:
 
 ---
 
-# Permissions
+## Permissions
 
 Workflow punya permission explicit.
 
@@ -235,7 +235,7 @@ Least privilege lebih sehat daripada semua workflow diberi write access.
 
 ---
 
-# GITHUB_TOKEN
+## GITHUB_TOKEN
 
 GitHub menyediakan token temporary buat workflow.
 
@@ -250,7 +250,7 @@ Kenapa better daripada personal password?
 
 ---
 
-# CD Workflow
+## CD Workflow
 
 Flow:
 
@@ -272,7 +272,7 @@ Jadi release artifact tidak dibuat dari arbitrary unverified revision.
 
 ---
 
-# Kenapa exact tested commit?
+## Kenapa exact tested commit?
 
 Bayangin CI test commit A.
 
@@ -292,7 +292,7 @@ Makanya delivery harus checkout exact revision yang passed CI.
 
 ---
 
-# Cara debug GitHub Actions
+## Cara debug GitHub Actions
 
 Jangan hanya lihat:
 
@@ -324,7 +324,7 @@ Nama step membantu narrow root cause.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Workflow, job, step beda apa?
 2. Trigger digunakan buat apa?

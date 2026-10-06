@@ -52,7 +52,7 @@ Lalu service kita yang tanggung jawab melakukan sisanya.
 
 ---
 
-# Serving itu sebenarnya abstraction boundary
+## Serving itu sebenarnya abstraction boundary
 
 Kalau disederhanakan:
 
@@ -84,7 +84,7 @@ Ini salah satu software engineering principle yang sangat useful di ML system: *
 
 ---
 
-# Kenapa request kita cuma zone_id dan target_datetime?
+## Kenapa request kita cuma zone_id dan target_datetime?
 
 Ini design decision yang sengaja kita ambil.
 
@@ -131,7 +131,7 @@ Pattern ini bikin responsibility lebih clear.
 
 ---
 
-# Training-serving consistency
+## Training-serving consistency
 
 Ini salah satu problem paling berbahaya di production ML karena kadang nggak langsung kelihatan.
 
@@ -175,7 +175,7 @@ Production system yang lebih besar sering memakai feature store untuk membantu c
 
 ---
 
-# Online feature generation di project kita
+## Online feature generation di project kita
 
 Untuk target:
 
@@ -210,7 +210,7 @@ Kita bisa punya Airflow, MLflow, Docker, Grafana yang keren, tapi kalau leakage 
 
 ---
 
-# Model selection: jangan hard-code version
+## Model selection: jangan hard-code version
 
 Misalnya registry punya:
 
@@ -264,7 +264,7 @@ Ini memisahkan lifecycle application dan lifecycle model.
 
 ---
 
-# Kenapa model tidak di-load ulang setiap request?
+## Kenapa model tidak di-load ulang setiap request?
 
 Bayangin ada 100 request.
 
@@ -318,7 +318,7 @@ Jadi kita balance freshness dan registry overhead.
 
 ---
 
-# Prediction logging — kenapa prediction harus disimpan?
+## Prediction logging — kenapa prediction harus disimpan?
 
 Sekarang kita predict:
 
@@ -372,7 +372,7 @@ Kalau prediction tidak dicatat, future ground truth nggak punya pasangan.
 
 ---
 
-# Kenapa JSONL?
+## Kenapa JSONL?
 
 Workshop pakai:
 
@@ -396,7 +396,7 @@ Yang penting concept-nya:
 
 ---
 
-## Serving vs Deployment
+### Serving vs Deployment
 
 Regression secara matematis bisa output negatif.
 
@@ -414,7 +414,7 @@ Post-processing juga bagian dari actual system behavior, jadi harus documented d
 
 ---
 
-# Serving vs deployment — jangan ketuker
+## Serving vs deployment — jangan ketuker
 
 ### Serving
 
@@ -452,7 +452,7 @@ Concern-nya beda.
 
 ---
 
-# Kalau feature history belum ada gimana?
+## Kalau feature history belum ada gimana?
 
 Misalnya client request target jam 18:00 tapi historical data untuk lag_168h belum lengkap.
 
@@ -464,7 +464,7 @@ Karena **fail clearly lebih baik daripada produce confident-looking garbage pred
 
 ---
 
-## Negative prediction
+### Negative prediction
 
 Coba jawab pakai bahasa sendiri:
 

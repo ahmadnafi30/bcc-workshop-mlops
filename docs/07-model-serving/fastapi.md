@@ -10,7 +10,7 @@ MLOps bukan dunia terpisah dari software engineering. MLOps justru banyak memaka
 
 ---
 
-# Kenapa FastAPI?
+## Kenapa FastAPI?
 
 Kita butuh service yang:
 
@@ -27,7 +27,7 @@ Tapi jangan terlalu attach ke brand tool-nya. Kalau besok pakai framework lain, 
 
 ---
 
-# Struktur project serving
+## Struktur project serving
 
 ~~~text
 api/
@@ -47,7 +47,7 @@ Kalau semua ditaruh di main.py, file itu cepat berubah jadi monster.
 
 ---
 
-# schemas.py — define contract
+## schemas.py — define contract
 
 Pydantic schema bilang request valid bentuknya apa.
 
@@ -78,7 +78,7 @@ daripada request invalid masuk jauh ke feature provider lalu error aneh beberapa
 
 ---
 
-# main.py — HTTP concern
+## main.py — HTTP concern
 
 main.py bertanggung jawab untuk:
 
@@ -104,7 +104,7 @@ FastAPI endpoint tipis
 
 ---
 
-# dependencies.py — wiring object yang dibutuhkan endpoint
+## dependencies.py — wiring object yang dibutuhkan endpoint
 
 Predictor dibuat lewat FastAPI dependency.
 
@@ -131,7 +131,7 @@ Jadi API contract bisa dites tanpa menyalakan seluruh MLOps stack.
 
 ---
 
-# GET /health
+## GET /health
 
 ~~~http
 GET /health
@@ -161,7 +161,7 @@ Signal yang specific lebih useful.
 
 ---
 
-# GET /model-info
+## GET /model-info
 
 Endpoint ini jawab:
 
@@ -189,7 +189,7 @@ Interpretasinya:
 
 ---
 
-# POST /predict
+## POST /predict
 
 Flow actual:
 
@@ -221,7 +221,7 @@ Dia delegate.
 
 ---
 
-# Kenapa typed response?
+## Kenapa typed response?
 
 Typed response membantu:
 
@@ -234,19 +234,19 @@ Client tahu bentuk output yang bisa diharapkan.
 
 ---
 
-# HTTP status code — jangan 500 semua
+## HTTP status code — jangan 500 semua
 
-## 200
+### 200
 
 Request berhasil.
 
-## 422
+### 422
 
 Request valid sebagai HTTP/JSON, tapi tidak valid secara semantic untuk prediction.
 
 Contoh target 18:30 padahal model hourly, atau required history tidak lengkap.
 
-## 503
+### 503
 
 Service process hidup, tapi dependency penting unavailable.
 
@@ -264,7 +264,7 @@ Distinction ini membantu debugging:
 
 ---
 
-# Middleware
+## Middleware
 
 Kita ingin ukur latency dan request count.
 
@@ -290,7 +290,7 @@ Cross-cutting concern seperti metrics cocok di middleware.
 
 ---
 
-# /metrics
+## /metrics
 
 Prometheus scrape:
 
@@ -306,7 +306,7 @@ User taxi forecast nggak perlu interact dengan Prometheus contract.
 
 ---
 
-# Path cardinality
+## Path cardinality
 
 Prometheus label bisa berbahaya kalau arbitrary URL dipakai raw.
 
@@ -333,7 +333,7 @@ Ini detail kecil tapi bagus banget buat menunjukkan observability perlu design.
 
 ---
 
-## Middleware
+### Middleware dalam alur request
 
 HTTP middleware wrap setiap request.
 
@@ -363,7 +363,7 @@ Cross-cutting concern cocok di middleware.
 
 ---
 
-## /metrics
+### Cek endpoint /metrics dari sisi client
 
 Prometheus scrape:
 
@@ -379,7 +379,7 @@ Client taxi prediction nggak perlu tahu metric endpoint.
 
 ---
 
-## Swagger UI
+### Swagger UI
 
 Start:
 
@@ -397,7 +397,7 @@ Di Swagger participant bisa lihat endpoint, schema, coba request, lihat status c
 
 ---
 
-# Champion harus ada sebelum predict
+## Champion harus ada sebelum predict
 
 Urutannya:
 
@@ -419,7 +419,7 @@ Kalau champion belum ada, API tidak tahu model mana yang approved.
 
 ---
 
-# Testing strategy
+## Testing strategy
 
 Jangan semua test dijadikan full integration test.
 
@@ -443,7 +443,7 @@ Kalau setiap test boot MLflow dan load dataset, test jadi lambat dan flaky.
 
 ---
 
-# Mini challenge
+## Mini challenge
 
 Suppose kita mau tambah batch prediction endpoint.
 
@@ -465,7 +465,7 @@ Ini recurring theme project kita: framework-specific layer tipis, reusable logic
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Kenapa schemas dipisah?
 2. Kenapa /health tidak check semua dependency?

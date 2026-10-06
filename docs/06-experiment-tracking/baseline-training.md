@@ -21,7 +21,7 @@ Baru setelah pain point tracking/reproducibility muncul, DVC dan MLflow masuk.
 
 ---
 
-# Dua comparator utama
+## Dua comparator utama
 
 Kita punya:
 
@@ -54,7 +54,7 @@ Model tabular yang menggunakan:
 
 ---
 
-# Kenapa baseline wajib?
+## Kenapa baseline wajib?
 
 Suppose main model:
 
@@ -88,7 +88,7 @@ Baseline memberi **minimum bar**.
 
 ---
 
-# Analogi baseline
+## Analogi baseline
 
 Kalian bikin route optimization AI.
 
@@ -110,7 +110,7 @@ Jadi baseline bukan strawman sengaja jelek.
 
 ---
 
-# Kenapa lag_24h jadi baseline?
+## Kenapa lag_24h jadi baseline?
 
 Karena use case punya natural daily pattern.
 
@@ -130,7 +130,7 @@ Good baseline harus cukup reasonable sehingga model benar-benar harus earn impro
 
 ---
 
-# Training snapshot
+## Training snapshot
 
 Manual training membaca:
 
@@ -152,7 +152,7 @@ Bukan:
 
 ---
 
-# Time-based split
+## Time-based split
 
 Initial:
 
@@ -193,7 +193,7 @@ yang kurang realistis.
 
 ---
 
-# Warm-up Jan 1–7
+## Warm-up Jan 1–7
 
 Kenapa snapshot historical mulai Jan 1 tapi training model-ready row baru Jan 8?
 
@@ -221,7 +221,7 @@ Tidak semua row harus menjadi training example untuk tetap useful.
 
 ---
 
-# Manual training flow
+## Manual training flow
 
 ~~~text
 load snapshot
@@ -255,7 +255,7 @@ Biar nanti ketika MLflow masuk, participant ngerti problem yang dia solve.
 
 ---
 
-# MAE intuition
+## MAE intuition
 
 MAE:
 
@@ -277,7 +277,7 @@ Easy to communicate.
 
 ---
 
-# RMSE intuition
+## RMSE intuition
 
 RMSE:
 
@@ -307,7 +307,7 @@ RMSE
 
 ---
 
-# Kenapa primary metric MAE?
+## Kenapa primary metric MAE?
 
 Karena interpretasi domain gampang.
 
@@ -319,7 +319,7 @@ Metric choice sebaiknya relate ke business/problem semantics, bukan cuma convent
 
 ---
 
-# Model matrix dan categorical zone
+## Model matrix dan categorical zone
 
 Sebelum fit, model input select feature columns.
 
@@ -339,7 +339,7 @@ Kalau model treat numeric continuous, relation yang dipelajari bisa misleading.
 
 ---
 
-# HGB parameter choice
+## HGB parameter choice
 
 Main config kurang lebih punya:
 
@@ -369,7 +369,7 @@ HistGradientBoosting fit kebutuhan itu.
 
 ---
 
-# “Kalau pakai model lebih canggih pasti lebih bagus dong?”
+## “Kalau pakai model lebih canggih pasti lebih bagus dong?”
 
 Belum tentu.
 
@@ -388,7 +388,7 @@ Workshop sengaja menggunakan model yang tidak menutupi lifecycle.
 
 ---
 
-# Hyperparameter tuning di mana?
+## Hyperparameter tuning di mana?
 
 Bisa ditambahkan nanti.
 
@@ -410,7 +410,7 @@ MLOps mengelola lifecycle experiment/model, bukan hanya optimizer hyperparameter
 
 ---
 
-# Local artifact
+## Local artifact
 
 Manual training save:
 
@@ -429,7 +429,7 @@ Nanti MLflow artifact store manage model secara lebih structured.
 
 ---
 
-# Kenapa local artifact tetap ada kalau nanti MLflow?
+## Kenapa local artifact tetap ada kalau nanti MLflow?
 
 Karena manual step punya pedagogical value.
 
@@ -443,7 +443,7 @@ Tool introduction jadi motivated.
 
 ---
 
-# Model kalah baseline — apakah workshop gagal?
+## Model kalah baseline — apakah workshop gagal?
 
 No.
 
@@ -469,7 +469,7 @@ Scientific honesty lebih penting dari demo narrative.
 
 ---
 
-# “model_beats_baseline” sebagai gate
+## “model_beats_baseline” sebagai gate
 
 Later training pipeline compute boolean:
 
@@ -485,7 +485,7 @@ MLOps connects ML evaluation to operational decision.
 
 ---
 
-# Reproducibility dan random_state
+## Reproducibility dan random_state
 
 Model punya random_state.
 
@@ -503,7 +503,7 @@ Reproducibility punya multiple layers.
 
 ---
 
-# Jangan invent actual workshop metrics
+## Jangan invent actual workshop metrics
 
 Docs boleh kasih hypothetical example:
 
@@ -526,7 +526,7 @@ Ini scientific integrity kecil tapi important.
 
 ---
 
-# What if RMSE naik tapi MAE turun?
+## What if RMSE naik tapi MAE turun?
 
 Interesting case.
 
@@ -549,7 +549,7 @@ Workshop gate sederhana pakai MAE baseline comparison, tapi reviewer tetap boleh
 
 ---
 
-# Time split saat retraining
+## Time split saat retraining
 
 Initial split fixed by snapshot end.
 
@@ -570,7 +570,7 @@ Baseline concept tetap sama.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 

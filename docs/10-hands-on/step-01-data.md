@@ -36,7 +36,7 @@ Kalau cuma berhasil download file tapi nggak bisa jawab pertanyaan itu, step ini
 
 ---
 
-# 1. Sebelum download, lihat problem-nya dulu
+## 1. Sebelum download, lihat problem-nya dulu
 
 Use case kita:
 
@@ -64,7 +64,7 @@ Ada transformation lifecycle.
 
 ---
 
-# 2. Bootstrap official dataset
+## 2. Bootstrap official dataset
 
 Setelah step ini:
 
@@ -76,7 +76,7 @@ Setelah step ini:
 
 ---
 
-## 1. Sebelum download, buka dataset docs
+### Sebelum membuka dokumentasi dataset
 
 Raw TLC punya satu row per trip.
 
@@ -92,7 +92,7 @@ Tapi raw source tetap penting sebagai starting point.
 
 ---
 
-## 2. Bootstrap
+### Jalankan bootstrap
 
 ~~~bash
 uv run python scripts/bootstrap_data.py
@@ -104,7 +104,7 @@ Jangan panik kalau terminal kelihatan sibuk.
 
 ---
 
-# 3. Apa yang sebenarnya didownload?
+## 3. Apa yang sebenarnya didownload?
 
 Dua hal utama.
 
@@ -132,7 +132,7 @@ Kita butuh tahu mana zone Manhattan.
 
 ---
 
-# 4. Kenapa base CloudFront URL bisa AccessDenied?
+## 4. Kenapa base CloudFront URL bisa AccessDenied?
 
 Kalau kalian coba buka folder base URL dan dapat XML AccessDenied, itu normal.
 
@@ -154,7 +154,7 @@ Jadi AccessDenied di prefix bukan berarti dataset private.
 
 ---
 
-# 5. Lihat folder setelah bootstrap
+## 5. Lihat folder setelah bootstrap
 
 Expected:
 
@@ -185,7 +185,7 @@ replay/
 
 ---
 
-# 6. Kenapa replay source lebih kecil?
+## 6. Kenapa replay source lebih kecil?
 
 Original TLC punya banyak columns.
 
@@ -204,7 +204,7 @@ Ini penting karena historical simulation akan sering access data tersebut.
 
 ---
 
-# 7. Inspect metadata zone lookup
+## 7. Inspect metadata zone lookup
 
 Try:
 
@@ -222,7 +222,7 @@ Model pakai zone_id, tapi human debugging sering terbantu zone name.
 
 ---
 
-# 8. Optional notebook exploration
+## 8. Optional notebook exploration
 
 Run:
 
@@ -253,7 +253,7 @@ Question:
 
 ---
 
-# 9. Prepare initial historical demand
+## 9. Prepare initial historical demand
 
 Run:
 
@@ -279,7 +279,7 @@ data/processed/demand/2025-01-26.parquet
 
 ---
 
-# 10. Kenapa Jan 1–26?
+## 10. Kenapa Jan 1–26?
 
 Karena kita butuh tiga logical segments.
 
@@ -304,7 +304,7 @@ Makanya Jan 8 adalah titik pertama yang punya one-week history lengkap.
 
 ---
 
-# 11. Warm-up bukan wasted data
+## 11. Warm-up bukan wasted data
 
 Jan 1–7 memang tidak jadi target training rows complete.
 
@@ -324,7 +324,7 @@ Data yang tidak jadi target row tetap bisa useful sebagai history.
 
 ---
 
-# 12. Inspect satu processed day
+## 12. Inspect satu processed day
 
 Try:
 
@@ -342,7 +342,7 @@ trip_count
 
 ---
 
-# 13. Kenapa processed row count bukan raw row count?
+## 13. Kenapa processed row count bukan raw row count?
 
 Raw:
 
@@ -364,7 +364,7 @@ Aggregation memang mengubah granularity.
 
 ---
 
-# 14. Complete grid sanity check
+## 14. Complete grid sanity check
 
 Suppose Manhattan punya Z zones.
 
@@ -382,7 +382,7 @@ Termasuk jam tanpa pickup.
 
 ---
 
-# 15. Zero demand vs missing data
+## 15. Zero demand vs missing data
 
 Ini distinction important.
 
@@ -406,7 +406,7 @@ Kalau semantics ini salah, lag feature nanti juga salah.
 
 ---
 
-# 16. Total pickup sanity
+## 16. Total pickup sanity
 
 Optional:
 
@@ -422,7 +422,7 @@ Goal:
 
 ---
 
-# 17. Kenapa data tidak di-commit ke Git?
+## 17. Kenapa data tidak di-commit ke Git?
 
 Generated Parquet cukup besar dan berubah.
 
@@ -439,7 +439,7 @@ Nanti DVC membantu snapshot reproducibility.
 
 ---
 
-# 18. Predict apa yang akan terjadi di Jan 27
+## 18. Predict apa yang akan terjadi di Jan 27
 
 Sekarang kita punya history sampai Jan 26.
 
@@ -461,7 +461,7 @@ Coba visualize ini sebelum Airflow masuk.
 
 ---
 
-# 19. Manual release Jan 27 — optional preview
+## 19. Manual release Jan 27 — optional preview
 
 Kalau mau lihat:
 
@@ -483,7 +483,7 @@ Karena kalau Airflow gagal, kalian tahu underlying operation-nya apa.
 
 ---
 
-# 20. Common issue: file sudah ada
+## 20. Common issue: file sudah ada
 
 Downloader bisa skip file existing.
 
@@ -497,7 +497,7 @@ Idempotency dan caching harus tetap punya integrity check mindset.
 
 ---
 
-# 21. Common issue: disk space
+## 21. Common issue: disk space
 
 Monthly TLC files besar.
 
@@ -509,7 +509,7 @@ Kalau download fail random, cek disk sebelum debugging Python logic terlalu jauh
 
 ---
 
-# 22. Common issue: internet venue
+## 22. Common issue: internet venue
 
 Ini alasan presenter checklist nanti menyarankan pre-bootstrap data.
 
@@ -519,29 +519,16 @@ Source data bisa disiapkan sebelum session supaya waktu lebih banyak buat MLOps.
 
 ---
 
-# 23. Mini challenge
+## 23. Mini challenge
 
 Coba jawab:
 
-### Raw source row
+### Tiga contoh baris pickup
 
 ~~~text
-pickup 17:03
-zone 161
-~~~
-
-### Raw source row
-
-~~~text
-pickup 17:10
-zone 161
-~~~
-
-### Raw source row
-
-~~~text
-pickup 17:44
-zone 162
+17:03 — Zone 161
+17:10 — Zone 161
+17:44 — Zone 162
 ~~~
 
 Setelah hourly aggregation:
@@ -562,7 +549,7 @@ Simple, tapi ini transformation fundamental seluruh project.
 
 ---
 
-# 24. Checkpoint
+## 24. Checkpoint
 
 Sebelum Step 2, pastikan:
 

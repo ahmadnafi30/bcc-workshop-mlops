@@ -36,7 +36,7 @@ Service kita tidak harus aktif push metric ke Prometheus. Dia cukup expose endpo
 
 ---
 
-# Apa itu scrape?
+## Apa itu scrape?
 
 Scrape = Prometheus datang ke endpoint metric dan mengambil current values.
 
@@ -60,7 +60,7 @@ Karena itu Prometheus bisa jawab pertanyaan seperti:
 
 ---
 
-# Counter
+## Counter
 
 Counter cocok untuk jumlah event cumulative.
 
@@ -92,7 +92,7 @@ Kita butuh rate.
 
 ---
 
-# Counter vs rate — Sample Odometer dan Speedometer
+## Counter vs rate — Sample Odometer dan Speedometer
 
 Counter itu seperti odometer mobil:
 
@@ -126,7 +126,7 @@ Ini distinction yang sangat useful.
 
 ---
 
-# Gauge
+## Gauge
 
 Gauge bisa naik dan turun.
 
@@ -165,7 +165,7 @@ Contoh lain:
 
 ---
 
-# Histogram
+## Histogram
 
 Latency nggak cukup direpresentasikan satu angka average.
 
@@ -184,21 +184,21 @@ Dari situ kita bisa estimate percentile.
 
 ---
 
-# p50, p95, p99
+## p50, p95, p99
 
-## p50
+### p50
 
 Kurang-lebih median.
 
 Bisa menggambarkan typical request.
 
-## p95
+### p95
 
 95% request berada di bawah sekitar ini.
 
 Tail latency mulai kelihatan.
 
-## p99
+### p99
 
 Lebih fokus to extreme tail.
 
@@ -208,7 +208,7 @@ Workshop kita pakai p95 supaya konsepnya gampang terlihat.
 
 ---
 
-# Metric di project kita
+## Metric di project kita
 
 Operational:
 
@@ -224,7 +224,7 @@ Perhatikan operational metric dan model metric bisa hidup di endpoint yang sama,
 
 ---
 
-## Labels
+### Labels
 
 Metric bisa punya labels.
 
@@ -246,7 +246,7 @@ Tapi ada bahaya besar: **cardinality**.
 
 ---
 
-## Cardinality
+### Cardinality
 
 Setiap kombinasi label values berpotensi jadi time series berbeda.
 
@@ -268,7 +268,7 @@ Prometheus bukan tempat yang tepat untuk menyimpan semua detail individual reque
 
 ---
 
-# Kenapa path dinormalisasi?
+## Kenapa path dinormalisasi?
 
 Kalau API punya path dynamic:
 
@@ -293,7 +293,7 @@ Ini detail kecil, tapi menunjukkan observability juga butuh architecture decisio
 
 ---
 
-# Kenapa zone_id nggak jadi label di semua metric?
+## Kenapa zone_id nggak jadi label di semua metric?
 
 Zone masih finite, tapi kita ingin ngajarin principle yang scalable.
 
@@ -314,11 +314,11 @@ lebih appropriate.
 
 ---
 
-# Metrics vs Logs
+## Metrics vs Logs
 
 Ini penting.
 
-## Metrics
+### Metrics
 
 ~~~text
 numeric
@@ -327,7 +327,7 @@ time-series
 cheap to query trends
 ~~~
 
-## Logs / Events
+### Logs / Events
 
 ~~~text
 detailed
@@ -349,7 +349,7 @@ Observability system biasanya combine beberapa signal types.
 
 ---
 
-# Scrape config di Compose
+## Scrape config di Compose
 
 Prometheus target:
 
@@ -378,7 +378,7 @@ Jadi Compose DNS dipakai lagi.
 
 ---
 
-# Prometheus UI
+## Prometheus UI
 
 Open:
 
@@ -414,7 +414,7 @@ Kalau logik itu paham, belajar PromQL berikutnya jauh lebih mudah.
 
 ---
 
-# Target Status
+## Target Status
 
 Prometheus punya target page.
 
@@ -444,7 +444,7 @@ Grafana cuma bisa visualisasi data yang sudah masuk Prometheus.
 
 ---
 
-# Metric naming
+## Metric naming
 
 Metric name sebaiknya menjelaskan semantics dan unit.
 
@@ -482,7 +482,7 @@ Nama yang jelas sangat membantu ketika metric sudah banyak.
 
 ---
 
-# Prometheus bukan alert magic
+## Prometheus bukan alert magic
 
 Punya metric belum berarti kita otomatis tahu threshold yang benar.
 
@@ -498,7 +498,7 @@ Hal yang sama berlaku buat MAE.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 
@@ -515,7 +515,7 @@ Coba jawab:
 
 ---
 
-## Metric monitoring model di repository ini
+### Metric monitoring model di repository ini
 
 `/metrics` membaca `data/monitoring/performance_summary.json` ketika Prometheus scrape. Scrape hanya memperbarui gauge; job evaluasi harus dijalankan terpisah.
 

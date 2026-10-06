@@ -27,7 +27,7 @@ Dia baca data dari Prometheus.
 
 ---
 
-# Analogi control room
+## Analogi control room
 
 Prometheus seperti sensor + measurement database.
 
@@ -41,7 +41,7 @@ Jadi dua role ini beda.
 
 ---
 
-## Datasource
+### Datasource
 
 Grafana perlu tahu:
 
@@ -62,7 +62,7 @@ Jadi internal service discovery lagi.
 
 ---
 
-# Provisioning — kenapa dashboard disimpan di Git?
+## Provisioning — kenapa dashboard disimpan di Git?
 
 Kita bisa bikin dashboard manual lewat UI.
 
@@ -105,7 +105,7 @@ Ini jauh lebih professional dan repeatable.
 
 ---
 
-# Dashboard sebagai code/config artifact
+## Dashboard sebagai code/config artifact
 
 Dashboard JSON memang bukan Python code, tapi dia tetap bagian system configuration.
 
@@ -121,7 +121,7 @@ Ini small example dari infrastructure/configuration as code mindset.
 
 ---
 
-# Panel apa saja?
+## Panel apa saja?
 
 Dashboard starter kita punya:
 
@@ -141,7 +141,7 @@ Biar kita cepat compare dua health dimension.
 
 ---
 
-# Scenario 1 — service sehat, model jelek
+## Scenario 1 — service sehat, model jelek
 
 Misalnya:
 
@@ -174,7 +174,7 @@ Restart API container belum tentu membantu.
 
 ---
 
-# Scenario 2 — model sehat, service jelek
+## Scenario 2 — model sehat, service jelek
 
 ~~~text
 recent MAE normal
@@ -205,7 +205,7 @@ Retrain model bukan solusi.
 
 ---
 
-# Scenario 3 — dua-duanya bermasalah
+## Scenario 3 — dua-duanya bermasalah
 
 ~~~text
 latency naik
@@ -225,7 +225,7 @@ Dashboard membantu narrow investigation, bukan otomatis memberi root cause.
 
 ---
 
-# Dashboard kosong belum tentu Grafana broken
+## Dashboard kosong belum tentu Grafana broken
 
 Kalau baru docker compose up dan belum ada request:
 
@@ -269,11 +269,11 @@ Observability debugging juga perlu dependency thinking.
 
 ---
 
-# generate_api_traffic vs replay_predictions
+## generate_api_traffic vs replay_predictions
 
 Ini penting karena dua script kelihatannya mirip.
 
-## generate_api_traffic.py
+### generate_api_traffic.py
 
 Future extension:
 
@@ -295,7 +295,7 @@ prediction log
 ✅
 ~~~
 
-## replay_predictions.py
+### replay_predictions.py
 
 Flow:
 
@@ -333,7 +333,7 @@ Different purpose.
 
 ---
 
-# Recent MAE panel tidak muncul magically
+## Recent MAE panel tidak muncul magically
 
 Grafana tidak menghitung MAE dari raw prediction.
 
@@ -367,7 +367,7 @@ Participant jadi lihat bahwa dashboard adalah ujung dari dependency chain, bukan
 
 ---
 
-# Debugging panel kosong
+## Debugging panel kosong
 
 Jangan langsung:
 
@@ -375,7 +375,7 @@ Jangan langsung:
 
 Debug chain.
 
-## Step 1
+### Step 1
 
 Ada prediction log?
 
@@ -383,7 +383,7 @@ Ada prediction log?
 data/monitoring/predictions.jsonl
 ~~~
 
-## Step 2
+### Step 2
 
 Ground truth ada?
 
@@ -391,7 +391,7 @@ Ground truth ada?
 data/processed/demand/...
 ~~~
 
-## Step 3
+### Step 3
 
 Evaluation sudah dijalankan?
 
@@ -399,7 +399,7 @@ Evaluation sudah dijalankan?
 uv run python scripts/evaluate_predictions.py
 ~~~
 
-## Step 4
+### Step 4
 
 Summary ada?
 
@@ -407,7 +407,7 @@ Summary ada?
 data/monitoring/performance_summary.json
 ~~~
 
-## Step 5
+### Step 5
 
 FastAPI metrics expose value?
 
@@ -415,15 +415,15 @@ FastAPI metrics expose value?
 /metrics
 ~~~
 
-## Step 6
+### Step 6
 
 Prometheus target UP?
 
-## Step 7
+### Step 7
 
 Prometheus query punya result?
 
-## Step 8
+### Step 8
 
 Baru check Grafana panel.
 
@@ -431,7 +431,7 @@ Dependency-first debugging jauh lebih efektif daripada random restart.
 
 ---
 
-# Refresh interval dan scrape delay
+## Refresh interval dan scrape delay
 
 Misalnya summary file baru saja update.
 
@@ -457,7 +457,7 @@ Observability system juga punya latency.
 
 ---
 
-# Grafana bukan decision engine
+## Grafana bukan decision engine
 
 Kita sengaja tidak menaruh logic:
 
@@ -496,7 +496,7 @@ Ini lebih mudah dites dan di-maintain.
 
 ---
 
-# Dashboard design juga punya responsibility
+## Dashboard design juga punya responsibility
 
 Dashboard yang penuh 50 panel belum tentu lebih bagus.
 
@@ -519,7 +519,7 @@ Enough buat satu coherent operational story.
 
 ---
 
-# Alerting — next step yang natural
+## Alerting — next step yang natural
 
 Kalau metric sudah mature, kita bisa add alert.
 
@@ -555,7 +555,7 @@ Actionable context matters.
 
 ---
 
-# Visualization bisa misleading
+## Visualization bisa misleading
 
 Y-axis scale, aggregation window, smoothing, dan time range bisa mengubah perception.
 
@@ -575,7 +575,7 @@ Makanya numeric context dan threshold tetap penting.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 
@@ -593,7 +593,7 @@ Kalau semua kebayang, dashboard bukan lagi sekadar “UI cantik”, tapi bagian 
 
 ---
 
-## Sinyal dashboard yang dipakai repository ini
+### Sinyal dashboard yang dipakai repository ini
 
 Konfigurasi panel ada di `monitoring/grafana/dashboards/taxi-mlops.json`. Angka-angka berikut mengikuti query dan exporter yang benar-benar ada di project:
 

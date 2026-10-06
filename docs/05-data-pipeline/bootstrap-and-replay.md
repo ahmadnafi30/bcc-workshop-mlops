@@ -14,7 +14,7 @@ Kita ingin ngerti boundaries.
 
 ---
 
-# Full journey satu batch data
+## Full journey satu batch data
 
 Coba lihat perjalanan besarnya:
 
@@ -48,7 +48,7 @@ Kalau kalian ngerti reason-nya, folder structure nggak lagi kelihatan sebagai �
 
 ---
 
-# Phase 1 — Bootstrap official source
+## Phase 1 — Bootstrap official source
 
 Command:
 
@@ -58,11 +58,11 @@ uv run python scripts/bootstrap_data.py
 
 Bootstrap download dua tipe source.
 
-## Taxi trip data
+### Taxi trip data
 
 Monthly Parquet Yellow Taxi.
 
-## Taxi zone lookup
+### Taxi zone lookup
 
 Metadata mapping:
 
@@ -78,7 +78,7 @@ Kita nggak tahu ID itu Manhattan, Queens, Bronx, atau area mana.
 
 ---
 
-# Kenapa source official disimpan dulu?
+## Kenapa source official disimpan dulu?
 
 Kita bisa saja:
 
@@ -107,7 +107,7 @@ Production data lake sering punya principle serupa:
 
 ---
 
-# Phase 2 — Compact replay preparation
+## Phase 2 — Compact replay preparation
 
 Official monthly Yellow Taxi punya banyak columns.
 
@@ -134,7 +134,7 @@ save compact Parquet
 
 ---
 
-# Kenapa select columns dulu?
+## Kenapa select columns dulu?
 
 Kalau source punya banyak field seperti fare, payment type, passenger count, vendor, toll, dan lain-lain, sementara kita cuma perlu pickup time + location, membaca semua columns berulang itu wasteful.
 
@@ -148,7 +148,7 @@ Lebih efisien memory dan I/O.
 
 ---
 
-# Kenapa validate month?
+## Kenapa validate month?
 
 Misalnya file bernama:
 
@@ -176,7 +176,7 @@ Validation month membantu menjaga replay source tetap clean secara time boundary
 
 ---
 
-# Phase 3 — Metadata zone lookup
+## Phase 3 — Metadata zone lookup
 
 Zone lookup disimpan:
 
@@ -214,7 +214,7 @@ reference dimension
 
 ---
 
-# Kenapa replay source bukan raw production batch?
+## Kenapa replay source bukan raw production batch?
 
 Ini distinction penting.
 
@@ -246,7 +246,7 @@ Kalau kalian campur dua role ini, replay logic jadi sulit dijelaskan.
 
 ---
 
-# Phase 4 — Release one logical day
+## Phase 4 — Release one logical day
 
 ~~~bash
 uv run python scripts/simulate_daily_data.py --date 2025-01-27
@@ -266,7 +266,7 @@ Sekarang downstream cuma melihat logical day tersebut.
 
 ---
 
-## Validation
+### Validation
 
 Daily batch harus dicek sebelum processing.
 
@@ -287,7 +287,7 @@ Data quality issue bisa berubah jadi modeling issue.
 
 ---
 
-## Aggregate
+### Aggregate
 
 Daily trip events jadi demand grid.
 
@@ -309,7 +309,7 @@ data/processed/demand/YYYY-MM-DD.parquet
 
 ---
 
-## Initial historical demand
+### Siapkan demand untuk hari pertama replay
 
 Kita punya special initial preparation:
 
@@ -341,11 +341,11 @@ Dia hanya tahu batch Jan 27 sudah datang.
 
 ---
 
-# Kenapa output per day?
+## Kenapa output per day?
 
 Partition per-day memberi banyak benefit.
 
-## Replay gampang
+### Replay gampang
 
 ~~~text
 Jan 27
@@ -353,19 +353,19 @@ Jan 28
 Jan 29
 ~~~
 
-## Validation gampang
+### Validation gampang
 
 Semua timestamp file Jan 27 seharusnya Jan 27.
 
-## Monitoring gampang
+### Monitoring gampang
 
 Ground truth target date bisa resolve file yang jelas.
 
-## Retry gampang
+### Retry gampang
 
 Satu logical date punya deterministic output path.
 
-## Debugging gampang
+### Debugging gampang
 
 Kalau Jan 28 aneh, inspect Jan 28 tanpa scan seluruh quarter.
 
@@ -373,7 +373,7 @@ Production object storage/data warehouse sering pakai partitioning karena reason
 
 ---
 
-# Phase 5 — Validation sebelum transformation
+## Phase 5 — Validation sebelum transformation
 
 Daily batch jangan langsung diaggregate.
 
@@ -406,7 +406,7 @@ Data quality issue berubah jadi leakage issue.
 
 ---
 
-# Fail early vs silent correction
+## Fail early vs silent correction
 
 Suppose required column missing.
 
@@ -436,7 +436,7 @@ Kalau pipeline hijau tapi data salah, itu lebih berbahaya.
 
 ---
 
-# Phase 6 — Aggregate raw trip ke hourly demand
+## Phase 6 — Aggregate raw trip ke hourly demand
 
 Manual command:
 
@@ -466,7 +466,7 @@ data/processed/demand/2025-01-27.parquet
 
 ---
 
-# Complete grid — kenapa row zero harus dibuat?
+## Complete grid — kenapa row zero harus dibuat?
 
 Bayangin Manhattan punya N zones.
 
@@ -495,7 +495,7 @@ Ini domain semantics.
 
 ---
 
-# Sanity check sederhana setelah aggregation
+## Sanity check sederhana setelah aggregation
 
 Kalian bisa inspect:
 
@@ -514,7 +514,7 @@ Simple invariants bisa catch banyak bug.
 
 ---
 
-# Initial historical demand
+## Seed historical demand sebelum replay
 
 Command:
 
@@ -540,7 +540,7 @@ Jadi kita optimize onboarding, bukan mengubah model logic.
 
 ---
 
-# Apa yang nanti Airflow orchestrate?
+## Apa yang nanti Airflow orchestrate?
 
 Daily DAG call reusable logic:
 
@@ -562,7 +562,7 @@ Saat lihat Graph Airflow, participant bisa relate ke manual flow.
 
 ---
 
-# Kenapa script dan src function dua-duanya ada?
+## Kenapa script dan src function dua-duanya ada?
 
 ### scripts
 
@@ -603,7 +603,7 @@ Kalau business logic hanya hidup di script, Airflow sering akhirnya copy-paste c
 
 ---
 
-# Idempotency detail
+## Idempotency detail
 
 Output path deterministic:
 
@@ -628,7 +628,7 @@ Workshop memberi intuition dasar:
 
 ---
 
-# Download reliability
+## Download reliability
 
 Network download bisa gagal.
 
@@ -674,7 +674,7 @@ Ini reliability pattern yang kecil tapi professional.
 
 ---
 
-# Base CloudFront AccessDenied
+## Base CloudFront AccessDenied
 
 Kalau buka:
 
@@ -706,7 +706,7 @@ request exact known object
 
 ---
 
-# External data tetap perlu distrust sehat
+## External data tetap perlu distrust sehat
 
 “Official source” bukan berarti:
 
@@ -726,7 +726,7 @@ Healthy data engineering principle:
 
 ---
 
-# Data issue atau model issue?
+## Data issue atau model issue?
 
 Suppose MAE mendadak naik.
 
@@ -748,29 +748,29 @@ MLOps membuat hubungan data → model lebih visible, tapi diagnosis tetap butuh 
 
 ---
 
-# Debugging by artifact layer
+## Debugging by artifact layer
 
-## Download fail
+### Download fail
 
 Check network, URL, partial file, disk.
 
-## Replay source missing
+### Replay source missing
 
 Bootstrap belum selesai.
 
-## Daily raw empty
+### Daily raw empty
 
 Check target date dan Manhattan filter.
 
-## Validation fail
+### Validation fail
 
 Read exact schema/date error.
 
-## Processed row count wrong
+### Processed row count wrong
 
 Check aggregation + complete grid.
 
-## Features wrong
+### Features wrong
 
 Jangan kembali download dulu. Debug next layer.
 
@@ -778,7 +778,7 @@ Selalu narrow layer.
 
 ---
 
-# Mini exercise: trace Jan 27
+## Mini exercise: trace Jan 27
 
 Coba tanpa lihat diagram tulis:
 
@@ -804,7 +804,7 @@ Kalau chain ini clear, data layer sudah mulai kebayang sebagai system, bukan kum
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Kenapa official source disimpan dulu?
 2. Replay source beda apa dengan TLC source?

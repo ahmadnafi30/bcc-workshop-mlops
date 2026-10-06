@@ -71,7 +71,7 @@ Kalau semua ini clear, kalian sudah paham lifecycle decision, bukan cuma command
 
 ---
 
-# 1. Jangan trigger DAG dulu — baca evidence-nya
+## 1. Jangan trigger DAG dulu — baca evidence-nya
 
 Setelah step ini:
 
@@ -84,7 +84,7 @@ Setelah step ini:
 
 ---
 
-## 1. Buka summary
+### 1. Buka summary
 
 ~~~text
 data/monitoring/performance_summary.json
@@ -111,7 +111,7 @@ Kita harus tahu input decision sebelum automation act.
 
 ---
 
-# 2. Reference MAE datang dari mana?
+## 2. Reference MAE datang dari mana?
 
 Monitoring code memanggil champion reference dari MLflow.
 
@@ -135,7 +135,7 @@ Kalau champion berubah, reference performance juga bisa berubah sesuai source ru
 
 ---
 
-# 3. Hitung threshold sendiri
+## 3. Hitung threshold sendiri
 
 Suppose:
 
@@ -174,7 +174,7 @@ Tapi dia punya reasoning yang jelas.
 
 ---
 
-# 4. Kenapa threshold relative?
+## 4. Kenapa threshold relative?
 
 Bayangin dua ML task.
 
@@ -206,7 +206,7 @@ Masih simplification, tapi lebih portable secara semantics.
 
 ---
 
-# 5. Kenapa multiplier 1.25?
+## 5. Kenapa multiplier 1.25?
 
 Jangan anggap 1.25 angka sakral.
 
@@ -226,7 +226,7 @@ Nilai threshold adalah policy decision, bukan universal law Machine Learning.
 
 ---
 
-# 6. Minimum sample
+## 6. Minimum sample
 
 Case:
 
@@ -261,7 +261,7 @@ Kita cari pattern.
 
 ---
 
-# 7. recent_limit
+## 7. recent_limit
 
 Misalnya:
 
@@ -281,7 +281,7 @@ Recent window memberi sensitivity ke current behavior.
 
 ---
 
-# 8. Open Airflow monitoring DAG
+## 8. Open Airflow monitoring DAG
 
 Buka:
 
@@ -313,7 +313,7 @@ recent_limit = 500
 
 ---
 
-# 9. Predict outcome sebelum Trigger
+## 9. Predict outcome sebelum Trigger
 
 Lihat performance_summary.
 
@@ -353,7 +353,7 @@ Again: hypothesis before clicking.
 
 ---
 
-# 10. Task evaluate_model
+## 10. Task evaluate_model
 
 Actual DAG call:
 
@@ -385,7 +385,7 @@ Reusable logic tetap di src/monitoring dan orchestration module.
 
 ---
 
-# 11. Healthy path
+## 11. Healthy path
 
 Kalau monitoring_result:
 
@@ -414,7 +414,7 @@ Kalau system selalu retrain setiap monitoring run, condition check jadi pointles
 
 ---
 
-# 12. No evaluated predictions path
+## 12. No evaluated predictions path
 
 Ada case:
 
@@ -437,7 +437,7 @@ Unknown evidence bukan signal degradation.
 
 ---
 
-# 13. Degraded path — overview
+## 13. Degraded path — overview
 
 Kalau recommendation true:
 
@@ -461,7 +461,7 @@ Mari bedah detailnya.
 
 ---
 
-# 14. latest_target_datetime menjadi cutoff
+## 14. latest_target_datetime menjadi cutoff
 
 Suppose latest evaluated target:
 
@@ -485,7 +485,7 @@ Kita nggak mau retraining memakai future data yang belum seharusnya available.
 
 ---
 
-# 15. Create retraining snapshot
+## 15. Create retraining snapshot
 
 Feature dataset aktif bisa terus berkembang.
 
@@ -512,7 +512,7 @@ Supaya MLflow run punya identity data yang kuat.
 
 ---
 
-# 16. Initial DVC snapshot vs runtime retraining snapshot
+## 16. Initial DVC snapshot vs runtime retraining snapshot
 
 Ini nuance yang bagus buat dibahas.
 
@@ -553,7 +553,7 @@ Workshop kita log frozen file + SHA ke MLflow.
 
 ---
 
-# 17. Train candidate dengan same experiment logic
+## 17. Train candidate dengan same experiment logic
 
 Retraining reuse:
 
@@ -577,7 +577,7 @@ One reusable experiment function menjaga consistency.
 
 ---
 
-# 18. Moving validation window
+## 18. Moving validation window
 
 Split model sekarang dinamis.
 
@@ -613,7 +613,7 @@ Kalau February model masih diuji hanya January holdout, kita belum menjawab apak
 
 ---
 
-# 19. Kenapa validation tidak pakai random split?
+## 19. Kenapa validation tidak pakai random split?
 
 Sama seperti initial training.
 
@@ -633,7 +633,7 @@ Retraining tidak mengubah prinsip temporal validation.
 
 ---
 
-# 20. Baseline gate
+## 20. Baseline gate
 
 Setelah candidate train, experiment result punya:
 
@@ -660,7 +660,7 @@ Baseline adalah guardrail setiap cycle.
 
 ---
 
-# 21. Apakah beat baseline cukup buat jadi champion?
+## 21. Apakah beat baseline cukup buat jadi champion?
 
 No.
 
@@ -694,7 +694,7 @@ Makanya automatic step berhenti di challenger.
 
 ---
 
-# 22. Challenger alias
+## 22. Challenger alias
 
 Kalau candidate eligible:
 
@@ -717,7 +717,7 @@ Review bisa dilakukan dengan evidence.
 
 ---
 
-# 23. Review sebelum promotion
+## 23. Review sebelum promotion
 
 Minimal inspect:
 
@@ -738,7 +738,7 @@ Version number tidak imply quality.
 
 ---
 
-# 24. Promote explicit
+## 24. Promote explicit
 
 Kalau approved:
 
@@ -758,7 +758,7 @@ Kita tidak edit API source code.
 
 ---
 
-# 25. Bagaimana API detect champion baru?
+## 25. Bagaimana API detect champion baru?
 
 RegistryModelLoader periodically refresh metadata.
 
@@ -792,7 +792,7 @@ Ini close loop Registry → Serving.
 
 ---
 
-# 26. Policy sensitivity experiment
+## 26. Policy sensitivity experiment
 
 Di local workshop, kita boleh experiment parameter.
 
@@ -838,7 +838,7 @@ Threshold adalah control policy tradeoff.
 
 ---
 
-# 27. Thermostat analogy
+## 27. Thermostat analogy
 
 Bayangin thermostat rumah.
 
@@ -876,7 +876,7 @@ Kita ingin stable decision, bukan hyperactive automation.
 
 ---
 
-# 28. Retraining tidak solve bad data
+## 28. Retraining tidak solve bad data
 
 Suppose MAE naik karena processed data corruption.
 
@@ -898,7 +898,7 @@ Jadi retrain recommendation berarti condition for candidate refresh reached, buk
 
 ---
 
-# 29. Batch retraining vs continual learning
+## 29. Batch retraining vs continual learning
 
 Project kita:
 
@@ -932,7 +932,7 @@ Pipeline kita berulang bukan berarti continual learning.
 
 ---
 
-# 30. Full lifecycle tanpa nama tools
+## 30. Full lifecycle tanpa nama tools
 
 Sekarang coba cerita full project tanpa sebut tool.
 
@@ -972,7 +972,7 @@ Ini lebih powerful daripada hafal list tools dulu.
 
 ---
 
-# Final challenge
+## Final challenge
 
 ### Scenario 1
 
@@ -1030,7 +1030,7 @@ Kalau reasoning ini clear, feedback loop-nya benar-benar dipahami.
 
 ---
 
-# Final checkpoint
+## Final checkpoint
 
 1. Reference MAE datang dari mana?
 2. Kenapa multiplier bukan universal truth?

@@ -43,7 +43,7 @@ Jadi Compose bukan sekadar shortcut command. Dia adalah declarative definition d
 
 ---
 
-# Command utama
+## Command utama
 
 ~~~bash
 docker compose up -d --build
@@ -67,7 +67,7 @@ Jadi satu command ini sebenarnya melakukan coordination cukup banyak.
 
 ---
 
-# Service 1 — MLflow
+## Service 1 — MLflow
 
 Host access:
 
@@ -89,7 +89,7 @@ Responsibility:
 
 ---
 
-# Service 2 — FastAPI
+## Service 2 — FastAPI
 
 Kadang service A butuh B.
 
@@ -113,44 +113,19 @@ Ini subtle tapi real operational concern.
 
 ---
 
-## Healthcheck
+### Menunggu MLflow siap
 
-Healthcheck adalah test readiness/liveness sederhana.
+Healthcheck mengirim test readiness sederhana ke MLflow. Compose dapat menahan FastAPI sampai dependency itu siap; ini mengurangi race condition saat startup.
 
-Misalnya request HTTP ke service.
+### Alamat dan tanggung jawab FastAPI
 
-Kalau belum healthy, dependent service bisa ditahan.
-
-Ini mengurangi race condition startup.
+Buka `http://localhost:8000` dari browser host. API menyediakan health check, model info, prediction, dan metrics. FastAPI membutuhkan MLflow champion untuk melayani prediction.
 
 ---
 
-## Shared data folder
+## Service 3 — Airflow
 
-Kita bind mount:
-
-~~~text
-http://localhost:8000
-~~~
-
-Responsibility:
-
-- health endpoint;
-- model info;
-- prediction;
-- metrics endpoint.
-
-FastAPI membutuhkan MLflow champion untuk model selection.
-
----
-
-# Service 3 — Airflow
-
-Host:
-
-~~~text
-http://localhost:8080
-~~~
+Alamat Airflow di browser mengikuti port host pada output `docker compose ps airflow`. Contoh `127.0.0.1:18081->8080/tcp` berarti buka `http://localhost:18081`; port 8080 di kanan adalah port dalam container.
 
 Responsibility:
 
@@ -161,7 +136,7 @@ Responsibility:
 
 ---
 
-# Service 4 — Prometheus
+## Service 4 — Prometheus
 
 Host:
 
@@ -179,7 +154,7 @@ Prometheus tidak perlu keluar ke host lalu balik lagi. Dia langsung bicara ke AP
 
 ---
 
-# Service 5 — Grafana
+## Service 5 — Grafana
 
 Host:
 
@@ -205,7 +180,7 @@ FastAPI /metrics
 
 ---
 
-# Host networking vs container networking
+## Host networking vs container networking
 
 Ini bagian yang harus benar-benar kebayang.
 
@@ -237,7 +212,7 @@ Docker Compose menyediakan DNS berdasarkan service name.
 
 ---
 
-# Port mapping
+## Port mapping
 
 Contoh:
 
@@ -273,7 +248,7 @@ Makanya sebelum step Docker, local FastAPI/MLflow/Airflow sebaiknya dihentikan d
 
 ---
 
-# Container running belum tentu application ready
+## Container running belum tentu application ready
 
 Ini nuance penting.
 
@@ -297,7 +272,7 @@ Makanya healthcheck useful.
 
 ---
 
-# Healthcheck
+## Cara Compose memastikan service siap
 
 Healthcheck menjawab:
 
@@ -319,7 +294,7 @@ Ini mengurangi startup race condition.
 
 ---
 
-# Shared data folder
+## Berbagi file dataset antar-container
 
 Kita bind mount:
 
@@ -344,7 +319,7 @@ Production besar mungkin pakai object storage, data lake, database, atau feature
 
 ---
 
-# Shared MLflow state — issue nyata hasil audit
+## Shared MLflow state — issue nyata hasil audit
 
 Ini salah satu issue yang baru kelihatan setelah kita audit **end-to-end**, bukan per component.
 
@@ -392,7 +367,7 @@ Ini contoh bagus bahwa system integration issue kadang tidak kelihatan kalau kit
 
 ---
 
-# Named volume
+## Volume untuk menyimpan state service
 
 Service lain punya internal state.
 
@@ -413,7 +388,7 @@ Volume memberi storage lifecycle terpisah dari process lifecycle.
 
 ---
 
-# Bind mount vs named volume
+## Bind mount vs named volume
 
 ### Bind mount
 
@@ -439,7 +414,7 @@ Jadi bukan soal mana lebih bagus. Responsibility-nya beda.
 
 ---
 
-# docker compose down
+## docker compose down
 
 ~~~bash
 docker compose down
@@ -451,7 +426,7 @@ Named volumes tetap.
 
 ---
 
-# docker compose down -v
+## docker compose down -v
 
 ~~~bash
 docker compose down -v
@@ -467,7 +442,7 @@ Ini command yang harus dipakai dengan sadar.
 
 ---
 
-# Workspace service
+## Workspace service
 
 Compose juga punya one-shot workspace:
 
@@ -485,7 +460,7 @@ Setelah command selesai, container di-remove.
 
 ---
 
-# Compose profile
+## Compose profile
 
 Workspace masuk optional profile.
 
@@ -500,7 +475,7 @@ Pattern profile useful untuk:
 
 ---
 
-# Environment variable dan configuration
+## Environment variable dan configuration
 
 Local:
 
@@ -522,7 +497,7 @@ Kalau address di-hard-code dalam source, pindah environment jadi painful.
 
 ---
 
-# docker compose ps
+## docker compose ps
 
 ~~~bash
 docker compose ps
@@ -540,7 +515,7 @@ Kalau stack “nggak jalan”, mulai dari sini sebelum random restart.
 
 ---
 
-# Logs
+## Logs
 
 ~~~bash
 docker compose logs -f api
@@ -565,7 +540,7 @@ Observability bukan cuma Grafana. Basic logs tetap penting.
 
 ---
 
-# Compose bukan Kubernetes mini
+## Compose bukan Kubernetes mini
 
 Docker Compose sangat bagus untuk:
 
@@ -602,7 +577,7 @@ Itu transferable.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 Coba jawab:
 

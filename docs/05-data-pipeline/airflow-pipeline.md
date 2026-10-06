@@ -14,7 +14,7 @@ Kita nggak mau berhenti di situ.
 
 ---
 
-# Manual flow vs orchestrated flow
+## Manual flow vs orchestrated flow
 
 Manual:
 
@@ -52,7 +52,7 @@ Karena graph seharusnya bisa dibaca manusia.
 
 ---
 
-# Orchestration bukan reimplementation
+## Orchestration bukan reimplementation
 
 Bad architecture:
 
@@ -81,7 +81,7 @@ Jadi manual dan Airflow share domain logic.
 
 ---
 
-# Thin DAG principle
+## Thin DAG principle
 
 DAG sebaiknya mostly berisi:
 
@@ -111,7 +111,7 @@ Benefit:
 
 ---
 
-# Daily DAG step 1 — get_replay_date
+## Daily DAG step 1 — get_replay_date
 
 Kenapa logical date jadi task/param?
 
@@ -129,7 +129,7 @@ Runtime parameter masuk execution context.
 
 ---
 
-# Daily DAG step 2 — release_batch
+## Daily DAG step 2 — release_batch
 
 Wrapper call:
 
@@ -153,7 +153,7 @@ Metadata bisa dipakai downstream dan visible di run context.
 
 ---
 
-# Dependency without data usage
+## Dependency without data usage
 
 Interesting pattern:
 
@@ -177,7 +177,7 @@ Task dependency bisa expressed lewat dataflow syntax walaupun actual data artifa
 
 ---
 
-# Metadata vs data plane
+## Metadata vs data plane
 
 Ini architecture concept useful.
 
@@ -207,7 +207,7 @@ Kalau large data dipaksa lewat XCom, control plane jadi overloaded.
 
 ---
 
-# Task boundary = observability boundary
+## Task boundary = observability boundary
 
 Kenapa validate dan aggregate tidak jadi satu task?
 
@@ -235,7 +235,7 @@ Task design mempengaruhi operational clarity.
 
 ---
 
-# Failure propagation
+## Failure propagation
 
 Default dependency:
 
@@ -255,7 +255,7 @@ Workshop keep default simple.
 
 ---
 
-# Retry dan idempotency
+## Retry dan idempotency
 
 Airflow bisa retry task.
 
@@ -277,7 +277,7 @@ Airflow tidak magically membuat non-idempotent code aman.
 
 ---
 
-# Training DAG
+## Training DAG
 
 ~~~text
 create_snapshot
@@ -287,7 +287,7 @@ train_model
 register_candidate
 ~~~
 
-## create_snapshot
+### create_snapshot
 
 Run DVC repro.
 
@@ -295,7 +295,7 @@ Kenapa separate task?
 
 Training input jadi explicit lifecycle step.
 
-## train_model
+### train_model
 
 Run baseline + candidate experiment.
 
@@ -308,7 +308,7 @@ RMSE
 beat baseline?
 ~~~
 
-## register_candidate
+### register_candidate
 
 Consume training summary.
 
@@ -328,7 +328,7 @@ Ini policy encoded in pipeline.
 
 ---
 
-# Why training DAG separate dari daily DAG?
+## Why training DAG separate dari daily DAG?
 
 Karena trigger berbeda.
 
@@ -350,7 +350,7 @@ Separation DAG = separation business trigger.
 
 ---
 
-# Monitoring DAG
+## Monitoring DAG
 
 ~~~text
 evaluate_model
@@ -374,7 +374,7 @@ Ini concept penting:
 
 ---
 
-# Initial DVC snapshot vs runtime retraining snapshot
+## Initial DVC snapshot vs runtime retraining snapshot
 
 Initial training gunakan DVC stage karena kita ingin source-controlled reproducible snapshot flow.
 
@@ -407,7 +407,7 @@ Workshop memilih simple frozen file + fingerprint.
 
 ---
 
-# Scheduling design future
+## Scheduling design future
 
 Workshop:
 
@@ -436,7 +436,7 @@ Schedule harus follow business/data availability.
 
 ---
 
-# Backfill
+## Backfill
 
 Airflow/data pipeline sering perlu backfill.
 
@@ -462,7 +462,7 @@ Dua waktu beda.
 
 ---
 
-# Catchup
+## Catchup
 
 DAG config workshop:
 
@@ -480,7 +480,7 @@ Kalau catchup aktif dengan daily schedule dari 2025, workshop bisa tiba-tiba pun
 
 ---
 
-# start_date bukan berarti langsung run
+## start_date bukan berarti langsung run
 
 Airflow start_date sering disalahpahami.
 
@@ -490,7 +490,7 @@ Workshop manual schedule membuat ini lebih simple, tapi concept tetap useful.
 
 ---
 
-# Parameter experiment
+## Parameter experiment
 
 Monitoring DAG expose:
 
@@ -508,7 +508,7 @@ UI flexibility bukan excuse buat random threshold production.
 
 ---
 
-# Airflow logs vs application logs
+## Airflow logs vs application logs
 
 Task log capture execution output/error.
 
@@ -526,7 +526,7 @@ Root cause tetap external dependency.
 
 ---
 
-# Orchestrator boundary
+## Orchestrator boundary
 
 Airflow sebaiknya tidak menjadi:
 
@@ -542,7 +542,7 @@ Architecture sehat membiarkan masing-masing tool fokus responsibility.
 
 ---
 
-# Failure scenario exercise
+## Failure scenario exercise
 
 Suppose:
 
@@ -563,7 +563,7 @@ Jawaban tergantung task retry/idempotency, tapi graph memberi clarity.
 
 ---
 
-# Another scenario
+## Another scenario
 
 ~~~text
 train_model ✅
@@ -582,7 +582,7 @@ Task boundary membantu recovery lebih surgical.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Manual script dan Airflow task relationship apa?
 2. Kenapa DAG tipis?

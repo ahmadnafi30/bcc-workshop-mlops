@@ -46,7 +46,7 @@ Setelah selesai kalian harus bisa menjelaskan:
 
 ---
 
-# 1. Lihat dulu feature dataset yang sekarang ada
+## 1. Lihat dulu feature dataset yang sekarang ada
 
 Pastikan:
 
@@ -72,7 +72,7 @@ Itu source of ambiguity.
 
 ---
 
-# 2. Buat snapshot manual dulu
+## 2. Buat snapshot manual dulu
 
 Sebelum DVC, jalankan underlying script:
 
@@ -109,7 +109,7 @@ Readable identity + content fingerprint lebih kuat.
 
 ---
 
-# 3. Apa yang dilakukan script snapshot?
+## 3. Apa yang dilakukan script snapshot?
 
 Actual flow:
 
@@ -137,7 +137,7 @@ Dia punya temporal boundary.
 
 ---
 
-# 4. Open dvc.yaml
+## 4. Open dvc.yaml
 
 File:
 
@@ -163,7 +163,7 @@ Baca seperti kalimat.
 
 ---
 
-# 5. cmd — “Kalau perlu reproduce, jalankan apa?”
+## 5. cmd — “Kalau perlu reproduce, jalankan apa?”
 
 ~~~text
 cmd
@@ -178,7 +178,7 @@ Kita yang declare recipe-nya.
 
 ---
 
-# 6. deps — “Apa yang bisa mengubah hasil?”
+## 6. deps — “Apa yang bisa mengubah hasil?”
 
 Dependencies:
 
@@ -198,7 +198,7 @@ Code dependency matters.
 
 ---
 
-# 7. outs — “Artifact apa yang dihasilkan?”
+## 7. outs — “Artifact apa yang dihasilkan?”
 
 Output:
 
@@ -222,7 +222,7 @@ Ini mirip build system.
 
 ---
 
-# 8. Sebelum dvc repro, predict behavior
+## 8. Sebelum dvc repro, predict behavior
 
 Suppose snapshot sudah ada dan dependency belum berubah.
 
@@ -248,7 +248,7 @@ Cari apakah stage rerun atau dianggap unchanged.
 
 ---
 
-# 9. dvc status
+## 9. dvc status
 
 Run:
 
@@ -268,7 +268,7 @@ Itu jauh lebih useful daripada manusia mengingat:
 
 ---
 
-# 10. Experiment kecil: dependency berubah
+## 10. Experiment kecil: dependency berubah
 
 Kalau workshop environment aman dan presenter punya backup, bisa demo conceptual change.
 
@@ -290,7 +290,7 @@ Output seharusnya berasal dari declared recipe.
 
 ---
 
-# 11. DVC cache
+## 11. DVC cache
 
 DVC punya local cache:
 
@@ -318,7 +318,7 @@ DVC
 
 ---
 
-# 12. “Kalau cache lokal, teammate lain dapat datanya gimana?”
+## 12. “Kalau cache lokal, teammate lain dapat datanya gimana?”
 
 Good question.
 
@@ -344,7 +344,7 @@ Tapi architecture path-nya jelas.
 
 ---
 
-# 13. Kenapa snapshot folder tidak masuk Git normal?
+## 13. Kenapa snapshot folder tidak masuk Git normal?
 
 Parquet binary bisa cukup besar.
 
@@ -362,7 +362,7 @@ DVC memberi metadata-driven approach.
 
 ---
 
-# 14. DVC vs .gitignore
+## 14. DVC vs .gitignore
 
 Generated data directory di-ignore Git.
 
@@ -378,7 +378,7 @@ Version control system dan artifact storage dipisahkan.
 
 ---
 
-# 15. Snapshot immutability mindset
+## 15. Snapshot immutability mindset
 
 Kalau snapshot:
 
@@ -403,7 +403,7 @@ Ini menjaga old model lineage.
 
 ---
 
-# 16. SHA256 — coba pikir kenapa useful
+## 16. SHA256 — coba pikir kenapa useful
 
 Terminal print SHA.
 
@@ -437,7 +437,7 @@ Cross-tool lineage mulai terbentuk.
 
 ---
 
-# 17. DVC vs MLflow — jangan jawab “sama-sama versioning”
+## 17. DVC vs MLflow — jangan jawab “sama-sama versioning”
 
 DVC fokus:
 
@@ -461,7 +461,7 @@ Tools-nya complement.
 
 ---
 
-# 18. DVC vs Airflow
+## 18. DVC vs Airflow
 
 DVC bisa punya pipeline stage.
 
@@ -495,7 +495,7 @@ Artinya orchestrator memanggil reproducibility tool.
 
 ---
 
-# 19. Failure scenario
+## 19. Failure scenario
 
 Suppose feature dataset belum ada.
 
@@ -518,7 +518,7 @@ Pipeline tidak silently membuat empty snapshot.
 
 ---
 
-# 20. Mini challenge
+## 20. Mini challenge
 
 Coba jawab apa yang harus berubah di dvc.yaml kalau snapshot cutoff jadi Feb 10.
 
@@ -539,7 +539,7 @@ Runtime retraining nanti punya separate snapshot behavior.
 
 ---
 
-# 21. Checkpoint
+## 21. Checkpoint
 
 1. Moving feature file kenapa bukan identity training yang kuat?
 2. Snapshot artinya apa?

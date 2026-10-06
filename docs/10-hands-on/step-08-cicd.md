@@ -30,7 +30,7 @@ Setelah selesai kalian harus bisa menjelaskan:
 
 ---
 
-# 1. Lihat branch flow dulu
+## 1. Lihat branch flow dulu
 
 Repository policy:
 
@@ -52,7 +52,7 @@ Dia juga verify contribution process.
 
 ---
 
-# 2. Open ci.yml
+## 2. Open ci.yml
 
 File:
 
@@ -76,7 +76,7 @@ Ini skeleton GitHub Actions workflow.
 
 ---
 
-# 3. name
+## 3. name
 
 ~~~text
 CI
@@ -90,7 +90,7 @@ Naming jelas membantu chaining automation.
 
 ---
 
-# 4. on — trigger
+## 4. on — trigger
 
 CI jalan pada:
 
@@ -114,7 +114,7 @@ Supaya developer dapat feedback sebelum PR.
 
 ---
 
-# 5. permissions
+## 5. permissions
 
 CI:
 
@@ -132,7 +132,7 @@ Kalau workflow tidak butuh write, jangan kasih write.
 
 ---
 
-# 6. concurrency
+## 6. concurrency
 
 Config:
 
@@ -159,7 +159,7 @@ Cancel old run menghemat runner.
 
 ---
 
-# 7. Job 1 — Branch policy
+## 7. Job 1 — Branch policy
 
 Job hanya pada pull_request.
 
@@ -204,7 +204,7 @@ Process-as-code.
 
 ---
 
-# 8. Kenapa branch policy CI belum sama dengan branch protection?
+## 8. Kenapa branch policy CI belum sama dengan branch protection?
 
 CI bisa fail.
 
@@ -228,7 +228,7 @@ platform ruleset
 
 ---
 
-# 9. Job 2 — Python + docs quality
+## 9. Job 2 — Python + docs quality
 
 Flow:
 
@@ -252,7 +252,7 @@ Mari bedah.
 
 ---
 
-# 10. Checkout
+## 10. Checkout
 
 Runner GitHub fresh.
 
@@ -266,7 +266,7 @@ CI result attach ke exact commit.
 
 ---
 
-# 11. setup-uv
+## 11. setup-uv
 
 Workflow pin version:
 
@@ -282,7 +282,7 @@ Dependencies/tooling juga bagian reproducibility.
 
 ---
 
-# 12. uv python install + sync
+## 12. uv python install + sync
 
 Runner install Python sesuai project.
 
@@ -296,7 +296,7 @@ Itu good failure.
 
 ---
 
-# 13. Ruff
+## 13. Ruff
 
 ~~~bash
 uv run ruff check src api scripts tests
@@ -310,7 +310,7 @@ Itu contoh CI memberi feedback real, bukan decorative.
 
 ---
 
-# 14. pytest
+## 14. pytest
 
 ~~~bash
 uv run pytest -q
@@ -324,7 +324,7 @@ CI green memberi confidence, bukan mathematical proof zero bugs.
 
 ---
 
-# 15. MkDocs strict build
+## 15. MkDocs strict build
 
 ~~~bash
 uv run --group docs mkdocs build --strict
@@ -340,7 +340,7 @@ Strict build memaksa warning tertentu jadi failure.
 
 ---
 
-# 16. Job 3 — Docker build matrix
+## 16. Job 3 — Docker build matrix
 
 Matrix target:
 
@@ -366,7 +366,7 @@ Matrix lebih maintainable.
 
 ---
 
-# 17. fail-fast false
+## 17. fail-fast false
 
 Matrix punya:
 
@@ -392,7 +392,7 @@ Debugging lebih informative.
 
 ---
 
-# 18. Docker Compose config validation
+## 18. Docker Compose config validation
 
 ~~~bash
 docker compose config --quiet
@@ -406,7 +406,7 @@ Different artifact, different check.
 
 ---
 
-# 19. Docker Buildx + cache
+## 19. Docker Buildx + cache
 
 Image build pakai GitHub Actions cache.
 
@@ -426,7 +426,7 @@ Clear cache harus tetap build.
 
 ---
 
-# 20. Buat practice branch
+## 20. Buat practice branch
 
 Kita bisa demo dengan docs branch kecil.
 
@@ -454,7 +454,7 @@ develop
 
 ---
 
-# 21. Sebelum buka Actions, predict job result
+## 21. Sebelum buka Actions, predict job result
 
 Kalau perubahan hanya Markdown:
 
@@ -483,7 +483,7 @@ optimized runner cost
 
 ---
 
-# 22. Observe GitHub Actions UI
+## 22. Observe GitHub Actions UI
 
 Buka workflow run.
 
@@ -501,7 +501,7 @@ Jangan hanya lihat final green.
 
 ---
 
-# 23. Controlled failure idea
+## 23. Controlled failure idea
 
 Presenter bisa punya demo branch dengan intentional docs nav typo atau Ruff issue.
 
@@ -517,7 +517,7 @@ Jangan lakukan di main.
 
 ---
 
-# 24. Develop → main
+## 24. Develop → main
 
 Setelah feature/docs PR squash merged ke develop dan develop green:
 
@@ -533,7 +533,7 @@ Main = stable release.
 
 ---
 
-# 25. Open cd.yml
+## 25. Open cd.yml
 
 CD trigger:
 
@@ -558,7 +558,7 @@ Karena PR candidate belum stable release.
 
 ---
 
-# 26. Checkout tested commit
+## 26. Checkout tested commit
 
 CD checkout:
 
@@ -578,7 +578,7 @@ Tested = published.
 
 ---
 
-# 27. Login GHCR
+## 27. Login GHCR
 
 Workflow pakai:
 
@@ -596,7 +596,7 @@ No personal password committed.
 
 ---
 
-# 28. Metadata tags
+## 28. Metadata tags
 
 Docker metadata action produce:
 
@@ -617,7 +617,7 @@ SHA.
 
 ---
 
-# 29. Build and push
+## 29. Build and push
 
 Per target:
 
@@ -633,7 +633,7 @@ Sekarang container registry punya deployable artifact.
 
 ---
 
-# 30. Kenapa belum SSH/Kubernetes deploy?
+## 30. Kenapa belum SSH/Kubernetes deploy?
 
 Karena workshop belum punya real production target.
 
@@ -654,7 +654,7 @@ Kita berhenti jujur di Continuous Delivery.
 
 ---
 
-# 31. Application release vs model release
+## 31. Application release vs model release
 
 Setelah CI/CD, ingat ada dua lifecycle.
 
@@ -674,7 +674,7 @@ Ini decoupling yang penting.
 
 ---
 
-# 32. Mini scenarios
+## 32. Mini scenarios
 
 ### Scenario A
 
@@ -712,7 +712,7 @@ Model lifecycle independent.
 
 ---
 
-# Checkpoint
+## Checkpoint
 
 1. Workflow/job/step beda apa?
 2. Trigger CI apa saja?
