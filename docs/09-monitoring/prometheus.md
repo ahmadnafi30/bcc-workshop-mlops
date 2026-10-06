@@ -52,7 +52,7 @@ Setiap sample punya timestamp.
 
 Karena itu Prometheus bisa jawab pertanyaan seperti:
 
-> “Latency lima menit terakhir naik nggak�
+> “Latency lima menit terakhir naik nggak”
 
 > “Request rate sekarang berapa?”
 
@@ -512,3 +512,21 @@ Coba jawab:
 8. Kenapa detailed prediction lebih cocok jadi log daripada metric?
 9. Kalau Grafana kosong, kenapa Prometheus target perlu dicek dulu?
 10. Kenapa metric tetap butuh domain interpretation?
+
+---
+
+## Metric monitoring model di repository ini
+
+`/metrics` membaca `data/monitoring/performance_summary.json` ketika Prometheus scrape. Scrape hanya memperbarui gauge; job evaluasi harus dijalankan terpisah.
+
+| Metric | Arti |
+| --- | --- |
+| `taxi_model_evaluation_status` | `0` belum dievaluasi, `1` sample kurang, `2` dalam batas, `3` perlu retrain. |
+| `taxi_model_evaluated_predictions` | Prediction unik yang cocok dengan actual dalam recent window. |
+| `taxi_model_min_evaluation_samples` | Minimum sample sebelum keputusan retraining boleh dibuat. |
+| `taxi_model_threshold_mae` | Reference MAE dikali degradation multiplier dari job evaluasi. |
+| `taxi_model_last_evaluation_timestamp_seconds` | Waktu nyata saat job evaluasi terakhir selesai menghitung summary. |
+| `taxi_model_latest_target_timestamp_seconds` | Target historis terbaru yang berhasil dipasangkan dengan actual. |
+| `taxi_model_evaluated_version_info` | Identitas model sumber summary evaluasi. |
+
+MAE yang belum diketahui diekspos sebagai `NaN`, supaya dashboard tidak menyebut kualitas model sempurna dengan angka nol. Kalau summary hilang atau invalid, exporter menghapus gauge performa lama tetapi tetap dapat menampilkan operational metrics. Summary ditulis lewat file sementara lalu diganti secara atomik agar scrape tidak membaca JSON setengah jadi.

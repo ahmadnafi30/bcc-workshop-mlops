@@ -5,6 +5,8 @@ Presenters:
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
+Materi kelas: [Modul Workshop](../workshop-module.md) dan [Quickstart Grafana](dashboard-quickstart.md).
+
 Live demo itu beda dengan local development.
 
 Yang bisa fail bukan cuma code.
@@ -177,9 +179,15 @@ Show real PR run.
 
 ### Monitoring
 
-Generate traffic live.
+Buka dashboard sebelum traffic untuk menunjukkan kondisi awal. Siapkan processed demand Jan 28 lewat daily replay DAG sebelum mengirim prediction.
 
-Grafana movement gives nice visual feedback.
+Tunjukkan tiga tahap:
+
+1. Sebelum traffic: status evaluasi dan waktu summary terakhir.
+2. Sesudah HTTP traffic: request rate, latency, serving model, dan response 4xx/5xx.
+3. Sesudah evaluasi: MAE, threshold, sample count, dan status model.
+
+Jalankan evaluator dengan `--min-samples 100000` untuk memperagakan status sample belum cukup, lalu ulangi dengan default. Bandingkan `Serving Model` dengan `Evaluated Model` dan jelaskan perbedaan waktu job dengan target replay NYC.
 
 ### Retraining
 

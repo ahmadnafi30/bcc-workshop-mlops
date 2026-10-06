@@ -984,3 +984,19 @@ Coba jawab tanpa lihat docs:
 Kalau semua kebayang, kalian bukan cuma “bisa pakai Grafana”. Kalian ngerti observability architecture di balik panel.
 
 Next kita tutup loop dengan retraining.
+
+---
+
+## Urutan demo untuk dashboard repository ini
+
+Kalau data, model, dan service belum disiapkan, mulai dari [Quickstart Grafana dari kondisi kosong](dashboard-quickstart.md). Quickstart menyiapkan training, champion, HTTP traffic, dan evaluasi.
+
+Setelah prediction API menghasilkan log dan actual demand tersedia, jalankan:
+
+~~~bash
+uv run python scripts/evaluate_predictions.py
+~~~
+
+Periksa `evaluation_status` di output dan `data/monitoring/performance_summary.json`. Untuk memperagakan status sample belum cukup, jalankan ulang dengan `--min-samples 100000` setelah ada prediction yang cocok dengan actual, lalu kembalikan ke default dengan menjalankan command tanpa opsi tersebut. Tanpa matched sample, status tetap belum dievaluasi.
+
+Dashboard memakai dua identitas model: serving version dari prediction API terakhir dan evaluated version dari summary MAE. Keduanya boleh berbeda sesudah promotion. Dashboard juga memakai dua clock: waktu nyata job evaluasi dan tanggal target replay historis di timezone `America/New_York`.

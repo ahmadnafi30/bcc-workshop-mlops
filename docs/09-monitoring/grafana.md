@@ -585,3 +585,23 @@ Coba jawab:
 9. Kenapa alerting sebaiknya datang setelah metric semantics clear?
 
 Kalau semua kebayang, dashboard bukan lagi sekadar “UI cantik”, tapi bagian dari observability architecture yang masuk akal.
+
+---
+
+## Sinyal dashboard yang dipakai repository ini
+
+Konfigurasi panel ada di `monitoring/grafana/dashboards/taxi-mlops.json`. Angka-angka berikut mengikuti query dan exporter yang benar-benar ada di project:
+
+| Panel | Cara membacanya |
+| --- | --- |
+| `Prediction Request Rate` | Request ke `/predict` per detik selama 1 menit terakhir, termasuk request yang gagal. Scrape `/metrics` dan health check tidak ikut dihitung. |
+| `Prediction Latency` | p50 dan p95 durasi HTTP `/predict` selama 5 menit, termasuk waktu feature loading dan request gagal. |
+| `Predictions in 5m` | Prediction API yang berhasil selama 5 menit. Request gagal dan `replay_predictions.py` tidak menambah counter API ini. |
+| `Prediction 4xx Rejection Rate` / `Prediction 5xx Error Rate` | Proporsi request `/predict` yang ditolak atau gagal di service. Nilainya belum tersedia saat tidak ada traffic; nol berarti ada traffic tanpa error pada window tersebut. |
+| `Evaluation Samples` | Jumlah prediction unik yang sudah cocok dengan actual, dibanding minimum sample. MAE tetap bisa terlihat ketika sample masih kurang, tetapi belum cukup untuk keputusan retraining. |
+
+Model Evaluation Status memakai kode `0` untuk belum dievaluasi, `1` untuk sample belum cukup, `2` untuk masih dalam batas, dan `3` untuk perlu retrain. Jika actual belum tersedia atau summary belum ada, kualitas model belum diketahui; panel MAE menampilkan N/A, bukan nol.
+
+Default evaluator memakai multiplier `1.25`, minimum `100` sample, dan paling banyak `500` prediction terbaru. Threshold-nya adalah `reference MAE × multiplier`. Nilai ini bisa diubah lewat opsi `--degradation-multiplier`, `--min-samples`, dan `--recent-limit` pada `scripts/evaluate_predictions.py`.
+
+`Last Evaluation (NYC)` dan `Evaluation Age` mengikuti waktu nyata saat job evaluasi berjalan. `Latest Evaluated Replay Target (NYC)` menunjukkan target historis terakhir yang sudah punya actual; tanggal replay 2025 tetap wajar. Setelah promotion, `Serving Model (Last Prediction)` bisa berbeda dari `Evaluated Model` sampai prediction dan evaluasi untuk versi baru tersedia.

@@ -671,3 +671,9 @@ Tracking dan promotion adalah separate stages.
 Kalau semua clear, kalian sudah punya traceability dari data snapshot sampai production model alias.
 
 Next kita orchestrate workflow-nya di Airflow.
+
+---
+
+## Kebutuhan format model di versi project saat ini
+
+Project menetapkan `mlflow>=3.16.1,<4.0`. Training melog model sklearn memakai format `skops`; `src/tracking/mlflow_tracking.py` juga mengizinkan trusted types internal yang diperlukan `HistGradientBoostingRegressor` saat artifact dimuat kembali. Pertahankan versi minimum project saat menyiapkan environment agar model yang diregister dapat diload oleh serving API.
