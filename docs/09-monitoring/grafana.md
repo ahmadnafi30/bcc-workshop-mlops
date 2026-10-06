@@ -1,43 +1,82 @@
 # Grafana — Dari Metric Mentah Jadi Dashboard yang Bisa Dibaca Manusia
 
-Prometheus punya data.
+Prometheus sudah punya time-series data.
 
-Tapi kalau setiap kali mau inspect system kita harus ngetik query satu-satu, kurang nyaman.
+Tapi kalau setiap kali mau inspect system kita harus buka Prometheus UI lalu ngetik query satu-satu, kurang nyaman.
 
-Grafana jadi visualization layer.
+Grafana masuk sebagai visualization layer.
 
-Mental model:
+Mental model yang paling gampang:
 
 ~~~text
 Prometheus
-→ collect + query
+→ collect + store + query
 
 Grafana
 → visualize + dashboard
 ~~~
 
+Grafana tidak menggantikan Prometheus.
+
+Dia baca data dari Prometheus.
+
+---
+
+# Analogi control room
+
+Prometheus seperti sensor + measurement database.
+
+Grafana seperti layar control room.
+
+Sensor tetap bisa collect data walaupun layar mati.
+
+Sebaliknya, layar tanpa datasource juga nggak punya apa-apa buat ditampilkan.
+
+Jadi dua role ini beda.
+
 ---
 
 ## Datasource
 
-Grafana perlu tahu data source.
+Grafana perlu tahu:
 
-Project provision:
+> “Data saya ambil dari mana?”
+
+Project provision datasource:
 
 ~~~text
 Prometheus
 http://prometheus:9090
 ~~~
 
-Di Compose network, hostname prometheus resolve ke Prometheus container.
+Kenapa hostname prometheus?
+
+Karena Grafana jalan di Docker Compose network yang sama.
+
+Jadi internal service discovery lagi.
 
 ---
 
-## Provisioning
+# Provisioning — kenapa dashboard disimpan di Git?
 
-Dashboard kita tidak dibuat manual lalu cuma hidup di laptop presenter.
+Kita bisa bikin dashboard manual lewat UI.
 
-Config disimpan di repo.
+Tapi bayangin presenter setup dashboard di laptop sendiri.
+
+Workshop hari H:
+
+~~~text
+presenter
+→ dashboard ada
+
+participant
+→ clone repo
+→ dashboard kosong
+~~~
+
+Nggak reproducible.
+
+Makanya project simpan configuration:
 
 ~~~text
 monitoring/grafana/
@@ -45,217 +84,504 @@ monitoring/grafana/
 └── dashboards/
 ~~~
 
-Benefit:
+Jadi:
 
 ~~~text
 git clone
 ↓
 docker compose up
 ↓
-same dashboard
+datasource auto-configured
+↓
+dashboard auto-loaded
 ~~~
 
-Dashboard jadi code/config artifact.
-
-Bisa versioned dan reviewed.
+Ini jauh lebih professional dan repeatable.
 
 ---
 
-## Panel utama
+# Dashboard sebagai code/config artifact
 
-Dashboard menampilkan:
+Dashboard JSON memang bukan Python code, tapi dia tetap bagian system configuration.
 
-- request rate dan p50/p95 latency khusus `/predict`,
-- jumlah prediction berhasil dalam 5 menit,
-- persentase response 4xx dan 5xx dari `/predict`,
-- status evaluasi model,
-- recent MAE, reference MAE, dan threshold retraining,
-- jumlah prediction yang sudah cocok dengan actual dan minimum sample,
-- waktu job evaluasi terakhir, umur evaluasi, dan target replay terakhir,
-- versi model dari prediction API terakhir dan versi model yang dievaluasi.
+Benefit kalau masuk Git:
 
-Setiap panel punya description. Hover ikon info untuk membaca arti angka dan
-window yang dipakai.
+- bisa review perubahan;
+- punya history;
+- reproducible;
+- tidak tergantung klik manual;
+- presenter dan participant dapat view yang sama.
 
-Request rate memakai window 1 menit, sedangkan latency dan error rate memakai
-window 5 menit. `/metrics`, `/health`, dan Swagger tetap dicatat oleh middleware,
-tetapi tidak ikut masuk panel prediction. Jadi scrape Prometheus tidak terlihat
-seolah-olah ada user yang meminta prediksi.
+Ini small example dari infrastructure/configuration as code mindset.
 
-4xx berarti request ditolak, misalnya target bukan awal jam atau history belum
-lengkap. 5xx berarti layanan gagal menangani request. Periksa response untuk
-mengetahui penyebabnya; kedua jenis error perlu dibaca dengan konteks berbeda.
+---
 
-Kenapa combine operational + model metric?
+# Panel apa saja?
 
-Supaya satu view bisa bantu differentiate:
+Dashboard starter kita punya:
 
 ~~~text
-service problem
-vs
-model problem
+API request rate
+API p95 latency
+prediction count
+retrain recommended
+recent MAE
+reference MAE
+current model version
 ~~~
+
+Kenapa metric operational dan model performance ditaruh satu tempat?
+
+Biar kita cepat compare dua health dimension.
 
 ---
 
-## Status model perlu evidence
+# Scenario 1 — service sehat, model jelek
 
-MAE nol berarti prediction cocok dengan actual. Kalau belum ada actual yang
-bisa dievaluate, kualitas model belum diketahui. Dashboard menampilkan N/A
-untuk MAE tersebut.
-
-| Status | Artinya |
-| --- | --- |
-| Belum dievaluasi | Belum ada prediction yang cocok dengan actual, atau summary belum tersedia. |
-| Sampel belum cukup | Sudah ada MAE, tetapi sample masih di bawah minimum. |
-| Dalam batas | Sample cukup dan MAE tidak melewati threshold. |
-| Perlu retrain | Sample cukup dan MAE melewati threshold. |
-
-Grafik **Model MAE** menampilkan threshold yang dihitung oleh job evaluasi:
+Misalnya:
 
 ~~~text
-threshold = reference MAE × degradation multiplier
+p95 latency = 60 ms
+HTTP success tinggi
+request rate normal
+
+recent MAE = naik jauh
 ~~~
 
-Dengan default multiplier 1.25, reference MAE 10 menghasilkan threshold 12.5.
-Tetap lihat **Evaluation Samples** sebelum mengambil keputusan.
-
----
-
-## Dua clock dalam historical replay
-
-**Last Evaluation** dan **Evaluation Age** mengikuti waktu nyata ketika job
-dijalankan. Scrape setiap 5 detik tidak berarti job evaluasi ikut berjalan
-setiap 5 detik.
-
-**Latest Evaluated Replay Target** mengikuti tanggal historical dari prediction
-yang sudah cocok dengan actual. Tanggal 2025 tetap normal walaupun workshop
-dilakukan sekarang. Panel ini bukan ukuran freshness job.
-
-Dashboard memakai timezone `America/New_York`. Summary menyimpan waktu job dalam
-UTC dan target replay sebagai waktu lokal NYC; exporter mengubah keduanya ke
-timestamp yang sesuai sebelum ditampilkan.
-
----
-
-## Sesudah model dipromote
-
-**Serving Model (Last Prediction)** menunjukkan model dari prediction API
-terakhir. Kirim prediction baru sesudah promotion untuk melihat pergantian versi.
-
-**Evaluated Model** menunjukkan model sumber summary evaluasi. Jika serving
-sudah v2 tetapi evaluation masih v1, MAE yang terlihat masih milik v1. Jalankan
-evaluasi lagi untuk model baru dan tunggu actual dari prediction model tersebut.
-
-Loader resolve alias champion lalu memuat artifact lewat URI versi tetap.
-Metadata dan model yang digunakan tetap cocok walaupun alias berubah saat
-artifact sedang dimuat.
-
----
-
-## Dashboard empty bukan berarti broken
-
-Kalau belum ada traffic:
+Interpretation:
 
 ~~~text
-request rate = no data / zero
+operations
+✅
+
+model quality
+❌
 ~~~
 
-Normal. Error rate dan latency juga bisa belum tersedia saat tidak ada traffic.
-Jangan menganggap panel kosong sebagai zero latency atau zero error yang sudah
-terbukti. Prometheus perlu lebih dari satu scrape untuk menghitung rate.
+Action focus kemungkinan ke:
 
-Generate actual API traffic:
+- data;
+- model performance;
+- retraining;
+- drift investigation.
+
+Restart API container belum tentu membantu.
+
+---
+
+# Scenario 2 — model sehat, service jelek
+
+~~~text
+recent MAE normal
+reference MAE normal
+
+p95 latency = 8 seconds
+timeouts naik
+~~~
+
+Interpretation:
+
+~~~text
+model quality
+✅
+
+service performance
+❌
+~~~
+
+Action focus:
+
+- resource;
+- network;
+- concurrency;
+- application bottleneck.
+
+Retrain model bukan solusi.
+
+---
+
+# Scenario 3 — dua-duanya bermasalah
+
+~~~text
+latency naik
+MAE naik
+~~~
+
+Sekarang kita perlu investigate dua layer.
+
+Mungkin:
+
+- new model lebih berat;
+- infrastructure overloaded;
+- data pipeline issue;
+- recent model degraded.
+
+Dashboard membantu narrow investigation, bukan otomatis memberi root cause.
+
+---
+
+# Dashboard kosong belum tentu Grafana broken
+
+Kalau baru docker compose up dan belum ada request:
+
+~~~text
+request rate
+→ zero / no samples
+~~~
+
+Normal.
+
+Kita perlu traffic.
+
+Command workshop:
 
 ~~~bash
-uv run python scripts/generate_api_traffic.py   --date 2025-01-28   --start-hour 17   --end-hour 18
+uv run python scripts/generate_api_traffic.py \
+  --date 2025-01-28 \
+  --start-hour 17 \
+  --end-hour 18
 ~~~
 
-Kenapa script ini lewat HTTP?
+Script ini benar-benar call FastAPI lewat HTTP.
 
 Supaya middleware metrics beneran triggered.
 
-Direct predictor replay nggak create HTTP latency metric.
-
----
-
-## Data chain
-
-Kalau recent MAE panel kosong, debug chain:
-
 ~~~text
-prediction happened?
-↓
-prediction log written?
-↓
-ground truth exists?
-↓
-evaluate_predictions ran?
-↓
-performance_summary exists?
-↓
-/metrics exposes gauge?
-↓
-Prometheus scraped?
-↓
-Grafana query correct?
+request middleware
+✅
+
+request counter
+✅
+
+latency histogram
+✅
+
+prediction log
+✅
 ~~~
 
 Observability debugging juga perlu dependency thinking.
 
 ---
 
-## Dashboard bukan source of truth sendiri
+# generate_api_traffic vs replay_predictions
+
+Ini penting karena dua script kelihatannya mirip.
+
+## generate_api_traffic.py
+
+Future extension:
+
+~~~text
+script
+↓ HTTP POST
+FastAPI
+↓
+prediction
+~~~
+
+Effect:
+
+~~~text
+API metrics
+✅
+
+prediction log
+✅
+~~~
+
+## replay_predictions.py
+
+Flow:
+
+~~~text
+script
+↓
+predictor directly
+~~~
+
+Effect:
+
+~~~text
+API latency metrics
+❌
+
+prediction log
+✅
+~~~
+
+Kenapa direct replay masih useful?
+
+Karena buat batch evaluation, kita nggak selalu perlu overhead HTTP.
+
+Jadi:
+
+~~~text
+API traffic generator
+→ operational demo
+
+direct replay
+→ batch model evaluation
+~~~
+
+Different purpose.
+
+---
+
+# Recent MAE panel tidak muncul magically
+
+Grafana tidak menghitung MAE dari raw prediction.
+
+Chain lengkap:
+
+~~~text
+prediction request
+↓
+predictions.jsonl
+↓
+ground truth available
+↓
+evaluate_predictions.py
+↓
+performance_summary.json
+↓
+FastAPI /metrics
+↓
+Prometheus scrape
+↓
+Grafana query
+↓
+panel
+~~~
+
+Panjang ya?
+
+Justru ini bagus.
+
+Participant jadi lihat bahwa dashboard adalah ujung dari dependency chain, bukan sumber logic.
+
+---
+
+# Debugging panel kosong
+
+Jangan langsung:
+
+> “Grafana error.”
+
+Debug chain.
+
+## Step 1
+
+Ada prediction log?
+
+~~~text
+data/monitoring/predictions.jsonl
+~~~
+
+## Step 2
+
+Ground truth ada?
+
+~~~text
+data/processed/demand/...
+~~~
+
+## Step 3
+
+Evaluation sudah dijalankan?
+
+~~~bash
+uv run python scripts/evaluate_predictions.py
+~~~
+
+## Step 4
+
+Summary ada?
+
+~~~text
+data/monitoring/performance_summary.json
+~~~
+
+## Step 5
+
+FastAPI metrics expose value?
+
+~~~text
+/metrics
+~~~
+
+## Step 6
+
+Prometheus target UP?
+
+## Step 7
+
+Prometheus query punya result?
+
+## Step 8
+
+Baru check Grafana panel.
+
+Dependency-first debugging jauh lebih efektif daripada random restart.
+
+---
+
+# Refresh interval dan scrape delay
+
+Misalnya summary file baru saja update.
+
+Grafana belum tentu berubah instant.
+
+Kenapa?
+
+~~~text
+summary file changes
+↓
+next /metrics scrape
+↓
+Prometheus stores sample
+↓
+next Grafana refresh
+↓
+panel updates
+~~~
+
+Ada small propagation delay.
+
+Observability system juga punya latency.
+
+---
+
+# Grafana bukan decision engine
+
+Kita sengaja tidak menaruh logic:
+
+~~~text
+if panel MAE > threshold:
+    retrain
+~~~
+
+di dashboard.
+
+Decision dibuat Python monitoring code.
+
+Prometheus expose/store metric.
 
 Grafana visualize.
 
-Dia bukan tempat business logic retrain.
-
-Decision summary dihasilkan monitoring pipeline.
-
-Prometheus scrape metric.
-
-Grafana visualize.
+Airflow orchestrate action.
 
 Separation:
 
 ~~~text
-logic
+calculation
 → monitoring code
 
-metrics storage
+time-series
 → Prometheus
 
 visualization
 → Grafana
+
+action
+→ Airflow
 ~~~
+
+Ini lebih mudah dites dan di-maintain.
 
 ---
 
-## Alerting?
+# Dashboard design juga punya responsibility
 
-Grafana/Prometheus ecosystem bisa alert.
+Dashboard yang penuh 50 panel belum tentu lebih bagus.
 
-Workshop belum fokus ke alert channel.
+Pertanyaan:
 
-Future extension:
+> “Apa decision yang ingin dibantu dashboard ini?”
+
+Workshop dashboard intentionally simple.
+
+Kita ingin participant bisa lihat:
+
+1. traffic ada?
+2. API lambat?
+3. model version apa?
+4. prediction count?
+5. recent MAE vs reference?
+6. retrain recommended?
+
+Enough buat satu coherent operational story.
+
+---
+
+# Alerting — next step yang natural
+
+Kalau metric sudah mature, kita bisa add alert.
+
+Contoh:
 
 ~~~text
 retrain_recommended = 1
 ↓
 alert
 ↓
-Slack/email/on-call
+Slack / email / on-call
 ~~~
 
-Tapi jangan buru-buru add alert sebelum metric quality jelas.
+Tapi alerting punya own problem:
+
+- false positive;
+- threshold;
+- duplicate alerts;
+- alert fatigue;
+- ownership.
+
+Jadi jangan buru-buru alert kalau metric semantics belum solid.
+
+Bad alert:
+
+> “Something changed.”
+
+Good alert:
+
+> “Champion recent MAE melewati threshold selama window tertentu dan sample count cukup.”
+
+Actionable context matters.
 
 ---
 
-## Checkpoint
+# Visualization bisa misleading
 
-1. Grafana beda apa dengan Prometheus?
-2. Provisioning dashboard benefit-nya apa?
-3. Kenapa dashboard bisa kosong padahal Grafana sehat?
-4. Kalau MAE panel kosong, dependency chain apa yang dicek?
-5. Kenapa retraining logic nggak ditaruh di Grafana?
+Y-axis scale, aggregation window, smoothing, dan time range bisa mengubah perception.
+
+Misalnya MAE naik:
+
+~~~text
+10.0 → 10.3
+~~~
+
+Kalau Y-axis zoom 9.9–10.4, kelihatan dramatis.
+
+Kalau Y-axis 0–100, kelihatan flat.
+
+Dashboard bukan neutral truth. Cara visualisasi juga perlu sense.
+
+Makanya numeric context dan threshold tetap penting.
+
+---
+
+# Checkpoint
+
+Coba jawab:
+
+1. Grafana dan Prometheus beda role apa?
+2. Kenapa dashboard provisioning disimpan di Git?
+3. Kenapa empty dashboard belum tentu error?
+4. generate_api_traffic dan replay_predictions beda apa?
+5. Recent MAE sampai Grafana lewat chain apa?
+6. Kenapa retraining logic nggak ditaruh di Grafana?
+7. Kenapa panel update bisa delay?
+8. Dashboard yang lebih banyak panel belum tentu lebih bagus kenapa?
+9. Kenapa alerting sebaiknya datang setelah metric semantics clear?
+
+Kalau semua kebayang, dashboard bukan lagi sekadar “UI cantik”, tapi bagian dari observability architecture yang masuk akal.

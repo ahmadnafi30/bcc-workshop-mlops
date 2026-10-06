@@ -1,322 +1,986 @@
-# Step 9 — Monitoring: Bikin Dashboard Benar-Benar Bergerak
+# Step 9 — Monitoring: Bikin Dashboard Bergerak dan Belajar Membaca Apa Artinya
 
-Sekarang stack hidup.
+Sekarang stack kita sudah hidup.
 
-Prometheus dan Grafana ada.
+FastAPI bisa menerima prediction request.
 
-Tapi dashboard tanpa traffic ya kosong.
+Prometheus bisa scrape metric.
 
-Kita generate real API traffic dan kemudian evaluate model quality.
+Grafana bisa render dashboard.
+
+Tapi ada satu hal yang sering banget bikin bingung pas pertama belajar monitoring:
+
+> “Kok dashboard-nya kosong? Berarti Grafana error ya?”
+
+Belum tentu.
+
+Dashboard hanya bisa menampilkan signal yang memang sudah diproduksi oleh system.
+
+Kalau belum ada traffic, belum ada prediction, atau ground truth belum datang, beberapa panel memang seharusnya kosong atau zero.
+
+Di step ini kita nggak cuma mau bikin graph bergerak. Kita mau ngerti **chain yang membuat graph itu bisa bergerak**.
 
 ---
 
 ## Goal
 
-Setelah step ini:
+Setelah selesai, kalian harus bisa menjelaskan dua chain berbeda.
 
-- API operational metrics bergerak,
-- Prometheus query works,
-- Grafana dashboard punya data,
-- prediction log dievaluate,
-- recent MAE muncul,
-- kalian ngerti system vs model monitoring.
+Operational monitoring:
+
+~~~text
+HTTP request
+↓
+FastAPI middleware
+↓
+Prometheus metric
+↓
+Prometheus scrape
+↓
+Grafana panel
+~~~
+
+Model performance monitoring:
+
+~~~text
+prediction
+↓
+prediction log
+↓
+ground truth datang belakangan
+↓
+evaluation
+↓
+performance summary
+↓
+FastAPI metrics endpoint
+↓
+Prometheus
+↓
+Grafana
+~~~
+
+Kenapa dua chain?
+
+Karena latency bisa diketahui langsung saat request selesai, tapi prediction accuracy baru diketahui setelah actual target tersedia.
 
 ---
 
-## 1. Open Grafana sebelum traffic
+# 1. Buka Grafana sebelum generate traffic
+
+Open:
 
 ~~~text
 http://localhost:3000
 ~~~
 
-Dashboard mungkin mostly zero/empty.
-
-Ini bagus buat comparison before-after.
-
-Jika belum pernah menjalankan evaluasi, **Model Evaluation Status** menunjukkan
-**Belum dievaluasi** dan MAE belum tersedia. Kalau sudah ada summary dari demo
-sebelumnya, periksa **Last Evaluation** dan **Evaluated Model** terlebih dahulu.
-
-Panel **Prediction Request Rate** hanya menghitung `/predict`. Refresh dashboard
-dan scrape `/metrics` sendiri tidak menambah prediction traffic.
-
----
-
-## 2. Generate HTTP traffic
-
-### Jalur manual kalau data dan model belum ada
-
-Ikuti [Quickstart Grafana dari kondisi kosong](dashboard-quickstart.md). Panduan
-tersebut memuat setup service, persiapan data, training, registration, promotion,
-HTTP traffic, dan evaluasi tanpa Airflow. Setelah selesai, lanjutkan membaca
-panel serta latihan monitoring di halaman ini.
-
-### Jalur Airflow kalau training sudah selesai
-
-Pastikan champion tersedia. Jika history Jan 27 belum ada, jalankan DAG
-`taxi_daily_replay` dengan `replay_date=2025-01-27` terlebih dahulu. Setelah selesai,
-jalankan untuk `replay_date=2025-01-28` dan tunggu sampai selesai. History per jam
-sampai Jan 28 dibutuhkan untuk request jam 17–18.
-
-Workshop ini melakukan replay setelah daily file tersedia. Feature provider
-tetap membatasi history sebelum target hour, sedangkan actual pada target hour
-dipakai nanti untuk evaluasi.
-
-### Kirim request lewat API
-
-Gunakan command ini setelah memilih salah satu jalur di atas:
-
-~~~bash
-uv run python scripts/generate_api_traffic.py \
-  --date 2025-01-28 --start-hour 17 --end-hour 18
-~~~
-
-Script ini call FastAPI.
-
-Kenapa bukan direct predictor?
-
-Karena kita pengen exercise:
+Cari dashboard:
 
 ~~~text
-HTTP middleware
-request count
-latency
-prediction log
+MLOps / Taxi Demand MLOps
 ~~~
+
+Lihat panel.
+
+Beberapa mungkin:
+
+~~~text
+0
+no data
+flat
+~~~
+
+Jangan buru-buru restart Grafana.
+
+Tanya:
+
+> “Event yang mau diukur memang sudah terjadi belum?”
+
+Kalau belum ada prediction request, prediction counter zero itu benar.
+
+Kalau belum ada evaluation, recent MAE belum punya value juga benar.
+
+Monitoring yang bagus tidak mengarang data supaya dashboard terlihat cantik.
 
 ---
 
-## 3. Refresh Grafana
+# 2. Sebelum Grafana, cek Prometheus target
 
-Wait beberapa detik buat Prometheus scrape.
-
-Lihat:
-
-- request rate,
-- p95 latency,
-- prediction count,
-- Serving Model (Last Prediction),
-- 4xx rejection rate dan 5xx error rate.
-
-Tunggu setidaknya dua scrape agar rate mulai tersedia. Error rate bisa bernilai
-nol saat ada traffic tanpa error; saat tidak ada traffic, panel bisa belum
-tersedia.
-
-Kalau burst pertama selesai sebelum counter sempat di-scrape, rate dan increase
-bisa masih nol. Tunggu 10–15 detik lalu jalankan script traffic sekali lagi agar
-Prometheus menangkap pertambahan counter.
-
-Untuk mencoba request ditolak, kirim body berikut melalui Swagger `/predict`:
-
-~~~json
-{
-  "zone_id": 161,
-  "target_datetime": "2025-01-28T18:30:00"
-}
-~~~
-
-Response seharusnya 422. Panel 4xx bergerak setelah scrape, tetapi counter
-prediction berhasil tidak bertambah. Buka description panel untuk melihat
-perbedaan antara request rate, rejection rate, dan prediction count.
-
-Question:
-
-> “Kalau request rate belum naik, chain mana yang mungkin belum jalan?”
-
-Traffic → API → metrics → Prometheus → Grafana.
-
-Debug from left to right.
-
----
-
-## 4. Open Prometheus
+Open:
 
 ~~~text
 http://localhost:9090
 ~~~
 
-Query:
+Masuk ke Targets.
+
+Target API harus:
+
+~~~text
+UP
+~~~
+
+Kenapa kita cek ini di awal?
+
+Karena dependency-nya:
+
+~~~text
+FastAPI /metrics
+↓
+Prometheus scrape
+↓
+Grafana
+~~~
+
+Kalau Prometheus bahkan nggak bisa scrape FastAPI, debug Grafana dulu itu salah layer.
+
+Ini recurring debugging principle:
+
+> **Start from the earliest broken dependency, not from the prettiest UI.**
+
+---
+
+# 3. Buka raw /metrics
+
+Open:
+
+~~~text
+http://localhost:8000/metrics
+~~~
+
+Output-nya raw text.
+
+Kelihatan nggak friendly.
+
+Normal.
+
+Endpoint ini primarily buat Prometheus.
+
+Cari:
+
+~~~text
+taxi_api_requests_total
+taxi_api_request_duration_seconds
+taxi_predictions_total
+~~~
+
+Coba observe label-nya.
+
+Misalnya request metric punya dimension method, path, status.
+
+Sekarang kalian bisa connect:
+
+~~~text
+Python metric definition
+↓
+/metrics exposition
+↓
+Prometheus series
+~~~
+
+---
+
+# 4. Predict dulu apa yang akan terjadi sebelum generate traffic
+
+Kita akan run:
+
+~~~bash
+uv run python scripts/generate_api_traffic.py   --date 2025-01-28   --start-hour 17   --end-hour 18
+~~~
+
+Sebelum Enter, coba jawab:
+
+1. Script ini call predictor langsung atau lewat HTTP?
+2. Berapa jam target yang dikirim?
+3. Apakah prediction log akan bertambah?
+4. Apakah API request counter akan bertambah?
+5. Apakah latency histogram akan punya observation baru?
+
+Expected:
+
+~~~text
+HTTP
+2 target hours
+yes
+yes
+yes
+~~~
+
+Baru run.
+
+---
+
+# 5. Apa yang dilakukan generate_api_traffic.py?
+
+Actual script:
+
+~~~text
+load Manhattan zone IDs
+↓
+for hour 17..18
+↓
+for each zone
+↓
+POST /predict
+↓
+count success / failed
+~~~
+
+Jadi jumlah request kira-kira:
+
+~~~text
+number_of_manhattan_zones × 2
+~~~
+
+Ini bukan random fake metric injection.
+
+Kita benar-benar exercise FastAPI serving path.
+
+---
+
+# 6. Watch success dan failed
+
+Terminal akan report:
+
+~~~text
+success
+failed
+target api
+~~~
+
+Kalau failed banyak, jangan lanjut seolah semuanya baik.
+
+Read response.
+
+Possible reason:
+
+- champion belum ada;
+- history tidak lengkap;
+- API URL salah;
+- service down;
+- request invalid.
+
+Operational monitoring demo harus mulai dari request yang memang berhasil.
+
+---
+
+# 7. Kenapa script ini berbeda dari replay_predictions.py?
+
+Ini penting.
+
+## generate_api_traffic.py
+
+~~~text
+script
+↓ HTTP
+FastAPI
+↓
+predictor
+~~~
+
+Effect:
+
+~~~text
+request counter ✅
+latency histogram ✅
+prediction counter ✅
+prediction log ✅
+~~~
+
+## replay_predictions.py
+
+~~~text
+script
+↓
+predictor directly
+~~~
+
+Effect:
+
+~~~text
+request counter ❌
+HTTP latency ❌
+prediction log ✅
+~~~
+
+Kenapa direct replay masih useful?
+
+Kalau kita mau batch historical evaluation, HTTP overhead bisa unnecessary.
+
+Jadi:
+
+~~~text
+API traffic generator
+→ operational monitoring demo
+
+direct replay
+→ batch model evaluation
+~~~
+
+Satu project bisa punya dua path yang sengaja berbeda.
+
+---
+
+# 8. Query raw counter
+
+Di Prometheus query:
 
 ~~~text
 taxi_api_requests_total
 ~~~
 
-Lihat raw series.
+Observe value.
 
-Then:
+Ini cumulative counter.
 
-~~~text
-sum(rate(taxi_api_requests_total{path="/predict"}[1m]))
-~~~
+Question:
 
-Apa bedanya?
+> “Kalau total requests sudah 1000, apakah traffic saat ini tinggi?”
 
-Counter vs rate.
+Belum tentu.
+
+1000 bisa terkumpul selama seminggu.
+
+Makanya counter sendiri belum jawab current traffic speed.
 
 ---
 
-## 5. Check prediction log
+# 9. Query rate
+
+Try:
+
+~~~text
+sum(rate(taxi_api_requests_total[1m]))
+~~~
+
+Sekarang kita estimate seberapa cepat counter bertambah dalam recent one-minute window.
+
+Analogy:
+
+~~~text
+counter
+→ odometer
+
+rate(counter)
+→ speedometer
+~~~
+
+Odometer bilang total perjalanan.
+
+Speedometer bilang current speed.
+
+Ini salah satu mental model Prometheus paling useful.
+
+---
+
+# 10. Latency dan p95
+
+Dashboard punya p95 latency.
+
+Kenapa p95?
+
+Bayangin:
+
+~~~text
+95 requests = 50 ms
+5 requests = 4 sec
+~~~
+
+Kalau cuma average, tail problem bisa kelihatan lebih kecil.
+
+p95 roughly bertanya:
+
+> “95% request selesai di bawah sekitar berapa lama?”
+
+Tail latency penting karena user yang unlucky tetap merasakan slow response.
+
+---
+
+# 11. Refresh Grafana
+
+Wait beberapa detik buat:
+
+~~~text
+FastAPI metric update
+↓
+Prometheus scrape
+↓
+Grafana refresh
+~~~
+
+Sekarang request rate dan latency harus mulai punya signal.
+
+Kalau belum, debugging order:
+
+~~~text
+generate script success?
+↓
+/metrics value changed?
+↓
+Prometheus target UP?
+↓
+Prometheus query has data?
+↓
+Grafana datasource/panel query?
+~~~
+
+Jangan random restart seluruh stack.
+
+---
+
+# 12. Sekarang pindah ke model monitoring
+
+Operational metric bergerak.
+
+Tapi kita belum menjawab:
+
+> “Prediction-nya bagus nggak?”
+
+Untuk itu, buka:
 
 ~~~text
 data/monitoring/predictions.jsonl
 ~~~
 
-Sekarang banyak entries.
+Lihat beberapa entries.
 
-Tapi belum otomatis punya actual error.
+Fields penting:
 
-Need ground truth match.
+~~~text
+logged_at
+zone_id
+target_datetime
+predicted_trip_count
+model_version
+run_id
+~~~
 
 ---
 
-## 6. Evaluate predictions
+# 13. Kenapa model_version harus ikut di prediction log?
+
+Bayangin setengah hari pertama champion v1.
+
+Siang hari champion pindah v2.
+
+Kalau log cuma simpan:
+
+~~~text
+target
+prediction
+~~~
+
+nanti kita nggak tahu prediction buruk berasal dari model mana.
+
+Model version adalah bagian dari prediction lineage.
+
+---
+
+# 14. Ground truth harus tersedia
+
+Prediction untuk Jan 28 hanya bisa dievaluate kalau processed actual demand Jan 28 tersedia.
+
+Check:
+
+~~~text
+data/processed/demand/2025-01-28.parquet
+~~~
+
+Kalau file belum ada, run daily replay Jan 28 dulu.
+
+Ini penting secara semantics:
+
+~~~text
+missing ground truth
+≠
+zero error
+~~~
+
+Kalau actual belum ada, kita belum tahu model benar atau salah.
+
+---
+
+# 15. Run evaluate_predictions.py
 
 ~~~bash
 uv run python scripts/evaluate_predictions.py
 ~~~
 
-Observe terminal.
-
-Expected summary fields:
+Actual flow:
 
 ~~~text
-reference MAE
+resolve current champion
+↓
+ambil champion validation MAE
+↓
+load prediction log
+↓
+filter prediction by champion model version
+↓
+join with ground truth
+↓
+calculate absolute/squared errors
+↓
+take recent evaluation window
+↓
+calculate MAE/RMSE
+↓
+compare threshold
+↓
+write artifacts
+~~~
+
+Banyak ya?
+
+Makanya model monitoring bukan sekadar satu Prometheus query.
+
+---
+
+# 16. Kenapa filter by model version?
+
+Suppose:
+
+~~~text
+v1 predictions = 300
+v2 predictions = 200
+~~~
+
+Kalau dicampur:
+
+~~~text
 recent MAE
-threshold
-evaluation count
-minimum samples
-evaluation status
-evaluated at
-latest replay target
-retrain recommended
+~~~
+
+jadi mixture dua model.
+
+Kalau kita sedang evaluate champion v2, summary tersebut misleading.
+
+Lineage membantu monitoring tetap model-specific.
+
+---
+
+# 17. Baca terminal output
+
+Output punya bentuk seperti:
+
+~~~text
+model version: ...
+evaluated: ...
+reference MAE: ...
+recent MAE: ...
+threshold MAE: ...
+retrain recommended: ...
+~~~
+
+Exact numeric values tergantung actual run.
+
+Jangan hafal angka contoh dari docs.
+
+Yang perlu dipahami relationship:
+
+~~~text
+recent_mae
+vs
+threshold_mae
+~~~
+
+dan:
+
+~~~text
+evaluation_count
+vs
+min_samples
 ~~~
 
 ---
 
-## 7. Open performance summary
+# 18. Buka evaluations.parquet
+
+Path:
+
+~~~text
+data/monitoring/evaluations.parquet
+~~~
+
+Optional inspect:
+
+~~~bash
+uv run python -c "import pandas as pd; df=pd.read_parquet('data/monitoring/evaluations.parquet'); print(df.head()); print(df.shape)"
+~~~
+
+Cari:
+
+~~~text
+predicted_trip_count
+actual_trip_count
+absolute_error
+squared_error
+~~~
+
+Ini row-level evidence di balik summary.
+
+Kalau MAE terlihat aneh, kita bisa inspect individual errors.
+
+---
+
+# 19. Buka performance_summary.json
 
 ~~~text
 data/monitoring/performance_summary.json
 ~~~
 
-Read values.
+Fields:
 
-Tanya:
+~~~text
+evaluation_count
+recent_mae
+recent_rmse
+reference_mae
+threshold_mae
+retrain_recommended
+latest_target_datetime
+model_version
+~~~
 
-> “Kalau retrain_recommended false, apakah monitoring gagal?”
+Question:
+
+> “Kalau retrain_recommended false, monitoring gagal?”
 
 No.
 
-Lihat juga `evaluation_status`. `retrain_recommended=false` bisa berarti belum
-ada actual, sample masih kurang, atau model berada dalam batas. Ketiganya punya
-arti berbeda.
+Bisa berarti champion masih healthy.
+
+No action adalah valid outcome.
 
 ---
 
-## 8. Refresh Grafana
+# 20. Bagaimana summary masuk ke Prometheus?
 
-Wait scrape.
+FastAPI metrics endpoint refresh model-performance gauge dari summary file saat scrape.
 
-Recent MAE dan reference MAE harus mulai muncul kalau evaluation available.
-
-Perhatikan juga:
-
-- **Model MAE**: recent, reference, dan garis threshold retraining.
-- **Evaluation Samples**: jumlah match dibanding minimum.
-- **Model Evaluation Status**: keputusan berdasarkan sample dan threshold.
-- **Last Evaluation / Evaluation Age**: kapan job terakhir berjalan.
-- **Latest Evaluated Replay Target**: target historical terakhir, ditampilkan dalam waktu NYC.
-- **Evaluated Model**: model sumber MAE, yang perlu dibandingkan dengan Serving Model.
-
-Untuk mendemokan sample belum cukup tanpa mengganti data atau model:
-
-~~~bash
-uv run python scripts/evaluate_predictions.py --min-samples 100000
-~~~
-
-Jika sudah ada match, status berubah menjadi **Sampel belum cukup**. MAE tetap
-terlihat tetapi belum digunakan untuk merekomendasikan retraining. Setelah itu
-kembalikan konfigurasi default:
-
-~~~bash
-uv run python scripts/evaluate_predictions.py
-~~~
-
-Dashboard memakai timezone `America/New_York`. Tahun 2025 di panel target replay
-normal, sementara waktu job evaluasi menunjukkan saat workshop berlangsung.
-
----
-
-## 9. Operational vs model scenario
-
-Coba discuss:
-
-### Scenario 1
+Flow:
 
 ~~~text
-p95 latency low
-HTTP success
-recent MAE high
+performance_summary.json
+↓
+FastAPI /metrics
+↓
+Prometheus scrape
+↓
+taxi_model_recent_mae
+taxi_model_reference_mae
+taxi_model_retrain_recommended
 ~~~
 
-Action focus model.
+Grafana tidak membaca JSON langsung.
 
-### Scenario 2
+Ini dependency chain penting.
+
+---
+
+# 21. Refresh Grafana lagi
+
+Setelah evaluation dan next scrape, panel recent MAE/reference MAE seharusnya mulai muncul kalau ada evaluated samples.
+
+Kalau kosong:
+
+~~~text
+summary recent_mae null?
+↓
+/metrics expose gauge?
+↓
+Prometheus query punya value?
+↓
+Grafana panel?
+~~~
+
+Debug step by step.
+
+---
+
+# 22. Scenario game — diagnose layer-nya
+
+## Scenario A
+
+~~~text
+p95 latency = 60 ms
+HTTP success normal
+recent MAE jauh naik
+~~~
+
+Interpretasi:
+
+~~~text
+service health
+✅
+
+model quality
+❌
+~~~
+
+Potential investigation:
+
+- data quality;
+- distribution shift;
+- model aging;
+- retraining.
+
+Restart Grafana bukan solution.
+
+## Scenario B
 
 ~~~text
 recent MAE normal
-p95 latency huge
+p95 latency = 8 sec
+timeout naik
 ~~~
 
-Action focus service/infrastructure.
+Interpretasi:
 
-Monitoring membantu classify problem.
+~~~text
+model quality
+✅
 
-Saat model dipromote, kirim prediction baru lalu bandingkan dua tabel versi.
-Serving bisa sudah memakai model baru sementara summary evaluasi masih berasal
-dari model sebelumnya. Evaluasi berikutnya memakai champion baru dan menunggu
-actual dari prediction model tersebut.
+service performance
+❌
+~~~
+
+Retraining model bukan first action.
+
+## Scenario C
+
+~~~text
+request rate zero
+all service healthy
+~~~
+
+Mungkin memang nggak ada traffic.
+
+Zero traffic bukan otomatis incident.
+
+## Scenario D
+
+~~~text
+Prometheus target DOWN
+Grafana stale
+~~~
+
+Investigate API/network/scrape config before dashboard.
+
+---
+
+# 23. Cardinality thought experiment
+
+Bayangin kita tambahkan label:
+
+~~~text
+request_id = unique UUID
+~~~
+
+Setiap request menghasilkan combination baru.
+
+Prometheus bisa punya sangat banyak series.
+
+Itu high cardinality.
+
+Bandingkan:
+
+### Bounded-ish labels
+
+~~~text
+method
+path category
+HTTP status
+model version
+~~~
+
+### Dangerous unbounded labels
+
+~~~text
+request_id
+user_id
+free text
+full timestamp
+dynamic URL ID
+~~~
+
+Detailed individual info cocok di logs/events, bukan metric labels.
+
+---
+
+# 24. Unknown vs zero
+
+Ini subtle tapi penting.
+
+Case ground truth belum ada.
+
+Wrong:
+
+~~~text
+error = 0
+~~~
+
+Itu berarti model perfect.
+
+Correct:
+
+~~~text
+error = unknown / not evaluated
+~~~
+
+Dalam data system:
+
+> Missing dan zero punya semantics berbeda.
+
+Kalau kita salah represent missing sebagai zero, monitoring terlihat lebih bagus dari reality.
+
+---
+
+# 25. Monitoring detects symptom, not necessarily root cause
+
+MAE naik adalah symptom.
+
+Possible causes:
+
+- data drift;
+- data corruption;
+- feature pipeline bug;
+- extraordinary event;
+- model aging;
+- target definition change.
+
+Monitoring bilang:
+
+> “Something deserves investigation.”
+
+Bukan:
+
+> “Pasti retrain.”
+
+Ini kenapa Step 10 masih punya governance boundary.
+
+---
+
+# 26. Experiment dengan policy
+
+Script support:
+
+~~~text
+--degradation-multiplier
+--min-samples
+--recent-limit
+~~~
+
+Untuk learning, coba:
+
+~~~bash
+uv run python scripts/evaluate_predictions.py --min-samples 10
+~~~
+
+Lihat recommendation.
+
+Lalu compare default 100.
+
+Pertanyaan:
+
+> “Mana yang lebih benar?”
+
+Tidak ada universal answer.
+
+Policy tergantung risk, noise, business cost, dan data volume.
+
+Workshop goal-nya memahami sensitivity.
+
+---
+
+# 27. Propagation delay
+
+Suppose performance_summary baru diupdate.
+
+Grafana mungkin belum instant berubah.
+
+Chain:
+
+~~~text
+file updated
+↓
+next /metrics scrape
+↓
+Prometheus stores sample
+↓
+next Grafana refresh
+↓
+panel changes
+~~~
+
+Ada small propagation delay.
+
+Jadi jangan spam refresh dan conclude failure dalam 100 ms.
+
+Observability system juga punya latency.
+
+---
+
+# 28. Monitoring chain recap
+
+Operational:
+
+~~~text
+HTTP request
+↓
+middleware
+↓
+metrics
+↓
+Prometheus
+↓
+Grafana
+~~~
+
+Model:
+
+~~~text
+prediction
+↓
+prediction log
+↓
+actual later
+↓
+evaluation
+↓
+summary
+↓
+metrics
+↓
+Prometheus
+↓
+Grafana
+~~~
+
+Model chain lebih panjang karena ground truth delayed.
 
 ---
 
 ## 10. Direct replay distinction
 
-Ada:
+Coba jawab tanpa lihat docs:
 
-~~~text
-replay_predictions.py
-~~~
+1. Kenapa empty dashboard belum tentu error?
+2. Prometheus target UP artinya apa?
+3. generate_api_traffic beda apa dengan replay_predictions?
+4. Counter beda apa dengan rate?
+5. Kenapa p95 useful?
+6. Kenapa prediction log simpan model_version?
+7. Kenapa ground truth delayed?
+8. Missing ground truth kenapa tidak boleh dianggap zero error?
+9. Kenapa evaluation filter model version?
+10. performance_summary sampai Grafana lewat chain apa?
+11. retrain_recommended false bisa jadi success kenapa?
+12. MAE naik berarti pasti drift nggak?
+13. High-cardinality label itu apa?
+14. Kalau panel kosong, debugging order yang masuk akal bagaimana?
+15. Kenapa dashboard punya propagation delay?
 
-Ini direct predictor, useful buat fast batch model evaluation.
+Kalau semua kebayang, kalian bukan cuma “bisa pakai Grafana”. Kalian ngerti observability architecture di balik panel.
 
-Tapi bypass HTTP.
-
-Jadi jangan expect API latency panel bergerak kalau pakai script itu.
-
-Use correct tool for intended signal.
-
----
-
-## Mini challenge
-
-Kenapa prediction detail nggak dimasukkan semua sebagai Prometheus labels?
-
-Cardinality.
-
-Detailed event → log/table.
-
-Aggregate metric → Prometheus.
-
----
-
-## Checkpoint
-
-1. Scrape itu apa?
-2. Counter vs rate?
-3. p95 latency?
-4. Prediction log kenapa perlu?
-5. Ground truth datang kapan?
-6. Model healthy vs service healthy beda apa?
-7. retrain_recommended false bisa jadi success nggak?
-8. Apa bedanya belum dievaluasi, sample kurang, dan dalam batas?
-9. Kenapa tanggal replay berbeda dengan waktu job evaluasi?
+Next kita tutup loop dengan retraining.

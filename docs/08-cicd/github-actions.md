@@ -1,43 +1,17 @@
-# GitHub Actions — CI/CD yang Jalan Karena Event di Repository
+# GitHub Actions — Membaca Workflow Tanpa Tenggelam di YAML
 
-GitHub Actions itu automation platform yang attached ke GitHub repository.
+GitHub Actions adalah automation platform yang hidup dekat dengan repository.
 
-Kalau Airflow reacts ke workflow/data lifecycle, GitHub Actions biasanya reacts ke:
+Begitu ada event seperti pull request atau push, workflow bisa jalan.
 
-~~~text
-push
-pull request
-manual dispatch
-workflow completion
-~~~
+Kalau pertama kali buka file YAML CI, mungkin kelihatan panjang banget. Cara bacanya jangan dari setiap syntax kecil dulu.
 
-Jadi trigger domain-nya beda.
-
----
-
-## Workflow file
-
-Stored di:
-
-~~~text
-.github/workflows/
-~~~
-
-Project:
-
-~~~text
-ci.yml
-cd.yml
-~~~
-
-YAML-nya mungkin awalnya kelihatan intimidating.
-
-Baca dari luar ke dalam.
+Baca dari struktur besar.
 
 ~~~text
 name
 ↓
-on / trigger
+trigger
 ↓
 permissions
 ↓
@@ -46,229 +20,317 @@ jobs
 steps
 ~~~
 
-Jangan langsung fokus ke expression syntax.
+Setelah mental model ini jelas, expression detail jauh lebih gampang.
 
 ---
 
-## CI trigger
+# Workflow
 
-Kita run CI di branch development/release paths.
+File ada di:
 
-Pull request juga trigger.
+~~~text
+.github/workflows/
+~~~
 
-Tujuannya:
+Project kita punya:
 
-> Before integration, verify repository state.
+~~~text
+ci.yml
+cd.yml
+~~~
+
+Workflow = satu automation definition.
 
 ---
 
-## Job vs Step
+# Trigger
+
+Workflow CI bisa jalan karena:
+
+~~~text
+push
+pull_request
+manual dispatch
+~~~
+
+CD kita bergantung pada successful CI di main.
+
+Event-driven behavior ini beda dengan Airflow schedule/data pipeline trigger.
+
+---
+
+# Job
 
 Workflow punya jobs.
-
-Job punya steps.
 
 Contoh:
 
 ~~~text
-Job: Python + docs quality
-
-Step:
-checkout
-setup uv
-install
-ruff
-pytest
-mkdocs
+Python + docs quality
+Docker build - api
+Docker build - mlflow
+Docker build - airflow
 ~~~
 
 Jobs bisa parallel.
 
-Steps dalam satu job mostly sequential.
+Kalau API image build lambat, MLflow build nggak harus menunggu selama dependency-nya memang independen.
 
 ---
 
-## Checkout
+# Step
 
-Runner adalah fresh machine.
+Di dalam job ada steps.
 
-Dia belum punya repo.
-
-actions/checkout clone exact revision yang mau dites.
-
-Fresh runner bagus karena membuktikan project nggak cuma works karena hidden local state.
-
----
-
-## setup-uv
-
-Install uv on runner.
-
-Lalu Python environment disiapkan.
-
-CI seharusnya follow setup yang mirip developer workflow.
-
-Kalau local pakai uv tapi CI pakai random pip logic beda, divergence lebih gampang muncul.
-
----
-
-## Ruff
-
-Ruff check basic lint/import order.
-
-Kenapa style masuk CI?
-
-Karena consistency mengurangi noise review.
-
-Reviewer fokus ke logic daripada import order.
-
----
-
-## pytest
-
-Test functional behavior.
-
-Unit tests catch regressions di feature, serving, monitoring logic.
-
-CI test bukan proof system perfect, tapi safety net.
-
----
-
-## MkDocs strict build
-
-Docs adalah workshop product.
-
-Strict build catch:
-
-- invalid nav,
-- missing page,
-- rendering issue tertentu.
-
-Kalau docs broken, workshop broken.
-
-Jadi docs punya quality gate sama seperti code.
-
----
-
-## Docker matrix
-
-Kita build:
+Quality job misalnya:
 
 ~~~text
-api
-mlflow
-airflow
+checkout
+setup uv
+install Python
+sync dependency
+Ruff
+pytest
+MkDocs
 ~~~
 
-Matrix artinya same job template executed dengan target berbeda.
+Steps dalam satu job jalan berurutan.
 
-Daripada copy YAML tiga kali.
+---
+
+# Checkout
+
+Runner fresh belum punya repository.
+
+Checkout ambil exact revision yang mau dites.
+
+Ini penting buat lineage:
+
+~~~text
+PR commit
+↓
+exact checkout
+↓
+checks
+~~~
+
+---
+
+# Setup uv + Python
+
+CI environment sebaiknya sedekat mungkin dengan local developer flow.
+
+Kalau local pakai uv tapi CI punya totally different install logic, divergence lebih mudah terjadi.
+
+Goal bukan environment identical 100%, tapi setup path harus konsisten enough untuk catch real issue.
+
+---
+
+# Branch Policy Job
+
+Job ini cuma relevant pada pull request.
+
+Dia baca:
+
+~~~text
+base branch
+head branch
+~~~
+
+Lalu validate direction.
+
+Contoh:
+
+~~~text
+docs/foo → develop
+✅
+
+develop → main
+✅
+
+feat/foo → main
+❌
+~~~
+
+Ini contoh simple process-as-code.
+
+---
+
+# Matrix build
+
+Daripada:
+
+~~~yaml
+job_api:
+  ...
+
+job_mlflow:
+  ...
+
+job_airflow:
+  ...
+~~~
+
+yang isinya almost sama, matrix bilang:
+
+~~~text
+target = [api, mlflow, airflow]
+~~~
+
+Lalu same job template dijalankan per target.
 
 Benefit:
 
-- less duplication,
-- parallel execution,
-- consistent logic.
+- less duplication;
+- same build logic;
+- gampang tambah target;
+- parallelism.
+
+---
+
+# Cache
+
+CI bisa cache uv dependency atau Docker layer.
+
+Cache bikin lebih cepat.
+
+Tapi jangan sampai workflow cuma works kalau cache ada.
+
+Rule:
+
+> Cache is optimization, not correctness dependency.
+
+Kalau cache clear, build tetap harus bisa sukses.
 
 ---
 
 ## Docker cache
 
-Build can reuse cache.
+Suppose kalian push commit A.
 
-Tapi workflow harus tetap correct tanpa cache.
+CI A mulai.
 
-Cache = performance optimization.
+30 detik kemudian push commit B.
 
-Bukan dependency correctness.
+CI A mungkin sudah obsolete.
 
----
+Concurrency config bisa cancel older run dari branch yang sama.
 
-## Concurrency
+Benefit:
 
-Kalau push commit A lalu cepat push B, CI A bisa dibatalkan.
-
-Kenapa?
-
-A sudah obsolete untuk branch latest.
-
-Runner time bisa dipakai B.
+- hemat runner time;
+- feedback lebih fokus ke latest revision.
 
 ---
 
-## CD trigger
+# Permissions
 
-Container Delivery menunggu CI success di main.
+Workflow punya permission explicit.
 
-Ini nice property:
+Container delivery perlu write package.
+
+Quality check cuma butuh read source.
+
+Least privilege lebih sehat daripada semua workflow diberi write access.
+
+---
+
+# GITHUB_TOKEN
+
+GitHub menyediakan token temporary buat workflow.
+
+Untuk GHCR, token bisa dipakai sesuai permission.
+
+Kenapa better daripada personal password?
+
+- lifecycle managed;
+- scoped;
+- tidak hard-code;
+- tidak perlu share credential personal.
+
+---
+
+# CD Workflow
+
+Flow:
 
 ~~~text
-not every push
+CI on main
 ↓
-only verified main revision
-↓
-publish image
+success?
+├── no  → stop
+└── yes → Container Delivery
+           ↓
+           build exact commit
+           ↓
+           login GHCR
+           ↓
+           push image
 ~~~
+
+Jadi release artifact tidak dibuat dari arbitrary unverified revision.
 
 ---
 
-## GITHUB_TOKEN
+# Kenapa exact tested commit?
 
-Workflow butuh auth ke GHCR.
+Bayangin CI test commit A.
 
-GitHub provide scoped token.
+Tapi CD build HEAD terbaru commit B yang belum dites.
 
-Permission:
+Sekarang:
 
 ~~~text
-packages: write
+tested code
+≠
+published code
 ~~~
 
-Kenapa bukan personal password hard-coded?
+Bad lineage.
 
-Credential di repo = disaster.
-
-Use secret/token mechanism.
+Makanya delivery harus checkout exact revision yang passed CI.
 
 ---
 
-## Branch policy job
+# Cara debug GitHub Actions
 
-Project kita encode expected flow:
+Jangan hanya lihat:
 
 ~~~text
-docs/* → develop
-feat/* → develop
-fix/* → develop
-
-develop → main
+red ❌
 ~~~
 
-Kalau direction salah, CI fail.
+Buka job.
 
-Ini process-as-code.
+Cari step pertama yang fail.
+
+Contoh:
+
+~~~text
+Ruff failed
+→ style/import problem
+
+pytest failed
+→ behavior/test regression
+
+MkDocs failed
+→ documentation config/page issue
+
+Docker build failed
+→ image packaging issue
+~~~
+
+Nama step membantu narrow root cause.
 
 ---
 
-## PR checks vs branch protection
-
-CI check bisa fail, tapi kalau repository admin masih allow merge anyway, governance belum complete.
-
-Ideal production setup juga enable GitHub ruleset/branch protection:
-
-- require PR,
-- require checks,
-- restrict direct push.
-
-Workshop connector tidak necessarily manage admin rules, tapi concept harus dipahami.
-
----
-
-## Checkpoint
+# Checkpoint
 
 1. Workflow, job, step beda apa?
-2. Kenapa runner fresh useful?
-3. Kenapa docs build masuk CI?
-4. Matrix dipakai buat apa?
-5. GITHUB_TOKEN kenapa better than password?
-6. CI branch policy beda apa dengan branch protection?
+2. Trigger digunakan buat apa?
+3. Kenapa fresh runner useful?
+4. Matrix build solve duplication apa?
+5. Cache itu optimization atau correctness?
+6. Kenapa permission perlu scoped?
+7. Kenapa CD build exact tested commit?
+8. Kalau workflow merah, debugging mulai dari mana?

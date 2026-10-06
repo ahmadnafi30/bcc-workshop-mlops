@@ -1,83 +1,139 @@
-# CI/CD — Biar Quality Nggak Bergantung ke “Jangan Lupa Run Test Ya”
+# CI/CD — Biar Quality Nggak Bergantung ke “Guys Jangan Lupa Run Test”
 
-Sekarang bayangin repo mulai dikerjakan beberapa orang.
+Bayangin repo mulai dikerjakan beberapa orang.
 
-Sebelum merge, harusnya:
+Sebelum merge, idealnya semua contributor:
 
-- test,
-- lint,
-- docs build,
-- Docker build.
+- run tests;
+- run lint;
+- build docs;
+- validate Docker;
+- build images.
 
-Kalau process-nya:
+Kalau process-nya cuma:
 
-> “Guys jangan lupa run test sebelum push.”
+> “Jangan lupa ya sebelum push.”
 
-Ada satu masalah: manusia lupa. 😭
+Cepat atau lambat pasti ada yang lupa. Termasuk kita sendiri. 😭
 
-CI masuk buat bikin quality gate lebih konsisten.
+CI masuk supaya quality gate menjadi **repeatable automation**, bukan checklist di kepala manusia.
 
 ---
 
-## CI = Continuous Integration
+# Continuous Integration — integrate apa?
 
-CI menjawab:
+Kata Integration penting.
 
-> “Perubahan code ini aman nggak buat diintegrasikan?”
+Setiap developer kerja di branch.
 
-Project kita check:
+Code masing-masing mungkin works sendiri.
+
+Masalah mulai muncul ketika perubahan digabung.
+
+CI membantu jawab:
+
+> “Repository state ini masih sehat nggak setelah perubahan ini masuk?”
+
+Jadi CI lebih luas dari sekadar pytest.
+
+---
+
+# Quality flow project kita
 
 ~~~text
-branch policy
-↓
-setup environment
-↓
+Push / Pull Request
+        ↓
+Branch Policy
+        ↓
+Setup uv + Python
+        ↓
 Ruff
-↓
+        ↓
 pytest
-↓
+        ↓
 MkDocs strict build
-↓
+        ↓
 Docker Compose validation
-↓
+        ↓
 Docker image build
 ~~~
 
-Perhatikan: CI bukan cuma unit test.
+Kenapa banyak?
 
-Karena repository kita bukan cuma Python code.
+Karena repo kita bukan cuma Python code.
 
-Docs dan Docker juga bagian deliverable.
-
----
-
-## Kenapa docs build masuk CI?
-
-Workshop docs adalah product juga.
-
-Kalau nav broken atau markdown extension error, workshop experience rusak.
-
-Jadi docs failure sama valid-nya dengan code failure.
+Workshop docs dan container setup juga deliverable.
 
 ---
 
-## Kenapa Docker build masuk CI?
+# Ruff
 
-Python test bisa green tapi Docker build fail.
+Saat audit sebelumnya, CI kita benar-benar menemukan import-order issue.
+
+Runtime impact-nya kecil.
+
+Tapi lint automation bikin style consistency tidak perlu dibahas manual saat review.
+
+Benefit:
+
+> Reviewer fokus ke logic, bukan mechanical style.
+
+---
+
+# pytest
+
+Test menjaga behavior yang sudah kita expect.
+
+Contoh:
+
+- lag feature tidak cross-zone;
+- rolling feature tidak leak target;
+- API schema valid;
+- healthy model tidak retrain.
+
+Test bukan bukti bahwa system sempurna.
+
+Dia safety net terhadap regression yang kita tahu.
+
+---
+
+# Kenapa MkDocs strict build masuk CI?
+
+Karena docs adalah product.
+
+Workshop bisa gagal walaupun Python perfect kalau:
+
+~~~text
+navigation broken
+page missing
+link salah
+~~~
+
+Makanya docs punya quality gate sendiri.
+
+Ini especially penting karena repository ini memang ditujukan untuk teaching, bukan cuma application runtime.
+
+---
+
+# Kenapa Docker image build masuk CI?
+
+Python test bisa green tapi Dockerfile fail.
 
 Contoh:
 
 ~~~text
 COPY path salah
-dependency missing di image
-Dockerfile syntax error
+dependency nggak ikut image
+target build rusak
 ~~~
 
-CI build image supaya packaging error ketahuan sebelum release.
+Kalau baru ketahuan pas release, terlalu telat.
+
+CI build image lebih awal.
 
 ---
 
-## Branch workflow
+# Branch strategy
 
 ~~~text
 feat/* / fix/* / docs/* / chore/*
@@ -87,57 +143,97 @@ feat/* / fix/* / docs/* / chore/*
             main
 ~~~
 
-Kenapa develop?
+## Feature/docs/fix branch
 
-Supaya ada integration stage sebelum stable release.
+Tempat iterate.
 
-Feature individually green belum tentu compatible dengan feature lain.
+## Develop
 
-Develop jadi tempat mereka ketemu dulu.
+Integration branch.
+
+Beberapa changes yang individually green ketemu di sini.
+
+## Main
+
+Stable workshop release.
+
+Branch yang harus nyaman dipakai presenter dan participant.
 
 ---
 
-## Branch policy
+# Kenapa tidak langsung feat → main?
 
-CI check PR direction.
+Bayangin feature A mengubah API schema.
+
+Feature B mengubah monitoring parser.
+
+Masing-masing mungkin green dari base lama.
+
+Saat digabung bisa muncul behavior conflict.
+
+Develop memberi integration boundary sebelum stable release.
+
+---
+
+# Branch policy as code
+
+CI check arah PR.
 
 Allowed:
 
 ~~~text
-feat/* → develop
-fix/* → develop
-docs/* → develop
+feat/*  → develop
+fix/*   → develop
+docs/*  → develop
 chore/* → develop
 
 develop → main
 ~~~
 
-Kenapa policy di CI?
+Kalau:
 
-Supaya workflow repository bukan cuma tulisan di README.
+~~~text
+feat/foo → main
+~~~
 
-Ada automated guard.
+branch-policy job fail.
 
-Idealnya GitHub branch protection/ruleset juga dipasang.
+Workflow tidak cuma ditulis di README. Ada automated check.
 
 ---
 
-## CD itu ambiguity
+# CI check vs GitHub branch protection
 
-CD bisa berarti:
+CI bisa bilang:
 
 ~~~text
-Continuous Delivery
-atau
-Continuous Deployment
+branch policy failed
 ~~~
 
-Workshop kita pakai **Continuous Delivery**.
+Tapi kalau platform permission masih allow bypass, admin secara teknis bisa tetap merge.
 
-Artinya:
+Ruleset/branch protection memberi enforcement di platform level.
+
+Jadi:
 
 ~~~text
-verified code
+CI
+→ verify condition
+
+branch protection
+→ restrict action
+~~~
+
+Dua-duanya complement.
+
+---
+
+# CD — satu singkatan dua arti
+
+### Continuous Delivery
+
+~~~text
+verified source
 ↓
 build artifact
 ↓
@@ -146,90 +242,190 @@ publish artifact
 ready to deploy
 ~~~
 
-Kita belum automatically deploy ke production cloud.
+### Continuous Deployment
 
-Kenapa?
+~~~text
+verified source
+↓
+build artifact
+↓
+publish
+↓
+automatically deploy production
+~~~
 
 Karena repo belum punya real production target.
 
-Lebih jujur berhenti di GHCR daripada fake deploy command cuma supaya diagram terlihat lengkap.
+Kenapa belum deployment?
+
+Karena kita tidak punya real production target environment.
+
+Lebih baik jujur berhenti di GHCR daripada menambahkan command deployment palsu hanya supaya diagram kelihatan penuh.
 
 ---
 
-## Artifact delivery
+# GHCR sebagai artifact registry
 
-Container image adalah deployment artifact.
+Container image adalah deployable software artifact.
 
-Kita publish:
+Kita publish image:
 
 ~~~text
-API image
-MLflow image
-Airflow image
+API
+MLflow
+Airflow
 ~~~
 
-ke GHCR.
+ke GitHub Container Registry.
+
+Nanti deployment platform tinggal pull exact image.
 
 ---
 
-## latest vs SHA tag
+# latest vs SHA tag
 
-latest convenient.
+### latest
 
-Tapi movable.
+Convenient.
+
+Tapi pointer berubah.
 
 ~~~text
-today latest = commit A
-tomorrow latest = commit B
+hari ini latest = commit A
+besok latest = commit B
 ~~~
 
-SHA tag identify exact revision.
+### SHA tag
 
-Useful buat:
-
-- audit,
-- rollback,
-- traceability.
-
----
-
-## Code lifecycle vs model lifecycle
-
-Ini salah satu concept MLOps yang subtle.
+Map ke exact source revision.
 
 ~~~text
-new code
-→ CI/CD
-
-new data / performance degradation
-→ retraining lifecycle
+sha-a1b2c3
 ~~~
 
-Model bisa berubah tanpa application code berubah.
+Kalau incident:
 
-Application code bisa berubah tanpa retrain model.
+> “Image ini dibangun dari source mana?”
 
-Jadi kita punya dua lifecycle yang related tapi tidak identical.
-
----
-
-## Analogi factory
-
-CI = quality inspection.
-
-CD = packaging approved product dan taruh ke warehouse.
-
-Continuous Deployment = warehouse langsung kirim ke customer automatically.
-
-Workshop berhenti di warehouse.
+SHA tag jauh lebih useful.
 
 ---
 
-## Checkpoint
+# Code version vs model version
 
-1. CI solve problem apa?
-2. Kenapa docs dan Docker ikut CI?
-3. Develop branch buat apa?
-4. Continuous Delivery beda apa dengan Deployment?
-5. Kenapa SHA image tag useful?
-6. Code lifecycle beda apa dengan model lifecycle?
+Ini sangat penting di MLOps.
+
+Kita punya dua version dimension.
+
+### Application version
+
+~~~text
+Git commit
+Docker image
+~~~
+
+### Model version
+
+~~~text
+MLflow model version
+champion alias
+~~~
+
+Bisa terjadi:
+
+~~~text
+Docker image sama
+model champion berubah
+~~~
+
+atau:
+
+~~~text
+Docker image berubah
+champion tetap
+~~~
+
+Dua lifecycle ini related tapi independent.
+
+---
+
+# Rollback juga ada dua
+
+### Application rollback
+
+Deploy image SHA sebelumnya.
+
+### Model rollback
+
+Move champion alias ke old model version.
+
+Kalau system incident, kita harus tahu layer mana yang problem.
+
+Jangan rollback semuanya tanpa diagnosis.
+
+---
+
+# GitHub Actions vs Airflow
+
+Dua-duanya automation, tapi trigger domain berbeda.
+
+~~~text
+GitHub Actions
+→ repository event
+
+Airflow
+→ data / ML workflow event
+~~~
+
+Contoh:
+
+~~~text
+new pull request
+→ GitHub Actions
+
+new taxi batch
+→ Airflow
+~~~
+
+Mereka bukan duplicate tool.
+
+---
+
+# Fresh runner itu justru bagus
+
+GitHub Actions runner mulai dari environment fresh.
+
+Kalau project cuma jalan karena laptop developer punya hidden dependency, CI akan expose itu.
+
+Fresh environment adalah reproducibility pressure test.
+
+---
+
+# Secrets
+
+Registry publishing butuh auth.
+
+Rule:
+
+> Credential jangan masuk source control.
+
+Gunakan scoped token / secret management.
+
+Project pakai GitHub-provided token dengan permission yang dibutuhkan.
+
+---
+
+# Checkpoint
+
+Coba jawab:
+
+1. CI sebenarnya verify apa?
+2. Kenapa lint, tests, docs, dan Docker sama-sama masuk?
+3. Kenapa develop useful?
+4. CI branch policy beda apa dengan platform ruleset?
+5. Delivery beda apa dengan Deployment?
+6. latest dan SHA tag tradeoff-nya apa?
+7. Application version dan model version beda apa?
+8. GitHub Actions beda apa dengan Airflow?
+
+Kalau clear, CI/CD sudah nggak lagi sekadar YAML yang “pokoknya jalan”.
