@@ -6,6 +6,8 @@ Welcome to **BCC Workshop — MLOps**.
 
 Materi yang bisa langsung dipakai:
 
+- [Mulai di Sini — Start Here](docs/00-start-here.md): peta belajar pemula dan tour praktis MLflow, Airflow, FastAPI, Prometheus, serta Grafana.
+
 - [Modul workshop lengkap](docs/workshop-module.md): rancangan 6 jam dengan konsep,
   praktik, checkpoint, tugas peserta, rubrik, dan panduan fasilitator.
 - [Step-by-step mengisi Grafana](docs/10-hands-on/dashboard-quickstart.md): dari data
@@ -166,7 +168,7 @@ Open:
 http://127.0.0.1:8002
 ~~~
 
-Kalau kalian masih newbie di MLOps, **recommended banget mulai dari docs**, jangan langsung lompat ke docker compose up.
+Kalau kalian masih newbie di MLOps, mulai dari [Mulai di Sini — Start Here](docs/00-start-here.md), lalu ikuti quickstart atau hands-on. Jangan langsung lompat ke docker compose up tanpa tahu data dan model apa yang perlu dibuat.
 
 Port docs 8002 dipakai supaya tidak bentrok dengan FastAPI di port 8000.
 

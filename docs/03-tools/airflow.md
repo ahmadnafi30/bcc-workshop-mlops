@@ -1,4 +1,11 @@
 # Apache Airflow — Dari Run Script Satu-Satu ke Workflow yang Bisa Diatur
+!!! tip "Airflow UI: first tour"
+    Buka [Airflow](http://localhost:8080), lalu pilih DAG **taxi_daily_replay**, **taxi_initial_training**, atau **taxi_model_monitoring**. Workshop ini menggunakan manual trigger, jadi DAG yang terlihat belum tentu pernah berjalan.
+
+    Buka **Grid** atau **Graph** untuk melihat urutan task. Setelah trigger, klik task lalu **Logs** untuk memahami hasilnya. Hijau berarti sukses; merah berarti ada task yang perlu diselidiki. Pada daily replay, cek parameter tanggal sebelum trigger. Pada monitoring, pastikan prediction dan actual sudah ada karena DAG ini dapat memulai retraining bila syaratnya terpenuhi.
+
+    Mulai dari [panduan UI ramah pemula](../00-start-here.md#airflow-ui) atau lanjutkan ke [Step 5 — Airflow](../10-hands-on/step-05-airflow.md).
+
 
 Airflow sering kelihatan intimidating buat newbie karena istilahnya banyak: DAG, task, scheduler, XCom, run, state, trigger, operator.
 

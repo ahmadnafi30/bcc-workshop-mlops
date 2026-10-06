@@ -24,8 +24,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Mulai di Sini: 00-start-here.md
   - Modul Workshop: workshop-module.md
-  - Mulai di Sini:
+  - Konsep & Konteks:
       - Workshop Overview: 01-introduction/workshop-overview.md
       - MLOps from Zero: 01-introduction/mlops-from-zero.md
       - Architecture: 01-introduction/architecture.md

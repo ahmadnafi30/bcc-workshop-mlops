@@ -1,4 +1,9 @@
 # Grafana — Dari Metric Mentah Jadi Dashboard yang Bisa Dibaca Manusia
+!!! tip "Grafana UI: baca panel sesuai sumber datanya"
+    Buka [dashboard Taxi Demand MLOps](http://localhost:3000/d/taxi-demand-mlops/taxi-demand-mlops), pilih **Last 30 minutes**, lalu baca traffic/latency dan evaluasi model sebagai sinyal yang berbeda. Traffic memerlukan request prediction. MAE memerlukan actual, prediction yang cocok, dan evaluation job. Jadi dashboard bisa terbuka dengan benar sementara sebagian panel masih menunjukkan belum ada data.
+
+    Ikuti [tur dashboard untuk pemula](../00-start-here.md#grafana-ui) atau [Quickstart Grafana](../10-hands-on/dashboard-quickstart.md) untuk menghasilkan data end-to-end.
+
 
 Prometheus sudah punya time-series data.
 

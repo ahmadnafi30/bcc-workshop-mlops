@@ -7,6 +7,8 @@ Workshop ini dibawakan oleh:
 - **Ahmad Nafi Mubarok**
 - **Fatoni Murfid Syafii**
 
+Baru pertama kali belajar? Mulai dari [Mulai di Sini — Start Here](00-start-here.md) untuk peta belajar dan tour UI tools.
+
 Untuk mengikuti satu modul yang utuh, buka [Modul Workshop](workshop-module.md).
 Modul memuat agenda, konsep, praktik, checkpoint, tugas, dan panduan fasilitator.
 Untuk menjalankan demo monitoring terlebih dahulu, gunakan

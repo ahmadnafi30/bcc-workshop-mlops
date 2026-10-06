@@ -1,4 +1,8 @@
 # MLflow Model Registry — Experiment Bagus Belum Tentu Langsung Production
+!!! tip "Registry UI: dari candidate ke model yang dipakai"
+    Di MLflow, buka **Models** lalu pilih **taxi-demand-forecasting-model**. Periksa version dan source run untuk menelusuri asal model. Alias **challenger** adalah candidate review; alias **champion** adalah pilihan yang dibaca API. Tidak semua run otomatis terdaftar atau dipromosikan. Lihat [tur Registry untuk pemula](../00-start-here.md#registry-ui) dan jangan promote sebelum membandingkan hasilnya.
+
+
 
 Ini transition penting.
 
