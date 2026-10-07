@@ -6,6 +6,9 @@ Welcome to **BCC Workshop — MLOps**.
 
 Materi yang bisa langsung dipakai:
 
+- [PDF workshop lengkap](output/pdf/bcc-workshop-mlops-lengkap.pdf): satu dokumen
+  dari konsep awal dan Step 0–10 sampai quickstart dashboard, troubleshooting,
+  glosarium, serta laporan akhir. Daftar isi dan bookmark dapat diklik.
 - [Mulai di Sini — Start Here](docs/00-start-here.md): peta belajar pemula dan tour praktis MLflow, Airflow, FastAPI, Prometheus, serta Grafana.
 
 - [Modul workshop lengkap](docs/workshop-module.md): rancangan 6 jam dengan konsep,

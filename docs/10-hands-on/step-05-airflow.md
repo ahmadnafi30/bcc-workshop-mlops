@@ -118,6 +118,14 @@ Buka `http://localhost:8080`. Password awal muncul di terminal saat pertama kali
 
     Buka port di sisi kiri pemetaan `PORTS`. Jika output menunjukkan `127.0.0.1:18081->8080/tcp`, gunakan `http://localhost:18081`. Untuk melihat credential Compose, jalankan `docker compose exec airflow cat /airflow/simple_auth_manager_passwords.json.generated`.
 
+    Jika ingin menjalankan DAG `taxi_initial_training` di container, aktifkan mode DVC tanpa SCM terlebih dahulu karena image tidak menyertakan folder `.git`:
+
+    ~~~bash
+    docker compose exec airflow dvc config core.no_scm true --local
+    ~~~
+
+    Ulangi konfigurasi ini jika container dibuat ulang. Konfigurasi hanya berlaku di container; latihan versioning DVC pada host tetap memakai Git checkout.
+
 Jangan langsung click semua menu. Pause sebentar. Pertanyaan pertama:
 
 > “Airflow sekarang sebenarnya tahu DAG kita dari mana?”

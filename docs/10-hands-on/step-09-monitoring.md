@@ -355,6 +355,14 @@ sum(rate(taxi_api_requests_total[1m]))
 
 Sekarang kita estimate seberapa cepat counter bertambah dalam recent one-minute window.
 
+Query di atas mencakup seluruh path API, termasuk request ke `/metrics` dari Prometheus. Untuk membaca traffic prediksi seperti panel **Prediction Request Rate** di Grafana, filter path `/predict`:
+
+~~~text
+sum(rate(taxi_api_requests_total{path="/predict"}[1m]))
+~~~
+
+Request scrape atau health check tidak membuktikan peserta sudah mengirim prediksi. Untuk checkpoint traffic, gunakan query yang memfilter `/predict` dan cek prediction log.
+
 Analogy:
 
 ~~~text
