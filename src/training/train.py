@@ -1,14 +1,17 @@
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
+from threadpoolctl import threadpool_limits
 
 from features.build_features import MODEL_FEATURE_COLUMNS
 
 DEFAULT_VALIDATION_DAYS = 5
 
 HIST_GRADIENT_BOOSTING_PARAMS = {
+    "loss": "poisson",
     "learning_rate": 0.05,
     "max_iter": 200,
     "max_leaf_nodes": 31,
@@ -35,8 +38,7 @@ def split_train_validation(
 
     train = data.loc[data["timestamp"] < validation_start].copy()
     validation = data.loc[
-        (data["timestamp"] >= validation_start)
-        & (data["timestamp"] < validation_end)
+        (data["timestamp"] >= validation_start) & (data["timestamp"] < validation_end)
     ].copy()
 
     if train.empty:
@@ -57,17 +59,30 @@ def prepare_model_input(data: pd.DataFrame) -> pd.DataFrame:
 # train gradient boosting dari model-ready features yang sudah bebas leakage
 def train_hist_gradient_boosting(
     train_data: pd.DataFrame,
+    model_params: dict | None = None,
+    cpu_threads: int = 2,
 ) -> HistGradientBoostingRegressor:
+    if cpu_threads < 1:
+        raise ValueError("cpu_threads harus minimal 1")
+    params = {**HIST_GRADIENT_BOOSTING_PARAMS, **(model_params or {})}
     # pisahin feature dan target biar input model explicit dan gampang dibaca
     X_train = prepare_model_input(train_data)
     y_train = train_data["target_trip_count"]
+    target_values = y_train.to_numpy(dtype=float)
+
+    if not np.isfinite(target_values).all():
+        raise ValueError("target_trip_count harus finite")
+    if (target_values < 0).any():
+        raise ValueError("loss poisson memerlukan target_trip_count tidak negatif")
 
     # zone_id disebut explicit sebagai categorical karena id zone bukan nilai ordinal
     model = HistGradientBoostingRegressor(
         categorical_features=["zone_id"],
-        **HIST_GRADIENT_BOOSTING_PARAMS,
+        **params,
     )
-    model.fit(X_train, y_train)
+    # batas thread eksplisit membuat training konsisten pada laptop workshop.
+    with threadpool_limits(limits=cpu_threads):
+        model.fit(X_train, y_train)
 
     return model
 

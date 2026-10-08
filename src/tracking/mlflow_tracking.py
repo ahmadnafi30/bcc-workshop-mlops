@@ -1,4 +1,6 @@
 import os
+import sys
+from contextlib import nullcontext
 
 import mlflow
 import mlflow.sklearn
@@ -20,16 +22,15 @@ def configure_mlflow(
     tracking_uri: str | None = None,
     experiment_name: str | None = None,
 ) -> dict[str, str]:
+    # MLflow prints Unicode run links. Windows redirected output may use cp1252.
+    if os.name == "nt":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     # env variable bisa override default tanpa perlu ubah code workshop
-    resolved_tracking_uri = (
-        tracking_uri
-        or os.getenv("MLFLOW_TRACKING_URI")
-        or DEFAULT_TRACKING_URI
-    )
+    resolved_tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI") or DEFAULT_TRACKING_URI
     resolved_experiment_name = (
-        experiment_name
-        or os.getenv("MLFLOW_EXPERIMENT_NAME")
-        or DEFAULT_EXPERIMENT_NAME
+        experiment_name or os.getenv("MLFLOW_EXPERIMENT_NAME") or DEFAULT_EXPERIMENT_NAME
     )
 
     # semua run setelah ini bakal masuk ke server dan experiment yang sama
@@ -67,7 +68,10 @@ def log_baseline_run(
     stage: str = "validation",
 ) -> str:
     # baseline nggak punya artifact model karena prediction-nya langsung dari lag_24h
-    with mlflow.start_run(run_name="naive-24h") as run:
+    # Reuse run yang sudah dibuka sebelum evaluation oleh experiment runner.
+    active_run = mlflow.active_run()
+    context = nullcontext(active_run) if active_run else mlflow.start_run(run_name="naive-24h")
+    with context as run:
         mlflow.log_params(
             {
                 "model_type": "naive_24h",
@@ -103,11 +107,18 @@ def log_sklearn_run(
     # model example cukup beberapa row karena tujuannya buat schema dan contoh input
     example = input_example.head(5).copy()
 
-    with mlflow.start_run(run_name="hist-gradient-boosting") as run:
+    # Runner membuka run sebelum fit; standalone callers tetap dapat membuat run sendiri.
+    active_run = mlflow.active_run()
+    context = (
+        nullcontext(active_run)
+        if active_run
+        else mlflow.start_run(run_name="hist-gradient-boosting-poisson")
+    )
+    with context as run:
         # params model dan dataset disimpan bareng supaya run bisa direproduce lagi
         mlflow.log_params(
             {
-                "model_type": "hist_gradient_boosting",
+                "model_type": "hist_gradient_boosting_poisson",
                 "categorical_feature": "zone_id",
                 "forecast_horizon": "1h",
                 "train_rows": train_rows,
@@ -120,7 +131,7 @@ def log_sklearn_run(
         mlflow.set_tags(
             {
                 "task": "taxi-demand-forecasting",
-                "model_family": "gradient-boosting",
+                "model_family": "gradient-boosting-poisson",
                 "stage": stage,
             }
         )

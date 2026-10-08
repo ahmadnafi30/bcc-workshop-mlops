@@ -65,7 +65,7 @@ Untuk Windows, ikuti panduan di WSL2 bila menggunakan command Bash pada quicksta
 | Buka halaman | Artinya | Yang diharapkan |
 | --- | --- | --- |
 | [MLflow](http://localhost:5000) | Tempat melihat training dan model | UI terbuka; daftar run terisi setelah training |
-| [Airflow](http://localhost:18081) | Tempat mengatur workflow | Halaman login, lalu DAG workshop |
+| [Airflow](http://localhost:8080) | Tempat mengatur workflow | Halaman login, lalu DAG workshop |
 | [API health](http://localhost:8000/health) | Cek API hidup | Status health menunjukkan service aktif |
 | [API Swagger](http://localhost:8000/docs) | Coba endpoint API | Daftar endpoint muncul |
 | [Prometheus targets](http://localhost:9090/targets) | Cek apakah metric berhasil di-scrape | Target taxi-api berstatus UP |
@@ -95,7 +95,7 @@ Local Grafana memakai user/password default `admin`/`admin` kecuali nilainya dig
 Buka [MLflow](http://localhost:5000), lalu:
 
 1. Pilih experiment **taxi-demand-forecasting**.
-2. Cari run seperti **naive-24h** dan **hist-gradient-boosting**. Nama run dapat bertambah atau berbeda setelah retraining.
+2. Cari run seperti **naive-24h** dan **hist-gradient-boosting-poisson**. Nama run dapat bertambah atau berbeda setelah retraining.
 3. Bandingkan kolom **MAE** dan **RMSE**. Untuk MAE, angka yang lebih kecil berarti rata-rata kesalahan lebih rendah.
 4. Klik salah satu run untuk membaca **Parameters**, **Metrics**, **Tags**, dan **Artifacts**.
 5. Cari informasi snapshot/dataset untuk mengetahui data yang dipakai. Buka artifacts untuk melihat output model atau report yang dicatat oleh run.
@@ -118,7 +118,7 @@ Satu run bagus belum otomatis menjadi champion. Ikuti proses register/review/pro
 
 ### 3. Airflow — lihat workflow berjalan per task 🛠️ {#airflow-ui}
 
-Buka [Airflow di port Compose saat ini](http://localhost:18081), login memakai credential untuk instance tersebut, lalu cari tiga DAG berikut. Kalau port di laptopmu berbeda, ikuti angka kiri pada `docker compose ps airflow`.
+Buka [Airflow di port Compose saat ini](http://localhost:8080), login memakai credential untuk instance tersebut, lalu cari tiga DAG berikut. Kalau port di laptopmu berbeda, ikuti angka kiri pada `docker compose ps airflow`.
 
 | DAG | Gunanya | Sebelum di-trigger |
 | --- | --- | --- |

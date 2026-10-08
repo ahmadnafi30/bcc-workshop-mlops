@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import write_parquet_atomic
 from data_versioning.snapshot import (
     build_snapshot_name,
     create_training_snapshot,
@@ -79,9 +80,7 @@ def create_retraining_snapshot(
     feature_path = root / "data" / "features" / "taxi_demand_features.parquet"
 
     if not feature_path.exists():
-        raise FileNotFoundError(
-            f"feature dataset belum ada: {feature_path}"
-        )
+        raise FileNotFoundError(f"feature dataset belum ada: {feature_path}")
 
     features = pd.read_parquet(feature_path)
     snapshot = create_training_snapshot(
@@ -89,15 +88,8 @@ def create_retraining_snapshot(
         cutoff_date=cutoff_date,
     )
 
-    output_path = (
-        root
-        / "data"
-        / "snapshots"
-        / "training"
-        / build_snapshot_name(cutoff_date)
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot.to_parquet(output_path, index=False)
+    output_path = root / "data" / "snapshots" / "training" / build_snapshot_name(cutoff_date)
+    write_parquet_atomic(snapshot, output_path)
 
     return describe_snapshot(output_path)
 
@@ -129,11 +121,7 @@ def retrain_if_recommended(
         cutoff_date=cutoff_date,
     )
     snapshot_path = (
-        Path(project_root)
-        / "data"
-        / "snapshots"
-        / "training"
-        / str(snapshot_info["name"])
+        Path(project_root) / "data" / "snapshots" / "training" / str(snapshot_info["name"])
     )
 
     training_result = run_mlflow_experiment(

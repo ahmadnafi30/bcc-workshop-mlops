@@ -1,9 +1,43 @@
+vars:
+  - params.json
+
 stages:
-  create_training_snapshot:
-    cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+  build_training_features:
+    desc: Build a separate feature file for the configured training period.
+    cmd: >-
+      python scripts/build_features.py
+      --start-date ${data.history_start}
+      --end-date ${data.training_cutoff}
+      --output-path data/features/training/taxi_demand_features.parquet
+      --force
     deps:
-      - data/features/taxi_demand_features.parquet
+      - data/processed/demand
+      - scripts/build_features.py
+      - src/features/dataset.py
+      - src/features/build_features.py
+      - src/data_versioning/pipeline_files.py
+      - pyproject.toml
+      - uv.lock
+    params:
+      - params.json:
+          - data.history_start
+          - data.training_cutoff
+    outs:
+      - data/features/training/taxi_demand_features.parquet
+
+  create_training_snapshot:
+    desc: Freeze training features into a dated, versioned snapshot.
+    cmd: >-
+      python scripts/create_training_snapshot.py
+      --cutoff-date ${data.training_cutoff}
+      --feature-path data/features/training/taxi_demand_features.parquet
+    deps:
+      - data/features/training/taxi_demand_features.parquet
       - scripts/create_training_snapshot.py
       - src/data_versioning/snapshot.py
+      - src/data_versioning/pipeline_files.py
+    params:
+      - params.json:
+          - data.training_cutoff
     outs:
-      - data/snapshots/training/taxi_demand_2025-01-26.parquet
+      - data/snapshots/training/taxi_demand_${data.training_cutoff}.parquet

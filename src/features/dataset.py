@@ -1,9 +1,14 @@
+import json
+import logging
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import file_fingerprint, write_json_atomic, write_parquet_atomic
 from features.build_features import build_model_features
+
+LOGGER = logging.getLogger(__name__)
 
 
 # load seluruh daily demand dalam range dan gagal kalau ada tanggal yang bolong
@@ -30,9 +35,7 @@ def load_demand_range(
     if missing_dates:
         preview = ", ".join(missing_dates[:5])
         suffix = "..." if len(missing_dates) > 5 else ""
-        raise FileNotFoundError(
-            f"processed demand belum lengkap: {preview}{suffix}"
-        )
+        raise FileNotFoundError(f"processed demand belum lengkap: {preview}{suffix}")
 
     if not frames:
         raise ValueError("nggak ada processed demand yang bisa digabung")
@@ -46,7 +49,48 @@ def build_feature_dataset(
     output_path: Path,
     start_date: date,
     end_date: date,
+    use_cache: bool = True,
 ) -> dict[str, int | str]:
+    if end_date < start_date:
+        raise ValueError("end_date harus sama atau setelah start_date")
+    output_path = Path(output_path)
+    manifest_path = output_path.with_suffix(".metadata.json")
+    # Check content, range, and code. File existence alone is not freshness.
+    fingerprint = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "demand": {
+            timestamp.date().isoformat(): file_fingerprint(
+                Path(demand_dir) / f"{timestamp.date().isoformat()}.parquet"
+            )
+            for timestamp in pd.date_range(start_date, end_date, freq="D")
+        },
+        "code": {
+            path.name: file_fingerprint(path)
+            for path in [
+                Path(__file__),
+                Path(__file__).with_name("build_features.py"),
+                Path(__file__).resolve().parents[1] / "data_versioning/pipeline_files.py",
+            ]
+        },
+        "pandas_version": pd.__version__,
+    }
+    if use_cache and output_path.exists() and manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest["inputs"] == fingerprint and manifest["output_sha256"] == file_fingerprint(
+                output_path
+            ):
+                summary = manifest["summary"]
+                if {"rows", "zones", "start_timestamp", "end_timestamp"} <= summary.keys():
+                    LOGGER.info(
+                        "Feature cache HIT: input, range, code, output tidak berubah: %s",
+                        output_path,
+                    )
+                    return {**summary, "path": str(output_path), "status": "cached"}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            LOGGER.info("Feature manifest tidak valid; rebuild %s", output_path)
+    LOGGER.info("Feature cache MISS: membangun features %s sampai %s", start_date, end_date)
     # feature selalu dibangun dari full history sampai end date supaya lag tetap konsisten
     demand = load_demand_range(
         demand_dir=demand_dir,
@@ -55,14 +99,17 @@ def build_feature_dataset(
     )
     features = build_model_features(demand)
 
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    features.to_parquet(output_path, index=False)
+    write_parquet_atomic(features, output_path)
 
-    return {
+    summary = {
         "rows": len(features),
         "zones": int(features["zone_id"].nunique()),
         "start_timestamp": features["timestamp"].min().isoformat(),
         "end_timestamp": features["timestamp"].max().isoformat(),
         "path": str(output_path),
     }
+    write_json_atomic(
+        {"inputs": fingerprint, "output_sha256": file_fingerprint(output_path), "summary": summary},
+        manifest_path,
+    )
+    return {**summary, "status": "rebuilt"}

@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+import pytest
 
 from features.build_features import MODEL_FEATURE_COLUMNS
 from training.evaluate import calculate_regression_metrics
@@ -93,4 +95,30 @@ def test_hist_gradient_boosting_can_train_and_predict() -> None:
     )
 
     assert len(predictions) == 5
+    assert np.isfinite(predictions).all()
+    assert (predictions >= 0).all()
+    assert model.loss == "poisson"
     assert list(prepare_model_input(train_data).columns) == MODEL_FEATURE_COLUMNS
+
+
+def test_poisson_training_rejects_negative_targets() -> None:
+    train_data = pd.DataFrame(
+        {
+            "zone_id": [161, 162, 161, 162],
+            "hour": [0, 1, 2, 3],
+            "day_of_week": [0, 0, 0, 0],
+            "is_weekend": [0, 0, 0, 0],
+            "lag_1h": [2, 3, 4, 5],
+            "lag_2h": [2, 3, 4, 5],
+            "lag_3h": [2, 3, 4, 5],
+            "lag_24h": [2, 3, 4, 5],
+            "lag_168h": [2, 3, 4, 5],
+            "rolling_mean_3h": [2, 3, 4, 5],
+            "rolling_mean_6h": [2, 3, 4, 5],
+            "rolling_mean_24h": [2, 3, 4, 5],
+            "target_trip_count": [2, 3, -1, 5],
+        }
+    )
+
+    with pytest.raises(ValueError, match="tidak negatif"):
+        train_hist_gradient_boosting(train_data)

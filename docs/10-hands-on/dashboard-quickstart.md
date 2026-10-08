@@ -131,7 +131,7 @@ model uri: runs:/MODEL_RUN_ID/model
 **Salin run ID dari baris `model`, bukan `baseline`.** Buka MLflow untuk
 membandingkan MAE/RMSE, dataset SHA256, parameter, dan artifact model.
 
-Model HGB menggunakan serialization `skops` dengan daftar trusted types
+Model Poisson HGB menggunakan serialization `skops` dengan daftar trusted types
 terbatas yang didefinisikan dalam repo. Jika environment lama belum mendukung
 parameter ini, jalankan kembali `uv sync` sesuai `pyproject.toml`.
 

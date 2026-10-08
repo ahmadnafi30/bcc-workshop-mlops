@@ -1,6 +1,10 @@
 # MLflow Tracking — Biar Experiment Kita Nggak Cuma Hidup di Ingatan
+
+!!! tip "Praktik sesuai materi Eksperimentasi ML"
+    Jalankan `uv run python scripts/train_with_mlflow.py --search` untuk membandingkan **tiga konfigurasi hyperparameter** pada data yang sama. Ikuti [Compare Three Experiments](hyperparameter-comparison.md) untuk command, UI tour, dataset lineage, artifact evaluasi, dan laporan pemilihan model.
+
 !!! tip "MLflow UI: bandingkan training run"
-    Buka [MLflow](http://localhost:5000), masuk ke experiment **taxi-demand-forecasting**, lalu bandingkan run baseline **naive-24h** dengan model **hist-gradient-boosting**. Buka run untuk melihat **Parameters**, **Metrics**, **Tags**, dan **Artifacts**. MAE lebih kecil berarti rata-rata kesalahan lebih rendah; pastikan kamu membandingkan run pada data/evaluation yang sebanding.
+    Buka [MLflow](http://localhost:5000), masuk ke experiment **taxi-demand-forecasting**, lalu bandingkan run baseline **naive-24h** dengan model **hist-gradient-boosting-poisson**. Buka run untuk melihat **Parameters**, **Metrics**, **Tags**, dan **Artifacts**. MAE lebih kecil berarti rata-rata kesalahan lebih rendah; pastikan kamu membandingkan run pada data/evaluation yang sebanding.
 
     Jika UI kosong, server mungkin sudah sehat tetapi training belum mencatat run. Jalankan [Step 4 — MLflow](../10-hands-on/step-04-mlflow.md), lalu ikuti [tur pemula MLflow](../00-start-here.md#mlflow-ui).
 
@@ -77,7 +81,7 @@ Misalnya:
 
 ~~~text
 naive-24h
-hist-gradient-boosting
+hist-gradient-boosting-poisson
 retraining-run-february
 ~~~
 
@@ -221,7 +225,7 @@ Same logical service, different network context.
 Conceptually code kita melakukan:
 
 ~~~python
-with mlflow.start_run(run_name="hist-gradient-boosting"):
+with mlflow.start_run(run_name="hist-gradient-boosting-poisson"):
 
     mlflow.log_params(
         {

@@ -1,5 +1,9 @@
 # Airflow Pipeline — Menaruh Manual Steps ke Workflow yang Observable
 
+!!! tip "Praktik Airflow + DVC terbaru"
+    Ikuti [panduan workflow dan optimasi](airflow-dvc-workshop.md) untuk dua stage DVC, params.json, pemisahan training/replay, cache features, pool, retry, dan UI tour.
+
+
 Sekarang manual data pipeline sudah jelas.
 
 Kita tahu input, output, validation, aggregation, feature engineering, dan training.

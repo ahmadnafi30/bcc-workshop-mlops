@@ -15,11 +15,11 @@ RUN useradd --create-home --uid 1000 app
 WORKDIR /app
 
 # copy dependency metadata dulu supaya layer install bisa kepake ulang
-COPY pyproject.toml .python-version README.md ./
+COPY pyproject.toml uv.lock .python-version README.md ./
 COPY src ./src
 COPY api ./api
 COPY scripts ./scripts
-COPY dvc.yaml ./
+COPY dvc.yaml params.json ./
 COPY .dvc ./.dvc
 COPY .dvcignore ./
 
@@ -29,7 +29,7 @@ RUN mkdir -p /app/.dvc/cache /app/data \
 USER app
 
 # install core project tanpa dev dependency
-RUN uv sync --no-dev
+RUN uv sync --locked --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 
@@ -58,7 +58,9 @@ CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000", "--backend-store
 FROM base AS airflow
 
 # airflow dipisah ke dependency group karena jauh lebih berat dari core project
-RUN uv sync --no-dev --group airflow
+RUN uv sync --locked --no-dev --group airflow
+COPY --chown=app:app dvc.lock ./
+RUN uv run --no-sync dvc config --local core.no_scm true
 
 COPY --chown=app:app dags ./dags
 

@@ -42,6 +42,7 @@ mlflow.db*
 models/*.json
 
 # Data generated locally
+data/experiments/
 data/source/*
 !data/source/tlc/
 !data/source/replay/

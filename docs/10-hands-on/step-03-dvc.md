@@ -1,5 +1,9 @@
 # Step 3 — DVC: Membekukan Training Data Biar Experiment Nggak “Pakai File yang Mana Ya?”
 
+!!! tip "Praktik Airflow + DVC terbaru"
+    Ikuti [panduan workflow dan optimasi](../05-data-pipeline/airflow-dvc-workshop.md) untuk dua stage DVC, params.json, pemisahan training/replay, cache features, pool, retry, dan UI tour.
+
+
 Sampai Step 2 kita sudah punya feature dataset dan model yang bisa ditrain.
 
 Sekarang coba bayangin satu minggu ke depan.
@@ -146,15 +150,26 @@ File:
 Actual stage kita sederhana:
 
 ~~~yaml
+# Excerpt: upstream build_training_features is defined in dvc.yaml.
+# params.json supplies dates; DVC resolves these variables.
+vars:
+  - params.json
 stages:
   create_training_snapshot:
-    cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
+    cmd: >-
+      python scripts/create_training_snapshot.py
+      --cutoff-date ${data.training_cutoff}
+      --feature-path data/features/training/taxi_demand_features.parquet
     deps:
-      - data/features/taxi_demand_features.parquet
+      - data/features/training/taxi_demand_features.parquet
       - scripts/create_training_snapshot.py
       - src/data_versioning/snapshot.py
+      - src/data_versioning/pipeline_files.py
+    params:
+      - params.json:
+          - data.training_cutoff
     outs:
-      - data/snapshots/training/taxi_demand_2025-01-26.parquet
+      - data/snapshots/training/taxi_demand_${data.training_cutoff}.parquet
 ~~~
 
 Jangan hafal YAML.

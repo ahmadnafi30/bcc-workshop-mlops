@@ -1,5 +1,9 @@
 # Step 5 — Airflow: Dari Pipeline Manual ke Workflow yang Bisa Dilihat, Diulang, dan Di-debug
 
+!!! tip "Praktik Airflow + DVC terbaru"
+    Ikuti [panduan workflow dan optimasi](../05-data-pipeline/airflow-dvc-workshop.md) untuk dua stage DVC, params.json, pemisahan training/replay, cache features, pool, retry, dan UI tour.
+
+
 Nah peers, sekarang timing-nya pas banget buat masuk Airflow.
 
 Kenapa baru sekarang?

@@ -1,5 +1,9 @@
 # Step 4 — MLflow: Dari “Run Kemarin Kayaknya Bagus” Jadi Experiment yang Bisa Ditelusuri
 
+!!! tip "Tambahan praktik: tiga variasi hyperparameter"
+    Flow dua run di bawah adalah latihan dasar. Untuk memenuhi latihan perbandingan **minimal tiga konfigurasi model**, jalankan `uv run python scripts/train_with_mlflow.py --search`, lalu ikuti [panduan comparison](../06-experiment-tracking/hyperparameter-comparison.md). Search membuat satu parent, satu baseline, tiga model, serta laporan hasil dan alasan pemilihan.
+
+
 Sekarang kita punya snapshot yang jelas.
 
 Kalau train sekali, manual metrics masih manageable.

@@ -46,9 +46,11 @@ nav:
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
       - Airflow Pipeline: 05-data-pipeline/airflow-pipeline.md
+      - Airflow + DVC Hands-on: 05-data-pipeline/airflow-dvc-workshop.md
   - Training & Model:
       - Baseline Training: 06-experiment-tracking/baseline-training.md
       - MLflow Tracking: 06-experiment-tracking/experiment-tracking.md
+      - Compare Three Experiments: 06-experiment-tracking/hyperparameter-comparison.md
       - Model Registry: 06-experiment-tracking/model-registry.md
       - Model Serving: 07-model-serving/model-serving.md
       - FastAPI: 07-model-serving/fastapi.md

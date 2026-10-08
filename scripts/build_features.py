@@ -22,9 +22,15 @@ def parse_args() -> argparse.Namespace:
         help="tanggal akhir demand history, format YYYY-MM-DD",
     )
     parser.add_argument(
+        "--output-path",
+        type=Path,
+        default=Path("data/features/taxi_demand_features.parquet"),
+        help="lokasi output; DVC memakai file training terpisah dari replay",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
-        help="timpa feature parquet kalau output sudah ada",
+        help="rebuild walaupun cache input/output masih sesuai",
     )
 
     return parser.parse_args()
@@ -42,28 +48,18 @@ def main() -> None:
 
     root = Path(__file__).resolve().parents[1]
     demand_dir = root / "data" / "processed" / "demand"
-    output_path = root / "data" / "features" / "taxi_demand_features.parquet"
-
-    # manual run bisa skip file existing, sedangkan Airflow nanti sengaja rebuild
-    if output_path.exists() and not args.force:
-        print(f"feature dataset sudah ada, skip: {output_path}")
-        return
+    output_path = root / args.output_path
 
     summary = build_feature_dataset(
         demand_dir=demand_dir,
         output_path=output_path,
         start_date=start_date,
         end_date=end_date,
+        use_cache=not args.force,
     )
 
-    print(
-        f"features selesai -> {summary['rows']:,} rows, "
-        f"{summary['zones']} zones"
-    )
-    print(
-        f"target range: {summary['start_timestamp']} "
-        f"sampai {summary['end_timestamp']}"
-    )
+    print(f"features {summary['status']} -> {summary['rows']:,} rows, {summary['zones']} zones")
+    print(f"target range: {summary['start_timestamp']} sampai {summary['end_timestamp']}")
     print(summary["path"])
 
 
