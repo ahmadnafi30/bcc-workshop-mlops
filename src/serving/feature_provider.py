@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import read_csv_dataset
 from features.build_features import MODEL_FEATURE_COLUMNS
 
 MAX_LOOKBACK_HOURS = 168
@@ -12,7 +13,9 @@ MAX_LOOKBACK_HOURS = 168
 def validate_target_datetime(target_datetime: datetime) -> None:
     # timezone-aware input ditolak dulu supaya nggak ambigu sama timestamp lokal NYC
     if target_datetime.tzinfo is not None:
-        raise ValueError("target_datetime harus tanpa timezone dan dianggap sebagai waktu lokal NYC")
+        raise ValueError(
+            "target_datetime harus tanpa timezone dan dianggap sebagai waktu lokal NYC"
+        )
 
     if (
         target_datetime.minute != 0
@@ -39,7 +42,7 @@ def load_zone_history(
 
     # processed demand disimpan per hari, jadi baca file yang overlap dengan lookback window
     for day in pd.date_range(history_start.date(), history_end.date(), freq="D"):
-        path = Path(demand_dir) / f"{day.date().isoformat()}.parquet"
+        path = Path(demand_dir) / f"{day.date().isoformat()}.csv"
 
         if not path.exists():
             raise FileNotFoundError(
@@ -47,7 +50,7 @@ def load_zone_history(
             )
 
         frames.append(
-            pd.read_parquet(
+            read_csv_dataset(
                 path,
                 columns=["timestamp", "zone_id", "trip_count"],
             )

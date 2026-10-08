@@ -89,7 +89,7 @@ berupa desimal karena model regression menghasilkan estimasi jumlah pickup.
 ### Peta alur repo
 
 ```text
-TLC monthly Parquet + zone lookup
+TLC monthly Parquet → CSV + zone lookup
   → Manhattan replay source
   → hourly demand per zone
   → lag/calendar/rolling features
@@ -183,7 +183,7 @@ Mengapa tests awal dibutuhkan sebelum mulai mengubah feature?
 
 ### Data dan waktu replay
 
-Bootstrap mengambil Yellow Taxi monthly Parquet, memfilter pickup Manhattan,
+Bootstrap mengambil Yellow Taxi monthly Parquet, mengonversinya ke CSV, lalu memfilter pickup Manhattan,
 dan menyimpan replay source. Demand harian disimpan sebagai grid semua zone
 Manhattan × 24 jam. Kombinasi tanpa pickup diisi nol agar satu row tetap mewakili
 satu jam.
@@ -281,7 +281,7 @@ Catat informasi berikut dalam laporan:
 | Metrics | MAE dan RMSE masing-masing run |
 | Artifact | Model, input example, dan signature pada model run |
 
-**Checkpoint:** jelaskan mengapa nama `final.parquet` saja belum cukup untuk
+**Checkpoint:** jelaskan mengapa nama `final.csv` saja belum cukup untuk
 mengetahui input experiment. Hash menggambarkan isi file snapshot yang benar-benar
 dipakai; versi kode dan dependency tetap diperlukan untuk reproduksi lengkap.
 

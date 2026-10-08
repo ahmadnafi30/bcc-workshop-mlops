@@ -11,9 +11,7 @@ from training.train import prepare_model_input, train_hist_gradient_boosting
 def test_logged_gradient_boosting_model_can_be_loaded(tmp_path, monkeypatch) -> None:
     # pakai model asli dan store lokal agar error serialisasi ikut terdeteksi
     rows = 80
-    data = pd.DataFrame(
-        {column: np.arange(rows) + 10 for column in MODEL_FEATURE_COLUMNS}
-    )
+    data = pd.DataFrame({column: np.arange(rows) + 10 for column in MODEL_FEATURE_COLUMNS})
     data["zone_id"] = [161 + i % 2 for i in range(rows)]
     data["hour"] = np.arange(rows) % 24
     data["day_of_week"] = np.arange(rows) % 7
@@ -40,7 +38,7 @@ def test_logged_gradient_boosting_model_can_be_loaded(tmp_path, monkeypatch) -> 
             train_rows=rows,
             validation_rows=5,
             dataset_info={
-                "name": "test.parquet",
+                "name": "test.csv",
                 "sha256": "0" * 64,
                 "rows": rows,
                 "zones": 2,

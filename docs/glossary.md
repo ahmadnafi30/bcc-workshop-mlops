@@ -15,7 +15,7 @@ Contoh:
 - trained model,
 - metrics JSON,
 - Docker image,
-- evaluation Parquet.
+- evaluation CSV.
 
 ---
 
@@ -319,7 +319,7 @@ Project kita pakai FastAPI HTTP.
 Frozen dataset state untuk satu training cycle.
 
 ~~~text
-taxi_demand_2025-01-26.parquet
+taxi_demand_2025-01-26.csv
 ~~~
 
 ---

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_versioning.pipeline_files import write_parquet_atomic
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
 from data_versioning.snapshot import (
     build_snapshot_name,
     create_training_snapshot,
@@ -31,7 +31,7 @@ def evaluate_champion_performance(
     reference = get_champion_reference()
 
     prediction_path = root / "data" / "monitoring" / "predictions.jsonl"
-    evaluation_path = root / "data" / "monitoring" / "evaluations.parquet"
+    evaluation_path = root / "data" / "monitoring" / "evaluations.csv"
     summary_path = root / "data" / "monitoring" / "performance_summary.json"
     demand_dir = root / "data" / "processed" / "demand"
 
@@ -77,19 +77,19 @@ def create_retraining_snapshot(
 ) -> dict[str, str | int]:
     # runtime retraining snapshot tetap punya nama dan sha yang jelas walaupun dibuat Airflow
     root = Path(project_root)
-    feature_path = root / "data" / "features" / "taxi_demand_features.parquet"
+    feature_path = root / "data" / "features" / "taxi_demand_features.csv"
 
     if not feature_path.exists():
         raise FileNotFoundError(f"feature dataset belum ada: {feature_path}")
 
-    features = pd.read_parquet(feature_path)
+    features = read_csv_dataset(feature_path)
     snapshot = create_training_snapshot(
         features=features,
         cutoff_date=cutoff_date,
     )
 
     output_path = root / "data" / "snapshots" / "training" / build_snapshot_name(cutoff_date)
-    write_parquet_atomic(snapshot, output_path)
+    write_csv_atomic(snapshot, output_path)
 
     return describe_snapshot(output_path)
 

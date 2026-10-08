@@ -47,8 +47,8 @@ def write_history(demand_dir) -> None:
         )
 
         demand_dir.mkdir(parents=True, exist_ok=True)
-        frame.to_parquet(
-            demand_dir / f"{day.date().isoformat()}.parquet",
+        frame.to_csv(
+            demand_dir / f"{day.date().isoformat()}.csv",
             index=False,
         )
 

@@ -10,15 +10,15 @@ Zora needs to answer: **Which data produced this model?** and **Which task runs 
 Daily demand files
     |
     +--> DVC: build_training_features
-    |        data/features/training/taxi_demand_features.parquet
+    |        data/features/training/taxi_demand_features.csv
     |            |
     |        DVC: create_training_snapshot
-    |        data/snapshots/training/taxi_demand_<cutoff>.parquet
+    |        data/snapshots/training/taxi_demand_<cutoff>.csv
     |            |
     |        Airflow: train_model --> register_candidate --> MLflow
     |
     +--> Airflow replay: operational features for serving/retraining
-             data/features/taxi_demand_features.parquet
+             data/features/taxi_demand_features.csv
 ~~~
 
 Training and replay features are separate files. Reproducing initial training therefore does not shorten the dataset used for serving after later replay days arrive.
@@ -93,7 +93,7 @@ This is an example for the participant to perform, not a command to commit all l
 
 For an older version, select its reviewed Git revision and use `dvc checkout` or `dvc repro`. Checkout needs the objects in cache/remote; reproduction needs the original dependencies/code. Save local work before switching Git revisions.
 
-**Remote limitation:** no DVC remote is configured. `dvc push`/`dvc pull` need a remote first. A local cache is not an off-device backup.
+**Remote configuration:** inspect `uv run dvc remote list` on your device. The public repo does not ship your local remote settings. Configure a default remote before `dvc push`/`dvc pull`; the [DVC hands-on](../10-hands-on/step-03-dvc.md) demonstrates local storage. A local folder on the same laptop is not an off-device backup.
 
 ## 4. Airflow hands-on
 
@@ -152,7 +152,7 @@ For the first demo, follow initial training, review/promote the model, replay a 
 | One API worker and one parser | Fewer background processes on the laptop |
 | Selected retries | Data/evaluation tasks get one extra attempt; training/registration do not automatically create duplicate runs/versions |
 | Execution timeout | A task has a time budget |
-| Atomic Parquet write | Publish the complete file only after writing finishes |
+| Atomic CSV write | Publish the complete file only after writing finishes |
 | Feature cache | Reuse output only when content, dates, code, and output checksum match |
 
 The pool coordinates this Airflow instance, not unrelated host scripts or another installation. Run host scripts after taxi workflows finish. Shared local volumes and standalone Airflow suit the workshop; distributed production needs shared storage, a suitable metadata database, and stronger publication controls. [Airflow best practices](https://airflow.apache.org/docs/apache-airflow/stable/best-practices.html)

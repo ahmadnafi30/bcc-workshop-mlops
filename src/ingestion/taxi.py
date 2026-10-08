@@ -1,8 +1,17 @@
+import json
 import re
 from pathlib import Path
 
 import pandas as pd
 import requests
+
+from data_versioning.pipeline_files import (
+    file_fingerprint,
+    iter_csv_chunks,
+    write_csv_chunks_atomic,
+    write_json_atomic,
+)
+from ingestion.csv_source import convert_parquet_to_csv
 
 TLC_TRIP_BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 TLC_ZONE_LOOKUP_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
@@ -59,7 +68,7 @@ def download_file(url: str, destination: Path, force: bool = False) -> Path:
     return destination
 
 
-# ambil yellow taxi parquet untuk satu bulan dan simpan sebagai source data
+# download official Parquet, lalu langsung konversi menjadi CSV untuk semua proses berikutnya
 def download_monthly_trip_data(
     month: str,
     destination_dir: Path,
@@ -69,7 +78,10 @@ def download_monthly_trip_data(
     validate_month(month)
     destination = Path(destination_dir) / f"yellow_tripdata_{month}.parquet"
 
-    return download_file(build_trip_url(month), destination, force=force)
+    downloaded = download_file(build_trip_url(month), destination, force=force)
+    converted = convert_parquet_to_csv(downloaded, force=force)
+    print(f"monthly CSV {converted['status']}: {converted['rows']:,} rows -> {converted['path']}")
+    return Path(converted["path"])
 
 
 # ambil taxi zone lookup yang nanti dipakai buat filter pickup zone manhattan
@@ -86,10 +98,7 @@ def load_manhattan_zones(zone_lookup_path: Path) -> pd.DataFrame:
     missing_columns = required_columns.difference(zones.columns)
 
     if missing_columns:
-        raise ValueError(
-            "taxi zone lookup kehilangan kolom: "
-            + ", ".join(sorted(missing_columns))
-        )
+        raise ValueError("taxi zone lookup kehilangan kolom: " + ", ".join(sorted(missing_columns)))
 
     # ambil zone yang borough-nya Manhattan dan simpan kolom yang memang kita pakai
     manhattan = zones.loc[
@@ -106,7 +115,7 @@ def load_manhattan_zones(zone_lookup_path: Path) -> pd.DataFrame:
     return manhattan.sort_values("LocationID").reset_index(drop=True)
 
 
-# ringkas monthly parquet jadi pickup manhattan yang enak dipakai buat replay
+# ringkas monthly CSV menjadi pickup Manhattan; Parquet hanya dibaca saat konversi download
 def prepare_replay_month(
     source_path: Path,
     zone_lookup_path: Path,
@@ -118,72 +127,62 @@ def prepare_replay_month(
     validate_month(month)
     output_path = Path(output_path)
 
-    # kalau replay source sudah pernah dibuat kita cukup baca summary-nya
-    if output_path.exists() and not force:
-        existing = pd.read_parquet(
-            output_path,
-            columns=["tpep_pickup_datetime", "PULocationID"],
-        )
+    if Path(source_path).suffix != ".csv" or output_path.suffix != ".csv":
+        raise ValueError("replay preparation memakai CSV; jalankan bootstrap untuk konversi source")
+    inputs = {
+        "source_sha256": file_fingerprint(source_path),
+        "zone_lookup_sha256": file_fingerprint(zone_lookup_path),
+        "code_sha256": file_fingerprint(Path(__file__)),
+        "month": month,
+    }
+    manifest_path = output_path.with_suffix(".metadata.json")
+    if output_path.exists() and manifest_path.exists() and not force:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest["inputs"] == inputs and manifest["output_sha256"] == file_fingerprint(
+                output_path
+            ):
+                return {
+                    "month": month,
+                    "rows": manifest["rows"],
+                    "zones": manifest["zones"],
+                    "path": str(output_path),
+                    "status": "skipped",
+                }
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
 
-        return {
-            "month": month,
-            "rows": len(existing),
-            "zones": int(existing["PULocationID"].nunique()),
-            "path": str(output_path),
-            "status": "skipped",
-        }
-
-    # baca cuma dua kolom yang kita butuhin biar prosesnya lebih hemat memory
-    trips = pd.read_parquet(
-        source_path,
-        columns=["tpep_pickup_datetime", "PULocationID"],
-    )
-
-    # rapihin tipe data karena source parquet tetap perlu kita anggap sebagai external input
-    trips["tpep_pickup_datetime"] = pd.to_datetime(
-        trips["tpep_pickup_datetime"],
-        errors="coerce",
-    )
-    trips["PULocationID"] = pd.to_numeric(
-        trips["PULocationID"],
-        errors="coerce",
-    )
-
-    # ambil daftar zone yang valid supaya replay source cuma berisi pickup Manhattan
     manhattan_zones = load_manhattan_zones(zone_lookup_path)
     valid_zone_ids = set(manhattan_zones["LocationID"].tolist())
-
-    # bikin batas awal dan akhir bulan buat buang timestamp nyasar di luar file month-nya
     month_start = pd.Timestamp(f"{month}-01")
     month_end = month_start + pd.offsets.MonthBegin(1)
+    observed_zones = set()
 
-    valid_rows = (
-        trips["tpep_pickup_datetime"].between(
-            month_start,
-            month_end,
-            inclusive="left",
-        )
-        & trips["PULocationID"].isin(valid_zone_ids)
+    def filtered_chunks():
+        for trips in iter_csv_chunks(source_path, ["tpep_pickup_datetime", "PULocationID"]):
+            trips["PULocationID"] = pd.to_numeric(trips["PULocationID"], errors="coerce")
+            valid_rows = trips["tpep_pickup_datetime"].between(
+                month_start, month_end, inclusive="left"
+            ) & trips["PULocationID"].isin(valid_zone_ids)
+            replay = trips.loc[valid_rows, ["tpep_pickup_datetime", "PULocationID"]].dropna().copy()
+            replay["PULocationID"] = replay["PULocationID"].astype("int16")
+            observed_zones.update(replay["PULocationID"].unique().tolist())
+            yield replay
+
+    rows = write_csv_chunks_atomic(filtered_chunks(), output_path)
+    write_json_atomic(
+        {
+            "inputs": inputs,
+            "output_sha256": file_fingerprint(output_path),
+            "rows": rows,
+            "zones": len(observed_zones),
+        },
+        manifest_path,
     )
-
-    # simpan cuma row valid dan dua kolom yang nanti dibutuhin historical replay
-    replay = trips.loc[
-        valid_rows,
-        ["tpep_pickup_datetime", "PULocationID"],
-    ].dropna()
-
-    # rapihin tipe dan urutan waktu supaya file replay lebih predictable
-    replay["PULocationID"] = replay["PULocationID"].astype("int16")
-    replay = replay.sort_values("tpep_pickup_datetime").reset_index(drop=True)
-
-    # tulis compact replay source ke parquet
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    replay.to_parquet(output_path, index=False)
-
     return {
         "month": month,
-        "rows": len(replay),
-        "zones": int(replay["PULocationID"].nunique()),
+        "rows": rows,
+        "zones": len(observed_zones),
         "path": str(output_path),
         "status": "prepared",
     }

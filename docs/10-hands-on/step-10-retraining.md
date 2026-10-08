@@ -372,7 +372,7 @@ build evaluation table
 ↓
 summarize performance
 ↓
-save evaluation parquet
+save evaluation CSV
 ↓
 save summary JSON
 ↓
@@ -494,7 +494,7 @@ Retraining freeze data sampai cutoff.
 Output misalnya:
 
 ~~~text
-data/snapshots/training/taxi_demand_2025-02-10.parquet
+data/snapshots/training/taxi_demand_2025-02-10.csv
 ~~~
 
 Metadata snapshot:

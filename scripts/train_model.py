@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_config import training_snapshot_path
+from data_versioning.pipeline_files import read_csv_dataset
 from data_versioning.snapshot import describe_snapshot
 from training.evaluate import (
     calculate_regression_metrics,
@@ -25,20 +27,14 @@ def load_training_snapshot(snapshot_path: Path) -> pd.DataFrame:
             "jalanin uv run dvc repro create_training_snapshot dulu."
         )
 
-    return pd.read_parquet(snapshot_path)
+    return read_csv_dataset(snapshot_path)
 
 
 # train baseline dan model utama dari snapshot yang sama lalu simpan hasil evaluasinya
 def main() -> None:
     # semua artifact disimpan relatif dari root repository supaya command konsisten
     root = Path(__file__).resolve().parents[1]
-    snapshot_path = (
-        root
-        / "data"
-        / "snapshots"
-        / "training"
-        / "taxi_demand_2025-01-26.parquet"
-    )
+    snapshot_path = training_snapshot_path(root)
     model_path = root / "models" / "taxi_demand_model.joblib"
     metrics_path = root / "models" / "initial_metrics.json"
 
@@ -52,9 +48,7 @@ def main() -> None:
 
     # train model utama lalu evaluate ke validation period yang sama
     model = train_hist_gradient_boosting(train_data)
-    predictions = model.predict(
-        prepare_model_input(validation_data)
-    )
+    predictions = model.predict(prepare_model_input(validation_data))
     model_metrics = calculate_regression_metrics(
         y_true=validation_data["target_trip_count"],
         y_pred=predictions,
@@ -70,9 +64,7 @@ def main() -> None:
         "validation_rows": len(validation_data),
         "baseline_24h": baseline_metrics,
         "hist_gradient_boosting": model_metrics,
-        "model_beats_baseline": (
-            model_metrics["mae"] < baseline_metrics["mae"]
-        ),
+        "model_beats_baseline": (model_metrics["mae"] < baseline_metrics["mae"]),
     }
 
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,10 +87,7 @@ def main() -> None:
         f"MAE {model_metrics['mae']:.3f}, "
         f"RMSE {model_metrics['rmse']:.3f}"
     )
-    print(
-        "model beats baseline  -> "
-        f"{metrics['model_beats_baseline']}"
-    )
+    print(f"model beats baseline  -> {metrics['model_beats_baseline']}")
     print(f"\nmodel: {model_path}")
     print(f"metrics: {metrics_path}")
 

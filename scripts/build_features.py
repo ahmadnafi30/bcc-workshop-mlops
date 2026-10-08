@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-path",
         type=Path,
-        default=Path("data/features/taxi_demand_features.parquet"),
+        default=Path("data/features/taxi_demand_features.csv"),
         help="lokasi output; DVC memakai file training terpisah dari replay",
     )
     parser.add_argument(

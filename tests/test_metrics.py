@@ -22,7 +22,7 @@ def write_summary(tmp_path, count=100, error=15.0):
     summary = summarize_performance(evaluations, reference_mae=10.0)
     summary.update(model_name="taxi-test", model_version="1", run_id="run-1")
     path = tmp_path / "summary.json"
-    save_performance_artifacts(evaluations, summary, tmp_path / "eval.parquet", path)
+    save_performance_artifacts(evaluations, summary, tmp_path / "eval.csv", path)
     return path, summary
 
 
@@ -117,16 +117,23 @@ def test_model_switch_deactivates_previous_serving_version(tmp_path):
     samples = metrics.MODEL_VERSION.collect()[0].samples
     active = [sample.labels for sample in samples if sample.value == 1]
     assert active == [
-        {"model_name": "taxi-rollout-test", "model_version": "2", "model_alias": "champion"}
+        {
+            "model_name": "taxi-rollout-test",
+            "model_version": "2",
+            "model_alias": "champion",
+        }
     ]
 
     # summary punya identitas sendiri, meskipun serving sudah pindah version
     path, _ = write_summary(tmp_path)
     metrics.refresh_performance_metrics(path)
-    assert REGISTRY.get_sample_value(
-        "taxi_model_evaluated_version_info",
-        {"model_name": "taxi-test", "model_version": "1", "run_id": "run-1"},
-    ) == 1
+    assert (
+        REGISTRY.get_sample_value(
+            "taxi_model_evaluated_version_info",
+            {"model_name": "taxi-test", "model_version": "1", "run_id": "run-1"},
+        )
+        == 1
+    )
 
 
 # kalau penulisan summary baru gagal, summary lengkap sebelumnya tetap tersedia

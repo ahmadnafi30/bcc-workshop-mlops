@@ -379,9 +379,9 @@ replay_date = 2025-01-27
 ↓
 month = 2025-01
 ↓
-source = yellow_tripdata_2025-01.parquet
+source = yellow_tripdata_2025-01.csv
 ↓
-output = data/raw/trips/2025-01-27.parquet
+output = data/raw/trips/2025-01-27.csv
 ~~~
 
 Jadi DAG tidak punya Pandas logic untuk filter daily rows.
@@ -409,10 +409,10 @@ Expected reasoning:
 
 ~~~text
 raw:
-data/raw/trips/2025-01-27.parquet
+data/raw/trips/2025-01-27.csv
 
 processed:
-data/processed/demand/2025-01-27.parquet
+data/processed/demand/2025-01-27.csv
 
 features:
 rebuilt through Jan 27
@@ -560,7 +560,7 @@ Mental model:
 XCom
 → sticky note
 
-Parquet
+CSV
 → actual package
 ~~~
 
@@ -574,7 +574,7 @@ Sticky note bukan tempat menaruh isi seluruh gudang.
 
 ## 15. aggregate_demand
 
-Task membaca daily trip parquet + zone lookup lalu reuse aggregate_hourly_demand.
+Task membaca daily trip CSV + zone lookup lalu reuse aggregate_hourly_demand.
 
 Output complete hourly demand.
 
@@ -854,7 +854,7 @@ Coba explain tanpa lihat docs:
 4. replay_date solve problem apa?
 5. Kenapa upstream metadata bisa dipakai hanya sebagai dependency signal?
 6. XCom cocok untuk data seperti apa?
-7. Kenapa DataFrame besar tetap di Parquet?
+7. Kenapa DataFrame besar disimpan sebagai CSV di shared storage?
 8. Kenapa daily replay dan training dipisah?
 9. Kenapa registration task terpisah?
 10. No-op monitoring run bisa successful kenapa?

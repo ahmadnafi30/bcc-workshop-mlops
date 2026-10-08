@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_versioning.pipeline_files import file_fingerprint, write_json_atomic, write_parquet_atomic
+from data_versioning.pipeline_files import (
+    file_fingerprint,
+    read_csv_dataset,
+    write_csv_atomic,
+    write_json_atomic,
+)
 from features.build_features import build_model_features
 
 LOGGER = logging.getLogger(__name__)
@@ -23,13 +28,13 @@ def load_demand_range(
 
     for timestamp in pd.date_range(start_date, end_date, freq="D"):
         target_date = timestamp.date()
-        path = Path(demand_dir) / f"{target_date.isoformat()}.parquet"
+        path = Path(demand_dir) / f"{target_date.isoformat()}.csv"
 
         if not path.exists():
             missing_dates.append(target_date.isoformat())
             continue
 
-        frames.append(pd.read_parquet(path))
+        frames.append(read_csv_dataset(path))
 
     # history bolong bisa bikin lag salah, jadi lebih aman fail daripada lanjut diam-diam
     if missing_dates:
@@ -61,7 +66,7 @@ def build_feature_dataset(
         "end_date": end_date.isoformat(),
         "demand": {
             timestamp.date().isoformat(): file_fingerprint(
-                Path(demand_dir) / f"{timestamp.date().isoformat()}.parquet"
+                Path(demand_dir) / f"{timestamp.date().isoformat()}.csv"
             )
             for timestamp in pd.date_range(start_date, end_date, freq="D")
         },
@@ -82,7 +87,12 @@ def build_feature_dataset(
                 output_path
             ):
                 summary = manifest["summary"]
-                if {"rows", "zones", "start_timestamp", "end_timestamp"} <= summary.keys():
+                if {
+                    "rows",
+                    "zones",
+                    "start_timestamp",
+                    "end_timestamp",
+                } <= summary.keys():
                     LOGGER.info(
                         "Feature cache HIT: input, range, code, output tidak berubah: %s",
                         output_path,
@@ -99,7 +109,7 @@ def build_feature_dataset(
     )
     features = build_model_features(demand)
 
-    write_parquet_atomic(features, output_path)
+    write_csv_atomic(features, output_path)
 
     summary = {
         "rows": len(features),
@@ -109,7 +119,11 @@ def build_feature_dataset(
         "path": str(output_path),
     }
     write_json_atomic(
-        {"inputs": fingerprint, "output_sha256": file_fingerprint(output_path), "summary": summary},
+        {
+            "inputs": fingerprint,
+            "output_sha256": file_fingerprint(output_path),
+            "summary": summary,
+        },
         manifest_path,
     )
     return {**summary, "status": "rebuilt"}

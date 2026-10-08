@@ -507,7 +507,7 @@ Supaya test endpoint tidak butuh real:
 
 - MLflow;
 - model;
-- Parquet history.
+- CSV history.
 
 Unit/API contract test fokus satu layer.
 

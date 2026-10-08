@@ -84,34 +84,43 @@ uv run python scripts/prepare_historical_demand.py \
 ```
 
 Bootstrap mengunduh lookup zone dan data Yellow Taxi, lalu menyiapkan replay
-source untuk Manhattan. Pemrosesan pertama memerlukan waktu dan memori untuk
-membaca file bulanan.
+source CSV untuk Manhattan. Download asli tetap Parquet; bootstrap langsung
+mengonversi semua kolom ke CSV sebelum filtering. Konversi/filtering memakai
+chunk agar penggunaan memori terkendali.
 
 **Hasil yang diperiksa:** metadata zone, replay source Januari, dan file
-`data/processed/demand/2025-01-28.parquet` tersedia. Script history juga menyiapkan
+`data/processed/demand/2025-01-28.csv` tersedia. Script history juga menyiapkan
 hari-hari sebelumnya yang dibutuhkan oleh lag sampai 168 jam.
 
-## 4. Buat feature dan snapshot training
+## 4. Buat features dan snapshot CSV
+
+Pastikan `params.json` memakai history Jan 1 dan cutoff Jan 26 untuk demo ini.
 
 ```bash
+uv run dvc repro create_training_snapshot
 uv run python scripts/build_features.py \
-  --start-date 2025-01-01 --end-date 2025-01-26 --force
-
-uv run python scripts/create_training_snapshot.py \
-  --cutoff-date 2025-01-26
+  --start-date 2025-01-01 --end-date 2025-01-28 --force
 ```
+
+DVC membuat training features terpisah dan snapshot Jan 26. Command kedua
+membangun features operasional hingga Jan 28 untuk replay/retraining.
 
 **Hasil yang diperiksa:**
 
-- `data/features/taxi_demand_features.parquet` terbentuk.
-- `data/snapshots/training/taxi_demand_2025-01-26.parquet` terbentuk.
-- Output snapshot menampilkan jumlah row, zone, rentang waktu, dan SHA256.
+- `data/features/training/taxi_demand_features.csv` terbentuk.
+- `data/snapshots/training/taxi_demand_2025-01-26.csv` terbentuk.
+- `data/features/taxi_demand_features.csv` mempunyai history operasional.
+- Output snapshot menampilkan rows, zones, rentang waktu, dan SHA-256.
 
-Cutoff training tetap Jan 26. Data Jan 27–28 disiapkan untuk inference dan
-ground truth, sehingga tidak ikut masuk snapshot initial training.
+Cutoff snapshot initial tetap Jan 26. Jan 27–28 disiapkan untuk inference dan
+ground truth. CSV snapshot berisi features beserta target; training membaginya
+menjadi train Jan 8–21 dan validation Jan 22–26.
 
-Panduan cepat ini membuat snapshot langsung. Pada sesi reproducibility di
-[modul workshop](../workshop-module.md), snapshot dikelola melalui stage DVC.
+```powershell
+Get-Content data/snapshots/training/taxi_demand_2025-01-26.csv -TotalCount 6
+```
+
+Untuk penjelasan file tiap tahap, baca [CSV Data Flow](../05-data-pipeline/csv-data-flow.md).
 
 ## 5. Train dan catat model run ID
 
@@ -189,7 +198,7 @@ uv run python scripts/evaluate_predictions.py
 dan artifact berikut terbentuk:
 
 ```text
-data/monitoring/evaluations.parquet
+data/monitoring/evaluations.csv
 data/monitoring/performance_summary.json
 ```
 

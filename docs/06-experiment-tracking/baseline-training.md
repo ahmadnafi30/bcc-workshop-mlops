@@ -135,7 +135,7 @@ Good baseline harus cukup reasonable sehingga model benar-benar harus earn impro
 Manual training membaca:
 
 ~~~text
-data/snapshots/training/taxi_demand_2025-01-26.parquet
+data/snapshots/training/taxi_demand_2025-01-26.csv
 ~~~
 
 Kenapa snapshot, bukan moving feature file?

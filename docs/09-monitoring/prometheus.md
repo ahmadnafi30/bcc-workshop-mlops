@@ -305,7 +305,7 @@ Kalau kita butuh row-level detail:
 
 ~~~text
 prediction log
-evaluation parquet
+evaluation CSV
 database
 warehouse
 ~~~

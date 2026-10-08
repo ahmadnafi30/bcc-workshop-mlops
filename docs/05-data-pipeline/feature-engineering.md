@@ -48,7 +48,7 @@ uv run python scripts/build_features.py
 Output:
 
 ~~~text
-data/features/taxi_demand_features.parquet
+data/features/taxi_demand_features.csv
 ~~~
 
 Row model-ready punya feature seperti:

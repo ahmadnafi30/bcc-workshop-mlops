@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
 from preprocessing.aggregate_demand import aggregate_hourly_demand
 
 
@@ -35,21 +36,14 @@ def parse_args() -> argparse.Namespace:
 # load monthly replay source cuma saat month berubah biar file besar nggak dibaca berulang
 def load_month_source(root: Path, month: str) -> pd.DataFrame:
     # initial history tetap diambil dari replay source hasil bootstrap
-    source_path = (
-        root
-        / "data"
-        / "source"
-        / "replay"
-        / f"yellow_tripdata_{month}.parquet"
-    )
+    source_path = root / "data" / "source" / "replay" / f"yellow_tripdata_{month}.csv"
 
     if not source_path.exists():
         raise FileNotFoundError(
-            f"replay source belum ada: {source_path}. "
-            "jalanin scripts/bootstrap_data.py dulu."
+            f"replay source belum ada: {source_path}. jalanin scripts/bootstrap_data.py dulu."
         )
 
-    return pd.read_parquet(
+    return read_csv_dataset(
         source_path,
         columns=["tpep_pickup_datetime", "PULocationID"],
     )
@@ -90,13 +84,7 @@ def main() -> None:
             month_trips = load_month_source(root, month)
             current_month = month
 
-        output_path = (
-            root
-            / "data"
-            / "processed"
-            / "demand"
-            / f"{target_date.isoformat()}.parquet"
-        )
+        output_path = root / "data" / "processed" / "demand" / f"{target_date.isoformat()}.csv"
 
         if output_path.exists() and not args.force:
             skipped += 1
@@ -109,14 +97,12 @@ def main() -> None:
             target_date=target_date,
         )
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        demand.to_parquet(output_path, index=False)
+        write_csv_atomic(demand, output_path)
         prepared += 1
 
     # summary ini cukup buat quick check sebelum lanjut feature engineering
     print(
-        f"history {start_date} sampai {end_date} selesai -> "
-        f"{prepared} prepared, {skipped} skipped"
+        f"history {start_date} sampai {end_date} selesai -> {prepared} prepared, {skipped} skipped"
     )
 
 

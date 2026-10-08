@@ -42,7 +42,7 @@ uv run python scripts/build_features.py
 Output:
 
 ~~~text
-data/features/taxi_demand_features.parquet
+data/features/taxi_demand_features.csv
 ~~~
 
 ---
@@ -52,7 +52,7 @@ data/features/taxi_demand_features.parquet
 Try:
 
 ~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/features/taxi_demand_features.parquet'); print(df.columns.tolist()); print(df.head())"
+uv run python -c "import pandas as pd; df=pd.read_csv('data/features/taxi_demand_features.csv'); print(df.columns.tolist()); print(df.head())"
 ~~~
 
 Cari:
@@ -201,7 +201,7 @@ uv run python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
 Output:
 
 ~~~text
-data/snapshots/training/taxi_demand_2025-01-26.parquet
+data/snapshots/training/taxi_demand_2025-01-26.csv
 ~~~
 
 Kenapa snapshot sekarang?
@@ -215,7 +215,7 @@ Step 3 nanti DVC formalize reproducibility-nya.
 ## 9. Inspect snapshot range
 
 ~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/snapshots/training/taxi_demand_2025-01-26.parquet'); print(df['timestamp'].min()); print(df['timestamp'].max()); print(df.shape)"
+uv run python -c "import pandas as pd; df=pd.read_csv('data/snapshots/training/taxi_demand_2025-01-26.csv'); print(df['timestamp'].min()); print(df['timestamp'].max()); print(df.shape)"
 ~~~
 
 Question:
@@ -525,10 +525,10 @@ Itu normal science.
 Pastikan ada:
 
 ~~~text
-data/features/taxi_demand_features.parquet
+data/features/taxi_demand_features.csv
 ✅
 
-data/snapshots/training/taxi_demand_2025-01-26.parquet
+data/snapshots/training/taxi_demand_2025-01-26.csv
 ✅
 
 models/taxi_demand_model.joblib

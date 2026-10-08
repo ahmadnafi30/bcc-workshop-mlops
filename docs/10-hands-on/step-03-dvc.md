@@ -1,575 +1,224 @@
-# Step 3 — DVC: Membekukan Training Data Biar Experiment Nggak “Pakai File yang Mana Ya?”
+# Step 3: DVC dari CSV Sederhana ke Training Snapshot
 
-!!! tip "Praktik Airflow + DVC terbaru"
-    Ikuti [panduan workflow dan optimasi](../05-data-pipeline/airflow-dvc-workshop.md) untuk dua stage DVC, params.json, pemisahan training/replay, cache features, pool, retry, dan UI tour.
+Pada sesi ini kita mulai dengan file kecil yang dapat dibuka langsung. Setelah memahami versioning, kita mengikuti pipeline CSV yang dipakai model taxi.
 
+**Terminal:** PowerShell, dari root repository. Dependency sudah terpasang melalui `uv sync`.
 
-Sampai Step 2 kita sudah punya feature dataset dan model yang bisa ditrain.
+## Bagian A: Demo add, push, pull, dan restore
 
-Sekarang coba bayangin satu minggu ke depan.
+### 1. Periksa apakah DVC sudah aktif
 
-Feature dataset bertambah karena Jan 27, Jan 28, Jan 29 masuk.
+```powershell
+uv run dvc root
+uv run dvc remote list
+```
 
-File yang sama:
+Repo workshop sudah mempunyai `.dvc`; tidak perlu menjalankan `dvc init` lagi. Error `.dvc exists` berarti project sudah diinisialisasi.
 
-~~~text
-data/features/taxi_demand_features.parquet
-~~~
+### 2. Buat CSV demo
 
-content-nya berubah.
+Jika `data/simple_case/data.csv` sudah berisi latihanmu sebelumnya, gunakan file itu dan lewati command pembuatan berikut.
 
-Lalu kita tanya:
+```powershell
+New-Item -ItemType Directory -Force data/simple_case | Out-Null
+@'
+zone_id,trip_count
+161,100
+162,80
+'@ | Set-Content -Encoding utf8 data/simple_case/data.csv
+Get-Content data/simple_case/data.csv
+```
 
-> “Model initial yang kita train kemarin sebenarnya pakai rows sampai tanggal berapa?”
+Ini hanya tabel simulasi, bukan dataset yang dilatih oleh model taxi.
 
-Kalau jawabannya cuma:
+### 3. Catat versi pertama
 
-> “Pakai file features itu.”
+```powershell
+uv run dvc add data/simple_case/data.csv
+Get-Content data/simple_case/data.csv.dvc
+git add data/simple_case/data.csv.dvc
+if (Test-Path data/simple_case/.gitignore) { git add data/simple_case/.gitignore }
+git commit -m "Demo DVC: record CSV version 1"
+$demoV1 = git rev-parse HEAD
+```
 
-belum cukup.
+| Hasil | Fungsinya |
+|---|---|
+| `data.csv` | Isi data yang dapat dibaca |
+| `data.csv.dvc` | Metadata hash dan lokasi file |
+| `data/simple_case/.gitignore` | Mencegah CSV tersebut masuk Git |
+| DVC cache | Menyimpan isi versi pertama |
+| Git commit | Menyimpan metadata versi pertama |
 
-Kita perlu training input yang **frozen dan identifiable**.
+Catat nilai `$demoV1` jika akan membuka terminal baru. Commit lokal ini belum mengirim apa pun ke GitHub.
 
-Nah, di step ini DVC masuk.
+### 4. Pilih remote default, lalu push
 
----
+```powershell
+uv run dvc remote list
+```
 
-## Goal
+Jika belum ada `demo-local`:
 
-Setelah selesai kalian harus bisa menjelaskan:
+```powershell
+uv run dvc remote add --local -d demo-local D:/bcc-dvc-storage
+```
 
-- kenapa moving feature file bukan training identity yang bagus;
-- apa itu training snapshot;
-- anatomy dvc.yaml;
-- cmd, deps, outs;
-- apa yang terjadi saat dvc repro;
-- kenapa DVC cache bukan Git;
-- kenapa SHA fingerprint juga dicatat;
-- kenapa DVC dan MLflow punya responsibility beda;
-- apa yang berubah kalau dependency berubah.
+Jika remote tersebut sudah ada:
 
----
+```powershell
+uv run dvc remote default --local demo-local
+```
 
-## 1. Lihat dulu feature dataset yang sekarang ada
+Kemudian:
 
-Pastikan:
+```powershell
+uv run dvc push data/simple_case/data.csv.dvc
+```
 
-~~~text
-data/features/taxi_demand_features.parquet
-~~~
+Push menggunakan remote default tanpa perlu `-r`. Metadata tetap di Git; isi CSV masuk storage DVC. Push ulang tanpa perubahan bisa menampilkan bahwa semua file sudah up to date.
 
-sudah exist.
+### 5. Tambahkan data dan catat versi kedua
 
-Optional inspect:
+```powershell
+Add-Content data/simple_case/data.csv '163,120'
+Get-Content data/simple_case/data.csv
+uv run dvc add data/simple_case/data.csv
+Get-Content data/simple_case/data.csv.dvc
+git add data/simple_case/data.csv.dvc
+git commit -m "Demo DVC: record CSV version 2"
+$demoV2 = git rev-parse HEAD
+uv run dvc push data/simple_case/data.csv.dvc
+```
 
-~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/features/taxi_demand_features.parquet'); print(df.shape); print(df['timestamp'].min()); print(df['timestamp'].max())"
-~~~
+Hash berubah setelah **isi file yang sudah disimpan** berubah. Jika tetap sama, periksa path yang diedit, simpan editor, lalu lihat `Get-Content` pada file yang sama.
 
-Pertanyaan:
+### 6. Pulihkan file workspace
 
-> “Kalau besok file ini ditambah Jan 27, apakah nama filenya berubah?”
+Simpan salinan file saat ini sebelum meminta DVC memulihkannya. Pilih nama backup baru jika file backup berikut sudah ada.
 
-No.
+```powershell
+Move-Item data/simple_case/data.csv data/simple_case/data.csv.backup
+uv run dvc pull data/simple_case/data.csv.dvc
+Get-Content data/simple_case/data.csv
+```
 
-Itu source of ambiguity.
+CSV versi kedua muncul kembali sesuai metadata aktif. Jika isi masih tersedia di cache lokal, DVC tidak perlu mengunduh ulang dari remote. `dvc pull` memastikan isi tersedia dan mengembalikan file workspace.
 
----
+### 7. Restore versi pertama tanpa mengganti seluruh repo
 
-## 2. Buat snapshot manual dulu
+```powershell
+git restore --source=$demoV1 -- data/simple_case/data.csv.dvc
+uv run dvc pull data/simple_case/data.csv.dvc
+Get-Content data/simple_case/data.csv
+```
 
-Sebelum DVC, jalankan underlying script:
+Hasil sekarang memiliki dua baris data seperti versi pertama. Git memilih metadata lama; DVC memulihkan isi yang ditunjuk metadata itu.
 
-~~~bash
-uv run python scripts/create_training_snapshot.py --cutoff-date 2025-01-26
-~~~
+Kembali ke versi kedua:
 
-Output:
+```powershell
+git restore --source=$demoV2 -- data/simple_case/data.csv.dvc
+uv run dvc pull data/simple_case/data.csv.dvc
+```
 
-~~~text
-data/snapshots/training/taxi_demand_2025-01-26.parquet
-~~~
+Jika cache lokal sudah mempunyai isi yang dibutuhkan, `dvc checkout data/simple_case/data.csv.dvc` juga dapat digunakan. Restore ini dapat mengganti isi file workspace; simpan perubahan yang ingin dipertahankan terlebih dahulu.
 
-Terminal juga print:
+## Bagian B: DVC yang benar-benar dipakai repo taxi
 
-~~~text
-file
-rows
-zones
-sha256
-~~~
+### 1. Siapkan input CSV
 
-Pause.
+```powershell
+uv run python scripts/bootstrap_data.py --months 2025-01
+uv run python scripts/prepare_historical_demand.py --start-date 2025-01-01 --end-date 2025-01-26
+```
 
-Kenapa nama file punya cutoff date?
+Bootstrap mendownload Parquet resmi TLC, langsung mengonversi semua kolom ke CSV, lalu membuat replay source CSV. History preparation membaca replay CSV dan menghasilkan daily demand CSV.
 
-Karena kita ingin identity yang readable.
+### 2. Baca konfigurasi dan graph
 
-Kenapa masih butuh SHA kalau nama sudah ada?
+```powershell
+Get-Content params.json
+Get-Content dvc.yaml
+uv run dvc dag
+```
 
-Karena filename bisa sama tapi content bisa berubah kalau overwrite.
+Dengan konfigurasi default:
 
-Readable identity + content fingerprint lebih kuat.
+```json
+{
+  "data": {
+    "history_start": "2025-01-01",
+    "training_cutoff": "2025-01-26"
+  }
+}
+```
 
----
+`history_start` menentukan awal history untuk membangun lag/rolling. `training_cutoff` menentukan batas akhir snapshot, termasuk hari tersebut.
 
-## 3. Apa yang dilakukan script snapshot?
+### 3. Jalankan dua stage
 
-Actual flow:
-
-~~~text
-read feature dataset
-↓
-filter rows <= cutoff date
-↓
-create snapshot
-↓
-build deterministic snapshot name
-↓
-write Parquet
-↓
-describe snapshot
-↓
-calculate SHA256
-~~~
-
-Important: cutoff date menentukan **data mana yang boleh masuk training context**.
-
-Snapshot bukan copy arbitrary.
-
-Dia punya temporal boundary.
-
----
-
-## 4. Open dvc.yaml
-
-File:
-
----
-
-Actual stage kita sederhana:
-
-~~~yaml
-# Excerpt: upstream build_training_features is defined in dvc.yaml.
-# params.json supplies dates; DVC resolves these variables.
-vars:
-  - params.json
-stages:
-  create_training_snapshot:
-    cmd: >-
-      python scripts/create_training_snapshot.py
-      --cutoff-date ${data.training_cutoff}
-      --feature-path data/features/training/taxi_demand_features.parquet
-    deps:
-      - data/features/training/taxi_demand_features.parquet
-      - scripts/create_training_snapshot.py
-      - src/data_versioning/snapshot.py
-      - src/data_versioning/pipeline_files.py
-    params:
-      - params.json:
-          - data.training_cutoff
-    outs:
-      - data/snapshots/training/taxi_demand_${data.training_cutoff}.parquet
-~~~
-
-Jangan hafal YAML.
-
-Baca seperti kalimat.
-
----
-
-## 5. cmd — “Kalau perlu reproduce, jalankan apa?”
-
-~~~text
-cmd
-→ python scripts/create_training_snapshot.py ...
-~~~
-
-DVC perlu tahu command yang menghasilkan output.
-
-Jadi DVC bukan magic yang tahu sendiri cara membuat snapshot.
-
-Kita yang declare recipe-nya.
-
----
-
-## 6. deps — “Apa yang bisa mengubah hasil?”
-
-Dependencies:
-
-~~~text
-feature dataset
-snapshot script
-snapshot implementation
-~~~
-
-Kenapa source code masuk deps?
-
-Karena output bisa berubah walaupun input data sama kalau logic snapshot berubah.
-
-Reproducibility bukan cuma data dependency.
-
-Code dependency matters.
-
----
-
-## 7. outs — “Artifact apa yang dihasilkan?”
-
-Output:
-
-~~~text
-taxi_demand_2025-01-26.parquet
-~~~
-
-DVC track state artifact ini.
-
-Mental model:
-
-~~~text
-deps
-+
-cmd
-↓
-outs
-~~~
-
-Ini mirip build system.
-
----
-
-## 8. Sebelum dvc repro, predict behavior
-
-Suppose snapshot sudah ada dan dependency belum berubah.
-
-Apa yang kalian expect?
-
-~~~text
-DVC
-→ stage up-to-date
-→ tidak perlu regenerate unnecessarily
-~~~
-
-Sekarang run:
-
-~~~bash
+```powershell
 uv run dvc repro create_training_snapshot
-~~~
+```
 
-Observe output.
+DVC menjalankan upstream `build_training_features` jika diperlukan, lalu membuat snapshot. Jika dependency, params, code, dan output sesuai catatan sebelumnya, stage dapat di-skip atau menggunakan cache.
 
-Jangan cuma lihat command selesai.
+| Stage | Input utama | Output |
+|---|---|---|
+| `build_training_features` | Daily demand CSV dan periode `params.json` | `data/features/training/taxi_demand_features.csv` |
+| `create_training_snapshot` | Training features CSV dan cutoff | `data/snapshots/training/taxi_demand_2025-01-26.csv` |
 
-Cari apakah stage rerun atau dianggap unchanged.
+Training features dipisahkan dari `data/features/taxi_demand_features.csv` yang dapat terus berkembang saat replay. Keduanya sekarang readable CSV.
 
----
+### 4. Buka snapshot dan lock
 
-## 9. dvc status
-
-Run:
-
-~~~bash
+```powershell
+Get-Content data/snapshots/training/taxi_demand_2025-01-26.csv -TotalCount 6
+Get-Content dvc.lock
 uv run dvc status
-~~~
+```
 
-Goal:
+Snapshot berisi features **dan** `target_trip_count`. History Jan 1–7 membangun lag satu minggu; model-ready rows mulai Jan 8. Training code memakai lima hari terakhir sebagai validation, sehingga default snapshot dibagi menjadi train Jan 8–21 dan validation Jan 22–26.
 
-> “Apakah current pipeline output masih sesuai dependency state?”
+Lock mencatat fingerprint tiap dependency dan output. Hash folder berakhiran `.dir` menunjuk kumpulan file, bukan satu CSV. Catatan `.dvc/cache/runs` adalah cache pipeline, bukan daftar MLflow training runs.
 
-Kalau feature dataset berubah, DVC bisa report stage out-of-date.
+### 5. Simpan metadata dan isi output
 
-Itu jauh lebih useful daripada manusia mengingat:
+Setelah remote default tersedia:
 
-> “Kayaknya kemarin file berubah deh.”
+```powershell
+uv run dvc push build_training_features create_training_snapshot
+git add dvc.yaml dvc.lock params.json
+if (Test-Path data/features/training/.gitignore) { git add data/features/training/.gitignore }
+if (Test-Path data/snapshots/training/.gitignore) { git add data/snapshots/training/.gitignore }
+git commit -m "Record CSV training snapshot"
+```
 
----
+Daily demand merupakan dependency stage, sehingga isinya tidak otomatis ikut diupload. Untuk reproduksi dari awal, bootstrap dan siapkan daily demand lagi. Untuk memperoleh output yang sudah dilacak pada versi Git tertentu, gunakan metadata versi tersebut lalu `uv run dvc pull`.
 
-## 10. Experiment kecil: dependency berubah
+### 6. Buat snapshot dengan cutoff baru
 
-Kalau workshop environment aman dan presenter punya backup, bisa demo conceptual change.
+Siapkan dulu semua daily demand hingga tanggal yang dipilih:
 
-Misalnya feature dataset rebuilt setelah new date.
+```powershell
+uv run python scripts/prepare_historical_demand.py --start-date 2025-01-01 --end-date 2025-01-28
+```
 
-Sekarang:
+Ubah hanya `data.training_cutoff` menjadi `2025-01-28` di `params.json`, kemudian:
 
-~~~text
-dep hash changes
-↓
-DVC detects stage stale
-↓
-dvc repro reruns snapshot stage
-~~~
+```powershell
+uv run dvc repro create_training_snapshot
+```
 
-Jangan edit snapshot output manual lalu menganggap pipeline valid.
+Output sekarang `taxi_demand_2025-01-28.csv`. Catat perubahan lock dan params di Git serta push DVC output jika versi ini ingin disimpan. Jangan memilih cutoff demo masa depan yang belum mempunyai ground truth.
 
-Output seharusnya berasal dari declared recipe.
+## Setelah snapshot siap
 
----
+```powershell
+uv run python scripts/train_with_mlflow.py --search
+```
 
-## 11. DVC cache
+Command ini menjalankan eksperimen CPU dan mencatat dataset identity di MLflow. Tracking server perlu aktif. DVC sendiri belum melatih model, mempromosikan champion, atau menjalankan API.
 
-DVC punya local cache:
-
-~~~text
-.dvc/cache/
-~~~
-
-Kenapa cache?
-
-Supaya data content tidak perlu disimpan berulang secara naive.
-
-Git menyimpan source + metadata.
-
-DVC cache menyimpan heavy data content.
-
-Separation:
-
-~~~text
-Git
-→ project history
-
-DVC
-→ data artifact state/cache
-~~~
-
----
-
-## 12. “Kalau cache lokal, teammate lain dapat datanya gimana?”
-
-Good question.
-
-Production/team usage biasanya pakai DVC remote.
-
-Concept:
-
-~~~text
-local DVC cache
-↓
-dvc push
-↓
-shared remote storage
-↓
-teammate dvc pull
-~~~
-
-Remote bisa object storage atau supported backend lain.
-
-Workshop tidak setup remote karena credential/cloud setup akan mengalihkan fokus.
-
-Tapi architecture path-nya jelas.
-
----
-
-## 13. Kenapa snapshot folder tidak masuk Git normal?
-
-Parquet binary bisa cukup besar.
-
-Kalau setiap snapshot di-commit directly ke Git:
-
-~~~text
-repo size grows
-binary diff poor
-clone heavy
-~~~
-
-Git bukan ideal storage buat repeatedly changing large ML data artifact.
-
-DVC memberi metadata-driven approach.
-
----
-
-## 14. DVC vs .gitignore
-
-Generated data directory di-ignore Git.
-
-Apakah berarti data “nggak versioned”?
-
-Not necessarily.
-
-Git ignore hanya bilang Git tidak store file binary directly.
-
-DVC pipeline metadata/fingerprint bisa tetap represent artifact state.
-
-Version control system dan artifact storage dipisahkan.
-
----
-
-## 15. Snapshot immutability mindset
-
-Kalau snapshot:
-
-~~~text
-taxi_demand_2025-01-26.parquet
-~~~
-
-sudah dipakai training, healthy behavior:
-
-~~~text
-jangan diam-diam edit
-~~~
-
-Kalau data sampai Feb 10:
-
-~~~text
-buat snapshot baru
-taxi_demand_2025-02-10.parquet
-~~~
-
-Ini menjaga old model lineage.
-
----
-
-## 16. SHA256 — coba pikir kenapa useful
-
-Terminal print SHA.
-
-Suppose dua machine punya file:
-
-~~~text
-taxi_demand_2025-01-26.parquet
-~~~
-
-Nama sama.
-
-SHA sama?
-
-Kalau iya, strong evidence content sama.
-
-Kalau beda, content beda.
-
-MLflow nanti log SHA ini.
-
-Jadi:
-
-~~~text
-DVC snapshot
-↓
-SHA fingerprint
-↓
-MLflow run metadata
-~~~
-
-Cross-tool lineage mulai terbentuk.
-
----
-
-## 17. DVC vs MLflow — jangan jawab “sama-sama versioning”
-
-DVC fokus:
-
-> “Bagaimana data artifact ini direproduce dari dependencies?”
-
-MLflow fokus:
-
-> “Experiment run ini menggunakan configuration/data/model apa dan hasilnya bagaimana?”
-
-Contoh:
-
-~~~text
-DVC:
-snapshot X up-to-date?
-
-MLflow:
-run Y memakai snapshot X, MAE berapa?
-~~~
-
-Tools-nya complement.
-
----
-
-## 18. DVC vs Airflow
-
-DVC bisa punya pipeline stage.
-
-Airflow juga workflow.
-
-Apakah redundant?
-
-Tidak persis.
-
-DVC strong di:
-
-- data/artifact dependency;
-- reproducibility;
-- content tracking.
-
-Airflow strong di:
-
-- orchestration;
-- scheduling;
-- task state;
-- retries;
-- distributed workflow control.
-
-Project kita bahkan punya Airflow training task yang menjalankan:
-
-~~~text
-dvc repro
-~~~
-
-Artinya orchestrator memanggil reproducibility tool.
-
----
-
-## 19. Failure scenario
-
-Suppose feature dataset belum ada.
-
-Run snapshot script.
-
-Expected:
-
-~~~text
-FileNotFoundError
-→ build_features dulu
-~~~
-
-Bagus.
-
-Kenapa?
-
-Karena snapshot task punya explicit dependency.
-
-Pipeline tidak silently membuat empty snapshot.
-
----
-
-## 20. Mini challenge
-
-Coba jawab apa yang harus berubah di dvc.yaml kalau snapshot cutoff jadi Feb 10.
-
-Possible:
-
-~~~text
-cmd cutoff
-output filename
-~~~
-
-Tapi jangan edit initial stage sembarangan kalau ingin preserve old state.
-
-Production design bisa parameterize/multiple stages.
-
-Workshop initial DVC stage sengaja static supaya concept mudah.
-
-Runtime retraining nanti punya separate snapshot behavior.
-
----
-
-## 21. Checkpoint
-
-1. Moving feature file kenapa bukan identity training yang kuat?
-2. Snapshot artinya apa?
-3. cutoff-date solve apa?
-4. cmd, deps, outs masing-masing?
-5. Kenapa code file masuk deps?
-6. dvc repro beda apa dengan langsung python script?
-7. dvc status jawab pertanyaan apa?
-8. Cache dan remote beda apa?
-9. Kenapa Parquet snapshot tidak masuk Git biasa?
-10. SHA256 membantu lineage bagaimana?
-11. DVC dan MLflow beda responsibility?
-12. DVC dan Airflow bisa dipakai bareng kenapa?
-13. Kenapa old snapshot sebaiknya immutable?
-
-Kalau bisa jawab, DVC sudah lebih dari “Git buat data” di kepala kalian.
-
-Next kita pakai snapshot tersebut untuk experiment yang dicatat proper lewat MLflow.
+Lanjutkan ke [Experiment Tracking](../06-experiment-tracking/experiment-tracking.md) dan [panduan CSV Data Flow](../05-data-pipeline/csv-data-flow.md).

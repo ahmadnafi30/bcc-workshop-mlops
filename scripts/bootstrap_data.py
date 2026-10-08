@@ -60,7 +60,7 @@ def main() -> None:
             force=args.force,
         )
 
-        replay_path = replay_dir / f"yellow_tripdata_{month}.parquet"
+        replay_path = replay_dir / f"yellow_tripdata_{month}.csv"
 
         summary = prepare_replay_month(
             source_path=monthly_path,

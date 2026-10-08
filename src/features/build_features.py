@@ -26,10 +26,7 @@ def validate_demand_columns(demand: pd.DataFrame) -> None:
     missing_columns = required_columns.difference(demand.columns)
 
     if missing_columns:
-        raise ValueError(
-            "hourly demand kehilangan kolom: "
-            + ", ".join(sorted(missing_columns))
-        )
+        raise ValueError("hourly demand kehilangan kolom: " + ", ".join(sorted(missing_columns)))
 
 
 # tambahin feature kalender supaya model bisa nangkep pattern jam dan hari
@@ -38,9 +35,7 @@ def add_calendar_features(demand: pd.DataFrame) -> pd.DataFrame:
     features = demand.copy()
     features["hour"] = features["timestamp"].dt.hour.astype("int8")
     features["day_of_week"] = features["timestamp"].dt.dayofweek.astype("int8")
-    features["is_weekend"] = (
-        features["day_of_week"].isin([5, 6]).astype("int8")
-    )
+    features["is_weekend"] = features["day_of_week"].isin([5, 6]).astype("int8")
 
     return features
 
@@ -68,14 +63,13 @@ def add_rolling_features(demand: pd.DataFrame) -> pd.DataFrame:
 
     # rolling dihitung per zone dengan minimum history sesuai panjang window
     for window in ROLLING_WINDOWS:
-        features[f"rolling_mean_{window}h"] = (
-            previous_demand.groupby(features["zone_id"], sort=False)
-            .transform(
-                lambda values: values.rolling(
-                    window=window,
-                    min_periods=window,
-                ).mean()
-            )
+        features[f"rolling_mean_{window}h"] = previous_demand.groupby(
+            features["zone_id"], sort=False
+        ).transform(
+            lambda values: values.rolling(
+                window=window,
+                min_periods=window,
+            ).mean()
         )
 
     return features
@@ -93,9 +87,7 @@ def build_model_features(
         features["timestamp"],
         errors="raise",
     )
-    features = features.sort_values(
-        ["zone_id", "timestamp"]
-    ).reset_index(drop=True)
+    features = features.sort_values(["zone_id", "timestamp"]).reset_index(drop=True)
 
     # bikin calendar, lag, dan rolling feature secara bertahap biar flow-nya gampang dibaca
     features = add_calendar_features(features)
@@ -107,11 +99,9 @@ def build_model_features(
 
     # lag 168 jam butuh history satu minggu, jadi row warm-up dibuang untuk training
     if drop_incomplete:
-        features = features.dropna(
-            subset=MODEL_FEATURE_COLUMNS
-        ).reset_index(drop=True)
+        features = features.dropna(subset=MODEL_FEATURE_COLUMNS).reset_index(drop=True)
 
-    # zone name tetap dibawa kalau tersedia biar hasil parquet enak diinspeksi
+    # zone name tetap dibawa kalau tersedia biar hasil CSV enak diinspeksi
     output_columns = ["timestamp", "zone_id"]
     if "zone" in features.columns:
         output_columns.append("zone")
@@ -119,6 +109,4 @@ def build_model_features(
     output_columns.extend(MODEL_FEATURE_COLUMNS[1:])
     output_columns.append("target_trip_count")
 
-    return features[output_columns].sort_values(
-        ["timestamp", "zone_id"]
-    ).reset_index(drop=True)
+    return features[output_columns].sort_values(["timestamp", "zone_id"]).reset_index(drop=True)

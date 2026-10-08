@@ -43,7 +43,7 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
 
     prediction_path = root / "data" / "monitoring" / "predictions.jsonl"
-    evaluation_path = root / "data" / "monitoring" / "evaluations.parquet"
+    evaluation_path = root / "data" / "monitoring" / "evaluations.csv"
     summary_path = root / "data" / "monitoring" / "performance_summary.json"
     demand_dir = root / "data" / "processed" / "demand"
 

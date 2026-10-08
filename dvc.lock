@@ -2,41 +2,41 @@ schema: '2.0'
 stages:
   create_training_snapshot:
     cmd: python scripts/create_training_snapshot.py --cutoff-date 2025-01-26 
-      --feature-path data/features/training/taxi_demand_features.parquet
+      --feature-path data/features/training/taxi_demand_features.csv
     deps:
-    - path: data/features/training/taxi_demand_features.parquet
+    - path: data/features/training/taxi_demand_features.csv
       hash: md5
-      md5: 8c7bd242020a97edb7c0e375665c3803
-      size: 450099
+      md5: 64ea2ea9f3769795acb5cf03c3ce286b
+      size: 3670158
     - path: scripts/create_training_snapshot.py
       hash: md5
-      md5: 9845a497b9e5fe0bef44bea3a686570b
-      size: 2303
+      md5: 93f14f87aa27ad3f3919bc3f74330a8a
+      size: 2219
     - path: src/data_versioning/pipeline_files.py
       hash: md5
-      md5: 943714444fc1647b0370e5aa38b22ac0
-      size: 1295
+      md5: 8a7fbc0d408aa3ef5db552f7f6d81ece
+      size: 3321
     - path: src/data_versioning/snapshot.py
       hash: md5
-      md5: 8bee9c364df1efe17efd47f27167d76c
-      size: 2541
+      md5: ea9e4879e88af494189a2ea5652bbfd5
+      size: 2471
     params:
       params.json:
         data.training_cutoff: '2025-01-26'
     outs:
-    - path: data/snapshots/training/taxi_demand_2025-01-26.parquet
+    - path: data/snapshots/training/taxi_demand_2025-01-26.csv
       hash: md5
-      md5: 8c7bd242020a97edb7c0e375665c3803
-      size: 450099
+      md5: 64ea2ea9f3769795acb5cf03c3ce286b
+      size: 3670158
   build_training_features:
     cmd: python scripts/build_features.py --start-date 2025-01-01 --end-date 
-      2025-01-26 --output-path 
-      data/features/training/taxi_demand_features.parquet --force
+      2025-01-26 --output-path data/features/training/taxi_demand_features.csv 
+      --force
     deps:
     - path: data/processed/demand
       hash: md5
-      md5: 9be6b82a6a55433a2e0de81a542105d8.dir
-      size: 232854
+      md5: 678e8006ca4a215f53456384fbedebe6.dir
+      size: 2095006
       nfiles: 29
     - path: pyproject.toml
       hash: md5
@@ -44,20 +44,20 @@ stages:
       size: 1182
     - path: scripts/build_features.py
       hash: md5
-      md5: 97f8c149b917e6aaa7a600cd52d7ca38
-      size: 2194
+      md5: e5ecf9ba884408eea79b5cac4562b29d
+      size: 2123
     - path: src/data_versioning/pipeline_files.py
       hash: md5
-      md5: 943714444fc1647b0370e5aa38b22ac0
-      size: 1295
+      md5: 8a7fbc0d408aa3ef5db552f7f6d81ece
+      size: 3321
     - path: src/features/build_features.py
       hash: md5
-      md5: 5bad3386b3427c0bc1b56541dee9989f
-      size: 4245
+      md5: 011f01abcd2fe9cb0c0ee5d86d407da9
+      size: 3982
     - path: src/features/dataset.py
       hash: md5
-      md5: 9a918e8d1756f9755dd845f54b363112
-      size: 4347
+      md5: be002abedf9e99756361f358ead604f6
+      size: 4517
     - path: uv.lock
       hash: md5
       md5: c7a3d76e44404d967b8310550262f696
@@ -67,7 +67,7 @@ stages:
         data.history_start: '2025-01-01'
         data.training_cutoff: '2025-01-26'
     outs:
-    - path: data/features/training/taxi_demand_features.parquet
+    - path: data/features/training/taxi_demand_features.csv
       hash: md5
-      md5: 8c7bd242020a97edb7c0e375665c3803
-      size: 450099
+      md5: 64ea2ea9f3769795acb5cf03c3ce286b
+      size: 3670158

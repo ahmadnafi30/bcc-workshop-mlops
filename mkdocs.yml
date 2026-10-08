@@ -44,6 +44,7 @@ nav:
       - DVC: 03-tools/dvc.md
       - Airflow & DAG: 03-tools/airflow.md
       - Bootstrap & Replay: 05-data-pipeline/bootstrap-and-replay.md
+      - CSV Data Flow: 05-data-pipeline/csv-data-flow.md
       - Feature Engineering: 05-data-pipeline/feature-engineering.md
       - Airflow Pipeline: 05-data-pipeline/airflow-pipeline.md
       - Airflow + DVC Hands-on: 05-data-pipeline/airflow-dvc-workshop.md

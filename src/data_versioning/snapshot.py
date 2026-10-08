@@ -3,11 +3,13 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import read_csv_dataset
+
 
 # bikin nama snapshot yang konsisten dari cutoff date
 def build_snapshot_name(cutoff_date: str) -> str:
     # format nama file dibuat predictable supaya gampang dipakai DVC dan training
-    return f"taxi_demand_{cutoff_date}.parquet"
+    return f"taxi_demand_{cutoff_date}.csv"
 
 
 # bikin snapshot training dari feature dataset sampai cutoff date tertentu
@@ -24,19 +26,13 @@ def create_training_snapshot(
 
     # cutoff bersifat inclusive sampai akhir hari yang dipilih
     cutoff_end = pd.Timestamp(cutoff_date) + pd.Timedelta(days=1)
-    snapshot = snapshot.loc[
-        snapshot["timestamp"] < cutoff_end
-    ].copy()
+    snapshot = snapshot.loc[snapshot["timestamp"] < cutoff_end].copy()
 
     if snapshot.empty:
-        raise ValueError(
-            f"snapshot kosong untuk cutoff date {cutoff_date}"
-        )
+        raise ValueError(f"snapshot kosong untuk cutoff date {cutoff_date}")
 
     # urutin row supaya snapshot gampang dibandingin dan reproducible
-    return snapshot.sort_values(
-        ["timestamp", "zone_id"]
-    ).reset_index(drop=True)
+    return snapshot.sort_values(["timestamp", "zone_id"]).reset_index(drop=True)
 
 
 # hitung fingerprint file snapshot supaya MLflow bisa nyatet dataset version yang dipakai
@@ -59,7 +55,7 @@ def describe_snapshot(path: Path) -> dict[str, str | int]:
     if not path.exists():
         raise FileNotFoundError(f"training snapshot belum ada: {path}")
 
-    snapshot = pd.read_parquet(
+    snapshot = read_csv_dataset(
         path,
         columns=["timestamp", "zone_id"],
     )

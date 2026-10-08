@@ -6,6 +6,8 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 import pandas as pd
 
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
+
 
 # load satu daily ground truth file dan rapihin key buat join ke prediction
 def load_daily_ground_truth(
@@ -13,12 +15,12 @@ def load_daily_ground_truth(
     target_date,
 ) -> pd.DataFrame | None:
     # satu tanggal cukup dibaca sekali walaupun prediction-nya banyak zone dan jam
-    path = Path(demand_dir) / f"{target_date.isoformat()}.parquet"
+    path = Path(demand_dir) / f"{target_date.isoformat()}.csv"
 
     if not path.exists():
         return None
 
-    demand = pd.read_parquet(
+    demand = read_csv_dataset(
         path,
         columns=["timestamp", "zone_id", "trip_count"],
     )
@@ -75,7 +77,7 @@ def build_evaluation_table(
     predictions["target_date"] = predictions["target_datetime"].dt.date
     evaluated_days = []
 
-    # setiap daily parquet dibaca sekali lalu join semua prediction pada tanggal itu
+    # setiap daily CSV dibaca sekali lalu join semua prediction pada tanggal itu
     for target_date, daily_predictions in predictions.groupby("target_date"):
         ground_truth = load_daily_ground_truth(
             demand_dir=demand_dir,
@@ -99,29 +101,28 @@ def build_evaluation_table(
     evaluations = pd.concat(evaluated_days, ignore_index=True)
 
     # error detail disimpan supaya summary dan debugging pakai source yang sama
-    error = (
-        evaluations["predicted_trip_count"]
-        - evaluations["actual_trip_count"]
-    )
+    error = evaluations["predicted_trip_count"] - evaluations["actual_trip_count"]
     evaluations["absolute_error"] = error.abs()
     evaluations["squared_error"] = error**2
 
-    return evaluations[
-        [
-            "logged_at",
-            "target_datetime",
-            "zone_id",
-            "model_name",
-            "model_version",
-            "run_id",
-            "predicted_trip_count",
-            "actual_trip_count",
-            "absolute_error",
-            "squared_error",
+    return (
+        evaluations[
+            [
+                "logged_at",
+                "target_datetime",
+                "zone_id",
+                "model_name",
+                "model_version",
+                "run_id",
+                "predicted_trip_count",
+                "actual_trip_count",
+                "absolute_error",
+                "squared_error",
+            ]
         ]
-    ].sort_values(
-        ["target_datetime", "zone_id"]
-    ).reset_index(drop=True)
+        .sort_values(["target_datetime", "zone_id"])
+        .reset_index(drop=True)
+    )
 
 
 # hitung recent model performance dan decide apakah retraining sudah layak dipicu
@@ -161,11 +162,7 @@ def summarize_performance(
             "latest_target_datetime": None,
         }
 
-    recent = (
-        evaluations.sort_values("target_datetime")
-        .tail(recent_limit)
-        .copy()
-    )
+    recent = evaluations.sort_values("target_datetime").tail(recent_limit).copy()
 
     recent_mae = float(recent["absolute_error"].mean())
     recent_rmse = float(np.sqrt(recent["squared_error"].mean()))
@@ -189,9 +186,7 @@ def summarize_performance(
         "reference_mae": float(reference_mae),
         "threshold_mae": threshold_mae,
         "retrain_recommended": retrain_recommended,
-        "latest_target_datetime": (
-            recent["target_datetime"].max().isoformat()
-        ),
+        "latest_target_datetime": (recent["target_datetime"].max().isoformat()),
     }
 
 
@@ -202,14 +197,14 @@ def save_performance_artifacts(
     evaluation_path: Path,
     summary_path: Path,
 ) -> None:
-    # detail prediction disimpan parquet, sedangkan summary kecil cukup json
+    # detail prediction disimpan CSV, sedangkan summary kecil cukup json
     evaluation_path = Path(evaluation_path)
     summary_path = Path(summary_path)
     evaluation_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
 
     if evaluations.empty:
-        pd.DataFrame(
+        empty_evaluations = pd.DataFrame(
             columns=[
                 "logged_at",
                 "target_datetime",
@@ -222,9 +217,10 @@ def save_performance_artifacts(
                 "absolute_error",
                 "squared_error",
             ]
-        ).to_parquet(evaluation_path, index=False)
+        )
+        write_csv_atomic(empty_evaluations, evaluation_path)
     else:
-        evaluations.to_parquet(evaluation_path, index=False)
+        write_csv_atomic(evaluations, evaluation_path)
 
     # /metrics selalu membaca summary lengkap, termasuk saat job sedang menulis
     temporary_path = None

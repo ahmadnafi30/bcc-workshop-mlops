@@ -3,6 +3,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import (
+    iter_csv_chunks,
+    read_csv_dataset,
+    write_csv_atomic,
+)
+
 
 # ambil trip untuk satu tanggal lalu release ke folder raw production
 def release_daily_batch(
@@ -13,7 +19,7 @@ def release_daily_batch(
 ) -> dict[str, int | str]:
     # kalau daily batch sudah pernah direlease kita cukup baca summary-nya
     if output_path.exists() and not force:
-        existing = pd.read_parquet(
+        existing = read_csv_dataset(
             output_path,
             columns=["tpep_pickup_datetime", "PULocationID"],
         )
@@ -29,40 +35,28 @@ def release_daily_batch(
     # replay source harus disiapin bootstrap dulu sebelum satu hari bisa direlease
     if not source_path.exists():
         raise FileNotFoundError(
-            f"replay source belum ada: {source_path}. "
-            "jalanin scripts/bootstrap_data.py dulu."
+            f"replay source belum ada: {source_path}. jalanin scripts/bootstrap_data.py dulu."
         )
-
-    # baca monthly replay source lalu samain pickup time ke tipe datetime
-    trips = pd.read_parquet(
-        source_path,
-        columns=["tpep_pickup_datetime", "PULocationID"],
-    )
-    trips["tpep_pickup_datetime"] = pd.to_datetime(
-        trips["tpep_pickup_datetime"],
-        errors="coerce",
-    )
 
     # bikin window satu hari dari jam 00:00 sampai sebelum hari berikutnya
     day_start = pd.Timestamp(target_date)
     day_end = day_start + pd.Timedelta(days=1)
 
-    # ambil cuma trip yang seolah-olah baru available pada tanggal replay ini
-    daily = trips.loc[
-        trips["tpep_pickup_datetime"].between(
-            day_start,
-            day_end,
-            inclusive="left",
-        )
-    ].copy()
-
-    if daily.empty:
+    # Monthly CSV is scanned in chunks; only this day's rows are held in memory.
+    frames = []
+    for trips in iter_csv_chunks(source_path, ["tpep_pickup_datetime", "PULocationID"]):
+        selected = trips.loc[
+            trips["tpep_pickup_datetime"].between(day_start, day_end, inclusive="left")
+        ].copy()
+        if not selected.empty:
+            frames.append(selected)
+    if not frames:
         raise ValueError(f"nggak ada trip buat tanggal {target_date.isoformat()}")
+    daily = pd.concat(frames, ignore_index=True)
 
     # urutin row lalu simpan batch ke folder raw production
     daily = daily.sort_values("tpep_pickup_datetime").reset_index(drop=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    daily.to_parquet(output_path, index=False)
+    write_csv_atomic(daily, output_path)
 
     return {
         "date": target_date.isoformat(),
@@ -84,7 +78,7 @@ def validate_daily_batch(
     if not batch_path.exists():
         raise FileNotFoundError(f"daily batch belum ada: {batch_path}")
 
-    trips = pd.read_parquet(
+    trips = read_csv_dataset(
         batch_path,
         columns=["tpep_pickup_datetime", "PULocationID"],
     )
@@ -103,9 +97,7 @@ def validate_daily_batch(
 
     actual_dates = set(pickup_time.dt.date.unique().tolist())
     if actual_dates != {target_date}:
-        raise ValueError(
-            f"daily batch punya tanggal di luar {target_date.isoformat()}"
-        )
+        raise ValueError(f"daily batch punya tanggal di luar {target_date.isoformat()}")
 
     # zone id juga nggak boleh missing karena dipakai untuk aggregation
     if trips["PULocationID"].isna().any():

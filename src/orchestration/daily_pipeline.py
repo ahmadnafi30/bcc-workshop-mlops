@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_versioning.pipeline_files import write_parquet_atomic
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
 from features.dataset import build_feature_dataset
 from ingestion.replay import (
     release_daily_batch,
@@ -22,10 +22,8 @@ def release_replay_batch(
     # path source dipilih berdasarkan month dari replay date
     target_date = date.fromisoformat(replay_date)
     month = target_date.strftime("%Y-%m")
-    source_path = (
-        Path(project_root) / "data" / "source" / "replay" / f"yellow_tripdata_{month}.parquet"
-    )
-    output_path = Path(project_root) / "data" / "raw" / "trips" / f"{replay_date}.parquet"
+    source_path = Path(project_root) / "data" / "source" / "replay" / f"yellow_tripdata_{month}.csv"
+    output_path = Path(project_root) / "data" / "raw" / "trips" / f"{replay_date}.csv"
 
     return release_daily_batch(
         target_date=target_date,
@@ -42,7 +40,7 @@ def validate_replay_batch(
 ) -> dict[str, int | str]:
     # validation baca file yang baru direlease dan cek tanggal serta schema minimum
     target_date = date.fromisoformat(replay_date)
-    batch_path = Path(project_root) / "data" / "raw" / "trips" / f"{replay_date}.parquet"
+    batch_path = Path(project_root) / "data" / "raw" / "trips" / f"{replay_date}.csv"
 
     return validate_daily_batch(
         batch_path=batch_path,
@@ -58,9 +56,9 @@ def prepare_replay_demand(
     # daily batch dan zone lookup jadi dua input utama aggregation
     root = Path(project_root)
     target_date = date.fromisoformat(replay_date)
-    trip_path = root / "data" / "raw" / "trips" / f"{replay_date}.parquet"
+    trip_path = root / "data" / "raw" / "trips" / f"{replay_date}.csv"
     zone_lookup_path = root / "data" / "metadata" / "taxi_zone_lookup.csv"
-    output_path = root / "data" / "processed" / "demand" / f"{replay_date}.parquet"
+    output_path = root / "data" / "processed" / "demand" / f"{replay_date}.csv"
 
     if not trip_path.exists():
         raise FileNotFoundError(f"daily batch belum ada: {trip_path}")
@@ -69,7 +67,7 @@ def prepare_replay_demand(
         raise FileNotFoundError(f"taxi zone lookup belum ada: {zone_lookup_path}")
 
     # aggregation reuse business logic yang sama dengan manual pipeline
-    trips = pd.read_parquet(trip_path, columns=["tpep_pickup_datetime", "PULocationID"])
+    trips = read_csv_dataset(trip_path, columns=["tpep_pickup_datetime", "PULocationID"])
     zone_lookup = pd.read_csv(zone_lookup_path)
     demand = aggregate_hourly_demand(
         trips=trips,
@@ -77,7 +75,7 @@ def prepare_replay_demand(
         target_date=target_date,
     )
 
-    write_parquet_atomic(demand, output_path)
+    write_csv_atomic(demand, output_path)
 
     return {
         "date": replay_date,
@@ -97,10 +95,10 @@ def rebuild_replay_features(
     root = Path(project_root)
     target_date = date.fromisoformat(replay_date)
     demand_dir = root / "data" / "processed" / "demand"
-    output_path = root / "data" / "features" / "taxi_demand_features.parquet"
+    output_path = root / "data" / "features" / "taxi_demand_features.csv"
 
     # Rerunning an older batch must not remove newer hours from serving features.
-    available_dates = [date.fromisoformat(path.stem) for path in demand_dir.glob("*.parquet")]
+    available_dates = [date.fromisoformat(path.stem) for path in demand_dir.glob("*.csv")]
     target_date = max([target_date, *available_dates])
 
     return build_feature_dataset(

@@ -29,7 +29,7 @@ def write_daily_demand(
     )
 
     demand_dir.mkdir(parents=True, exist_ok=True)
-    frame.to_parquet(demand_dir / f"{day}.parquet", index=False)
+    frame.to_csv(demand_dir / f"{day}.csv", index=False)
 
 
 # pastikan online feature cuma ngelihat history sebelum target hour

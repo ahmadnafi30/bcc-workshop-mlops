@@ -8,7 +8,7 @@ stages:
       python scripts/build_features.py
       --start-date ${data.history_start}
       --end-date ${data.training_cutoff}
-      --output-path data/features/training/taxi_demand_features.parquet
+      --output-path data/features/training/taxi_demand_features.csv
       --force
     deps:
       - data/processed/demand
@@ -23,16 +23,16 @@ stages:
           - data.history_start
           - data.training_cutoff
     outs:
-      - data/features/training/taxi_demand_features.parquet
+      - data/features/training/taxi_demand_features.csv
 
   create_training_snapshot:
     desc: Freeze training features into a dated, versioned snapshot.
     cmd: >-
       python scripts/create_training_snapshot.py
       --cutoff-date ${data.training_cutoff}
-      --feature-path data/features/training/taxi_demand_features.parquet
+      --feature-path data/features/training/taxi_demand_features.csv
     deps:
-      - data/features/training/taxi_demand_features.parquet
+      - data/features/training/taxi_demand_features.csv
       - scripts/create_training_snapshot.py
       - src/data_versioning/snapshot.py
       - src/data_versioning/pipeline_files.py
@@ -40,4 +40,4 @@ stages:
       - params.json:
           - data.training_cutoff
     outs:
-      - data/snapshots/training/taxi_demand_${data.training_cutoff}.parquet
+      - data/snapshots/training/taxi_demand_${data.training_cutoff}.csv

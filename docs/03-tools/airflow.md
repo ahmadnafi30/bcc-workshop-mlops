@@ -344,7 +344,7 @@ Better:
 
 ~~~text
 large data
-→ parquet / storage
+→ CSV / storage
 
 XCom
 → reference + metadata
@@ -497,7 +497,7 @@ dependency service reachable?
 
 Contoh actionable:
 
-> aggregate_demand failed karena daily parquet belum ada.
+> aggregate_demand failed karena daily CSV belum ada.
 
 Itu jauh lebih gampang ditangani.
 

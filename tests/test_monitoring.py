@@ -17,8 +17,8 @@ def test_build_evaluation_table_matches_ground_truth(tmp_path) -> None:
             "zone_id": [161],
             "trip_count": [100],
         }
-    ).to_parquet(
-        demand_dir / "2025-01-28.parquet",
+    ).to_csv(
+        demand_dir / "2025-01-28.csv",
         index=False,
     )
 

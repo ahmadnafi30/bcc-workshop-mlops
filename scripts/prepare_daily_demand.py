@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
 from preprocessing.aggregate_demand import aggregate_hourly_demand
 
 
@@ -36,21 +37,9 @@ def main() -> None:
     target_date = date.fromisoformat(args.date)
     root = Path(__file__).resolve().parents[1]
 
-    trip_path = (
-        root
-        / "data"
-        / "raw"
-        / "trips"
-        / f"{target_date.isoformat()}.parquet"
-    )
+    trip_path = root / "data" / "raw" / "trips" / f"{target_date.isoformat()}.csv"
     zone_lookup_path = root / "data" / "metadata" / "taxi_zone_lookup.csv"
-    output_path = (
-        root
-        / "data"
-        / "processed"
-        / "demand"
-        / f"{target_date.isoformat()}.parquet"
-    )
+    output_path = root / "data" / "processed" / "demand" / f"{target_date.isoformat()}.csv"
 
     # processed file nggak perlu dibuat ulang kecuali force memang diminta
     if output_path.exists() and not args.force:
@@ -60,18 +49,16 @@ def main() -> None:
     # kasih error yang jelas kalau urutan manual pipeline-nya belum lengkap
     if not trip_path.exists():
         raise FileNotFoundError(
-            f"daily batch belum ada: {trip_path}. "
-            "jalanin simulate_daily_data.py dulu."
+            f"daily batch belum ada: {trip_path}. jalanin simulate_daily_data.py dulu."
         )
 
     if not zone_lookup_path.exists():
         raise FileNotFoundError(
-            f"taxi zone lookup belum ada: {zone_lookup_path}. "
-            "jalanin bootstrap_data.py dulu."
+            f"taxi zone lookup belum ada: {zone_lookup_path}. jalanin bootstrap_data.py dulu."
         )
 
     # load raw batch dan metadata lalu ubah trip-level data jadi hourly demand
-    trips = pd.read_parquet(trip_path)
+    trips = read_csv_dataset(trip_path)
     zone_lookup = pd.read_csv(zone_lookup_path)
     demand = aggregate_hourly_demand(
         trips=trips,
@@ -79,9 +66,8 @@ def main() -> None:
         target_date=target_date,
     )
 
-    # simpan hasil processed sebagai parquet supaya step berikutnya tinggal baca
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    demand.to_parquet(output_path, index=False)
+    # simpan hasil processed sebagai CSV supaya step berikutnya tinggal baca
+    write_csv_atomic(demand, output_path)
 
     # kasih summary sederhana buat quick sanity check dari terminal
     print(

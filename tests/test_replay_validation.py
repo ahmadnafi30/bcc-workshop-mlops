@@ -8,8 +8,8 @@ from ingestion.replay import validate_daily_batch
 
 # pastikan valid batch lolos dan summary yang dibalikin tetap kecil
 def test_validate_daily_batch_accepts_matching_date(tmp_path) -> None:
-    # sample parquet cukup dua trip pada tanggal yang sama
-    path = tmp_path / "2025-01-27.parquet"
+    # sample CSV cukup dua trip pada tanggal yang sama
+    path = tmp_path / "2025-01-27.csv"
     pd.DataFrame(
         {
             "tpep_pickup_datetime": pd.to_datetime(
@@ -20,7 +20,7 @@ def test_validate_daily_batch_accepts_matching_date(tmp_path) -> None:
             ),
             "PULocationID": [161, 162],
         }
-    ).to_parquet(path, index=False)
+    ).to_csv(path, index=False)
 
     result = validate_daily_batch(
         batch_path=path,
@@ -35,7 +35,7 @@ def test_validate_daily_batch_accepts_matching_date(tmp_path) -> None:
 # pastikan timestamp dari tanggal lain langsung bikin validation gagal
 def test_validate_daily_batch_rejects_wrong_date(tmp_path) -> None:
     # row kedua sengaja masuk tanggal berikutnya buat simulasi batch bocor
-    path = tmp_path / "2025-01-27.parquet"
+    path = tmp_path / "2025-01-27.csv"
     pd.DataFrame(
         {
             "tpep_pickup_datetime": pd.to_datetime(
@@ -46,7 +46,7 @@ def test_validate_daily_batch_rejects_wrong_date(tmp_path) -> None:
             ),
             "PULocationID": [161, 162],
         }
-    ).to_parquet(path, index=False)
+    ).to_csv(path, index=False)
 
     with pytest.raises(ValueError, match="tanggal di luar"):
         validate_daily_batch(

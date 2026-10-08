@@ -198,7 +198,7 @@ status
 ### Data plane
 
 ~~~text
-Parquet
+CSV
 model artifact
 large table
 ~~~

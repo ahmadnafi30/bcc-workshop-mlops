@@ -10,6 +10,7 @@ import mlflow
 import pandas as pd
 from threadpoolctl import threadpool_limits
 
+from data_versioning.pipeline_files import read_csv_dataset
 from data_versioning.snapshot import describe_snapshot
 from tracking.experiment_metadata import (
     log_evaluation_artifacts,
@@ -52,7 +53,7 @@ def load_training_snapshot(snapshot_path: Path) -> pd.DataFrame:
     path = Path(snapshot_path)
     if not path.exists():
         raise FileNotFoundError(f"training snapshot belum ada: {path}")
-    return pd.read_parquet(path)
+    return read_csv_dataset(path)
 
 
 def _run_name(label: str) -> str:

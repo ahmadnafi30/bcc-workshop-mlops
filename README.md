@@ -6,9 +6,11 @@ Welcome to **BCC Workshop — MLOps**.
 
 Materi yang bisa langsung dipakai:
 
+- [CSV Data Flow](docs/05-data-pipeline/csv-data-flow.md): download TLC Parquet dikonversi ke CSV; replay, features, snapshot, training, serving history, dan evaluation memakai CSV.
+
 - [PDF workshop lengkap](output/pdf/bcc-workshop-mlops-lengkap.pdf): satu dokumen
   dari konsep awal dan Step 0–10 sampai quickstart dashboard, troubleshooting,
-  glosarium, serta laporan akhir. Daftar isi dan bookmark dapat diklik.
+  glosarium, serta laporan akhir. Daftar isi dan bookmark dapat diklik. PDF edisi sebelumnya masih menggunakan contoh format lama; ikuti docs web untuk pipeline CSV terbaru.
 - [Mulai di Sini — Start Here](docs/00-start-here.md): peta belajar pemula dan tour singkat UI.
 
 - [Modul workshop lengkap](docs/workshop-module.md): rancangan 6 jam dengan konsep,
@@ -306,7 +308,7 @@ Detail-nya ada di CONTRIBUTING.md dan section Git Workflow.
 
 ## Tentang data NYC TLC
 
-Official Yellow Taxi monthly data diakses sebagai exact Parquet object.
+Official Yellow Taxi monthly data diunduh sebagai exact Parquet object, lalu langsung dikonversi ke CSV. Semua pemrosesan dataset setelah konversi menggunakan CSV.
 
 Kalau kalian buka base CloudFront folder dan dapat:
 

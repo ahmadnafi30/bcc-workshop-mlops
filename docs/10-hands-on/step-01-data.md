@@ -108,7 +108,7 @@ Jangan panik kalau terminal kelihatan sibuk.
 
 Dua hal utama.
 
-### Yellow Taxi monthly Parquet
+### Yellow Taxi monthly Parquet, lalu konversi CSV
 
 Contoh:
 
@@ -164,9 +164,10 @@ data/
 │   └── taxi_zone_lookup.csv
 └── source/
     ├── tlc/
-    │   └── yellow_tripdata_2025-01.parquet
+    │   ├── yellow_tripdata_2025-01.parquet
+    │   └── yellow_tripdata_2025-01.csv
     └── replay/
-        └── yellow_tripdata_2025-01.parquet
+        └── yellow_tripdata_2025-01.csv
 ~~~
 
 Question:
@@ -272,9 +273,9 @@ through
 Output:
 
 ~~~text
-data/processed/demand/2025-01-01.parquet
+data/processed/demand/2025-01-01.csv
 ...
-data/processed/demand/2025-01-26.parquet
+data/processed/demand/2025-01-26.csv
 ~~~
 
 ---
@@ -329,7 +330,7 @@ Data yang tidak jadi target row tetap bisa useful sebagai history.
 Try:
 
 ~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/processed/demand/2025-01-26.parquet'); print(df.head()); print(df.shape); print(df['timestamp'].min(), df['timestamp'].max())"
+uv run python -c "import pandas as pd; df=pd.read_csv('data/processed/demand/2025-01-26.csv'); print(df.head()); print(df.shape); print(df['timestamp'].min(), df['timestamp'].max())"
 ~~~
 
 Expected columns:
@@ -411,7 +412,7 @@ Kalau semantics ini salah, lag feature nanti juga salah.
 Optional:
 
 ~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/processed/demand/2025-01-26.parquet'); print(df['trip_count'].sum())"
+uv run python -c "import pandas as pd; df=pd.read_csv('data/processed/demand/2025-01-26.csv'); print(df['trip_count'].sum())"
 ~~~
 
 Compare roughly dengan trip count source Manhattan hari itu kalau ingin.
@@ -424,7 +425,7 @@ Goal:
 
 ## 17. Kenapa data tidak di-commit ke Git?
 
-Generated Parquet cukup besar dan berubah.
+Generated CSV cukup besar dan berubah.
 
 Git cocok buat:
 
@@ -560,7 +561,7 @@ data/metadata/taxi_zone_lookup.csv
 data/source/replay/...
 ✅
 
-data/processed/demand/2025-01-26.parquet
+data/processed/demand/2025-01-26.csv
 ✅
 ~~~
 
@@ -575,7 +576,7 @@ Dan coba explain:
 7. Jan 1–7 role-nya apa?
 8. Jan 8–21 role-nya apa?
 9. Jan 22–26 role-nya apa?
-10. Kenapa Git nggak simpan generated Parquet?
+10. Kenapa Git nggak simpan generated CSV?
 11. Manual Jan 27 flow seperti apa?
 12. Kalau row count processed tidak 24 × zones, apa yang kalian curigai?
 

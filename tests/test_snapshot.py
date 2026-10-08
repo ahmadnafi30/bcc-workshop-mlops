@@ -37,10 +37,7 @@ def test_create_training_snapshot_respects_cutoff_date() -> None:
 
 # pastikan nama snapshot konsisten dan gampang ditebak dari cutoff date
 def test_build_snapshot_name() -> None:
-    assert (
-        build_snapshot_name("2025-01-26")
-        == "taxi_demand_2025-01-26.parquet"
-    )
+    assert build_snapshot_name("2025-01-26") == "taxi_demand_2025-01-26.csv"
 
 
 # pastikan fingerprint berubah kalau isi file berubah

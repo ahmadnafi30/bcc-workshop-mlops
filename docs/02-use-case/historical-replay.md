@@ -70,7 +70,7 @@ monthly replay source
 ↓
 filter target date
 ↓
-data/raw/trips/2025-01-27.parquet
+data/raw/trips/2025-01-27.csv
 ~~~
 
 Sekarang downstream pipeline behave seolah:
@@ -134,7 +134,7 @@ uv run python scripts/simulate_daily_data.py --date 2025-01-27
 Output:
 
 ~~~text
-data/raw/trips/2025-01-27.parquet
+data/raw/trips/2025-01-27.csv
 ~~~
 
 Apa yang terjadi di belakang?
@@ -202,7 +202,7 @@ processed hourly demand
 Output:
 
 ~~~text
-data/processed/demand/2025-01-27.parquet
+data/processed/demand/2025-01-27.csv
 ~~~
 
 Sekarang satu row berarti:

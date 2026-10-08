@@ -1,9 +1,7 @@
 import argparse
 from pathlib import Path
 
-import pandas as pd
-
-from data_versioning.pipeline_files import write_parquet_atomic
+from data_versioning.pipeline_files import read_csv_dataset, write_csv_atomic
 from data_versioning.snapshot import (
     build_snapshot_name,
     create_training_snapshot,
@@ -20,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--feature-path",
         type=Path,
-        default=Path("data/features/taxi_demand_features.parquet"),
+        default=Path("data/features/taxi_demand_features.csv"),
         help="input features; DVC mengisi path training terpisah",
     )
     parser.add_argument(
@@ -46,14 +44,14 @@ def main() -> None:
         )
 
     # filter feature dataset sesuai cutoff date lalu simpan sebagai immutable training input
-    features = pd.read_parquet(feature_path)
+    features = read_csv_dataset(feature_path)
     snapshot = create_training_snapshot(
         features=features,
         cutoff_date=args.cutoff_date,
     )
 
     output_path = snapshot_dir / build_snapshot_name(args.cutoff_date)
-    write_parquet_atomic(snapshot, output_path)
+    write_csv_atomic(snapshot, output_path)
 
     # print fingerprint biar dataset version yang dipakai langsung kelihatan
     info = describe_snapshot(output_path)

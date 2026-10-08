@@ -10,7 +10,6 @@ from tracking.mlflow_tracking import configure_mlflow
 from tracking.model_registry import register_run_model
 from training.experiment import run_mlflow_experiment
 
-DEFAULT_SNAPSHOT_NAME = "taxi_demand_2025-01-26.parquet"
 LOGGER = logging.getLogger(__name__)
 
 

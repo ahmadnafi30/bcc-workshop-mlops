@@ -491,7 +491,7 @@ Prediction untuk Jan 28 hanya bisa dievaluate kalau processed actual demand Jan 
 Check:
 
 ~~~text
-data/processed/demand/2025-01-28.parquet
+data/processed/demand/2025-01-28.csv
 ~~~
 
 Kalau file belum ada, run daily replay Jan 28 dulu.
@@ -602,18 +602,18 @@ min_samples
 
 ---
 
-## 18. Buka evaluations.parquet
+## 18. Buka evaluations.csv
 
 Path:
 
 ~~~text
-data/monitoring/evaluations.parquet
+data/monitoring/evaluations.csv
 ~~~
 
 Optional inspect:
 
 ~~~bash
-uv run python -c "import pandas as pd; df=pd.read_parquet('data/monitoring/evaluations.parquet'); print(df.head()); print(df.shape)"
+uv run python -c "import pandas as pd; df=pd.read_csv('data/monitoring/evaluations.csv'); print(df.head()); print(df.shape)"
 ~~~
 
 Cari:

@@ -41,34 +41,14 @@ mlflow.db*
 *.onnx
 models/*.json
 
-# Data generated locally
+# Data generated locally: keep metadata, not datasets, in Git
+data/**/*
+!data/**/
+!data/**/.gitkeep
+!data/**/*.dvc
+!data/**/.gitignore
 data/experiments/
-data/source/*
-!data/source/tlc/
-!data/source/replay/
-!data/source/tlc/.gitkeep
-!data/source/replay/.gitkeep
-
-data/metadata/*
-!data/metadata/.gitkeep
-
-data/raw/*
-!data/raw/trips/
-!data/raw/trips/.gitkeep
-
-data/processed/*
-!data/processed/demand/
-!data/processed/demand/.gitkeep
-
-data/features/*
-!data/features/.gitkeep
-
-data/snapshots/*
-!data/snapshots/training/
-!data/snapshots/training/.gitkeep
-
-data/monitoring/*
-!data/monitoring/.gitkeep
+data/legacy_parquet/
 
 # DVC cache
 .dvc/cache/

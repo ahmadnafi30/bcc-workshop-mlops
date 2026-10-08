@@ -35,22 +35,10 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     month = target_date.strftime("%Y-%m")
 
-    source_path = (
-        root
-        / "data"
-        / "source"
-        / "replay"
-        / f"yellow_tripdata_{month}.parquet"
-    )
+    source_path = root / "data" / "source" / "replay" / f"yellow_tripdata_{month}.csv"
 
     # output raw sengaja satu file per hari biar gampang dipetakan ke Airflow
-    output_path = (
-        root
-        / "data"
-        / "raw"
-        / "trips"
-        / f"{target_date.isoformat()}.parquet"
-    )
+    output_path = root / "data" / "raw" / "trips" / f"{target_date.isoformat()}.csv"
 
     summary = release_daily_batch(
         target_date=target_date,
